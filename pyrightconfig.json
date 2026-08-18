@@ -1,0 +1,38 @@
+{
+  // "recommended", not "strict" — see power-user-linux-setup's pyrightconfig.json (the origin repo
+  // this package was extracted from) for the full profile rationale.
+  "typeCheckingMode": "recommended",
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.*"],
+  "failOnWarnings": false,
+
+  "reportAny": "error",
+  "reportUnreachable": "error",
+  "reportIgnoreCommentWithoutRule": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportUnusedImport": "error",
+  "reportUnusedVariable": "error",
+  "reportUnusedFunction": "error",
+  "reportUnusedClass": "error",
+  "reportUnusedCoroutine": "error",
+  "reportUnnecessaryIsInstance": "error",
+  "reportUnnecessaryCast": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportUnnecessaryContains": "error",
+  "reportMatchNotExhaustive": "error",
+  "reportRedeclaration": "error",
+  "reportPropertyTypeMismatch": "error",
+
+  "reportMissingTypeArgument": "warning",
+  "reportImplicitStringConcatenation": "none",
+
+  // invoke ships no type stubs — every `c: Context` task parameter is Unknown/Any without this.
+  "allowedUntypedLibraries": ["invoke"],
+
+  // pytest autouse fixtures aren't referenced by name anywhere, a structural false positive.
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "reportUnusedFunction": "none"
+    }
+  ]
+}

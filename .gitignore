@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Claude Code — personal/runtime state, not shared config.
+.claude/settings.local.json

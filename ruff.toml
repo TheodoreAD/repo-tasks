@@ -1,0 +1,39 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+# Same curated select as power-user-linux-setup (the origin repo this package was extracted from) —
+# see its ruff.toml for the full per-rule-group rationale; kept in sync by hand until repo-tasks
+# itself becomes the single source these config files are generated from.
+select = [
+  "E4",
+  "E7",
+  "E9",
+  "F",
+  "E501",
+  "I",
+  "UP",
+  "B",
+  "C4",
+  "SIM",
+  "PTH",
+  "RET",
+  "TID",
+  "RUF",
+  "C90",
+  "PERF",
+  "A",
+  "DTZ",
+  "PL",
+  "TRY",
+]
+ignore = [
+  "PLR", # refactor-suggestion noise (too-many-args/branches/statements, magic-value-comparison),
+  # not bug-catching — see power-user-linux-setup's ruff.toml for the research trail
+  "TRY003", # "raise vanilla exception with a long message" — deliberately minimal exception
+  # hierarchy in this small package
+]
+
+[lint.isort]
+known-first-party = ["repo_tasks"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
