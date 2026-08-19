@@ -19,6 +19,8 @@ flows, and semver bumping — see the sibling plans this one underlies:
 - `plans/2026-08-19-helm-chart-tasks.md`
 - `plans/2026-08-19-dogfood-sample-service.md` (the concrete Dockerfile+chart pair that exercises
   this plan's grouping model and the docker/helm task modules for real)
+- `plans/2026-08-20-venv-deps-tasks.md` (venv lifecycle + lock-file task modules; Phase 2 iterates
+  this plan's `projects.discover_python_projects(c)` the same way `python-package-tasks.md` does)
 
 All five need the same thing this plan provides: a way for a task module to answer "what project(s)
 exist in this consumer repo, where, what kind (python package / docker image / helm chart), and
