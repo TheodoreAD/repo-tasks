@@ -106,12 +106,19 @@ Decisions from review:
     monorepo tag-format precedent (also hands-on confirmed working via bump-my-version's own
     `tag_name` templating, not just commitizen's).
 - Individually invocable outside a release flow — e.g. a plain point release with no gitflow
-  ceremony at all. Returns the new version string so `gitflow.py`'s `release_start`/`hotfix_start`
-  can name the release/hotfix branch after it.
+  ceremony at all. Returns the new version string.
 - `tag=True` keyword arg (default on for standalone use). `gitflow.py`'s `release_start`/
   `hotfix_start` call `version.bump(..., tag=False)` — the tag belongs on `main` at _finish_ time
   per Design §2 below, not on `develop`/`main` at _bump_ time, so bump-my-version's own `tag=true`
   config line is conditional on this flag rather than always on.
+- `current_version(c, group=None)` and `next_version(current, part)` — two small additions on top
+  of the original design, needed once `gitflow.py`'s branch-then-bump order (Design §2) was
+  corrected to match nvie's actual sequence: the release/hotfix branch has to be _named_ before the
+  real, writing `bump` call runs on it. `next_version` is plain arithmetic (no subprocess) rather
+  than shelling out to `bump-my-version show --increment` — safe to hand-roll because the config
+  `bump`/`_bumpversion_config` always generates uses bump-my-version's untouched default
+  parse/serialize (`major.minor.patch`), so there's no scheme this could diverge from. The actual
+  file-writing/committing stays 100% owned by bump-my-version either way.
 
 ### 2. `src/repo_tasks/gitflow.py` — raw git plumbing
 
@@ -122,11 +129,21 @@ mirroring nvie's git-flow branch-naming and merge-back conventions:
 - `release/*` branches off `develop`; `hotfix/*` branches off `main`. Both finish by merging back to
   **both** `develop` and `main`, with the release tag created on `main`.
 
+**Branch-then-bump order, straight from nvie's source article** (corrected after review — the
+original design here had it backwards): the release/hotfix branch is cut _first_, unbumped, off its
+base; the version bump commit is made **on the branch itself**, after it exists. Not
+bump-the-base-then-branch — that would make an aborted release leave a stray bump commit sitting on
+`develop`/`main` even with no release branch to show for it. `version.py`'s `next_version(current,
+part)` computes the branch's name (pure arithmetic — the config our `bump` always generates never
+customizes bump-my-version's parse/serialize, so hand-rolling this one piece doesn't risk diverging
+from what the tool would compute) _before_ the real, file-writing `bump` call runs on the new
+branch.
+
 Tasks:
 
 - `feature_start(c, name)` / `feature_finish(c, name)`
-- `release_start(c, bump, group=None)` — calls `version.bump(part=bump, group=group)` first, then
-  creates the `release/*` branch off the now-bumped `develop`.
+- `release_start(c, bump, group=None)` — checks out `develop`, branches `release/<next_version>` off
+  it, then calls `version.bump(part=bump, group=group, tag=False)` **on the release branch**.
 - `release_finish(c, push=False)` — merges the release branch into `main` and `develop`, tags `main`
   at the merge commit, deletes the release branch. Pushes branches + tag only if `push=True`. No
   `name`/branch argument on finish — reads the current branch (via `git rev-parse --abbrev-ref
@@ -134,6 +151,24 @@ Tasks:
   name (`release/<version>` → `v<version>`), not passed separately.
 - `hotfix_start(c, bump, group=None)` / `hotfix_finish(c, push=False)` — same shape as release,
   sourced from `main` instead of `develop`.
+
+**Hotfix merge-back exception, also straight from nvie's article** (quoting it directly: _"when a
+release branch currently exists, the hotfix changes need to be merged into that release branch,
+instead of develop"_): `hotfix_finish` checks `git for-each-ref refs/heads/release/*` after tagging
+`main`, and if a `release/*` branch is open, merges into **that** instead of `develop` — `develop`
+picks the fix up later, transitively, when the release itself finishes. Raises if more than one
+`release/*` branch exists (ambiguous — this repo's model assumes at most one release in flight at a
+time, same as nvie's). `--push` pushes whichever branch actually got the merge (`main
+<merge_back_target>`), not a hardcoded `main develop`.
+
+**Known, accepted rough edge:** if a hotfix bumps a version that collides with an in-flight release
+branch's own already-bumped version line, merging into the release branch produces a real git merge
+conflict on that line (both sides touched the same line differently) — confirmed hands-on in the
+dry run below. This is correct, expected behavior, not something to auto-resolve: `git merge --no-ff`
+just fails and the task halts (no `warn=True` anywhere in `gitflow.py`), same as any other `c.run`
+failure. A human resolves it exactly as they would running the real `git-flow` tool by hand
+(normally by keeping the release branch's own, higher version number) and finishes the remaining
+steps (deleting the hotfix branch, etc.) manually — there's no "resume this task" mechanism.
 
 ### 3. Explicit bump type only
 
@@ -159,12 +194,25 @@ branch-mapping issues entirely, by not depending on automatic inference in the f
   then `release_start --bump=patch` → `release_finish` (no `--push`), inspecting `git log`/`git tag`
   before trusting the flow more broadly.
 
-**Dry run result:** run in an isolated scratch repo (editable-installed from this repo's real
-source) rather than against this repo's own branches, since Phase 1 work was still uncommitted at
-the time. Caught a real bug the unit tests missed: `_start` was bumping the version on whatever
+**Dry run result (round 1):** run in an isolated scratch repo (editable-installed from this repo's
+real source) rather than against this repo's own branches, since Phase 1 work was still uncommitted
+at the time. Caught a real bug the unit tests missed: `_start` was bumping the version on whatever
 branch happened to be checked out _before_ switching to `develop`/`main`, so the release/hotfix
 branch got cut from an unbumped base and the bump commit landed on the wrong branch. Fixed by
 checking out the base branch before bumping, not after; added a regression test asserting full
 call _order_ (`tests/test_gitflow.py`'s prior assertions only checked the tail of the call list,
 which is why they didn't catch it). Re-run confirmed: `main` ends at the bumped version, the tag
 lands on the right commit, `develop` stays in sync, no stray branches survive.
+
+**Dry run result (round 2, after the nvie-alignment corrections above):** re-verified branch-then-
+bump ordering directly (`develop`'s/`main`'s version file confirmed untouched right after
+`release_start`/`hotfix_start` — only the new branch has the bump). Then exercised the hotfix
+redirect specifically: opened `release/1.1.0` off `develop` (left unfinished), cut and finished
+`hotfix/1.0.1` off `main` — confirmed the merge-back targeted `release/1.1.0`, not `develop`
+(`develop` stayed at the old version throughout). Hit the expected version-line merge conflict doing
+so (matches the "known, accepted rough edge" noted above); resolved it by hand keeping the release
+branch's version, then finished the release — confirmed `main` and `develop` both converge on
+`1.1.0`, both tags (`v1.0.1`, `v1.1.0`) land on the correct commits. Also caught and fixed an
+unrelated real bug in the same pass: `_open_release_branch`'s `git for-each-ref
+--format=%(refname:short)` wasn't shell-quoted, so the bare parentheses broke the shell `c.run`
+invokes through — fixed by single-quoting the format string.
