@@ -3,7 +3,9 @@
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos —
 `quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the composite `fix`/`check`/
 `precommit` graph), `dev_env` (`venv`/`claude_hook`/`setup` — the one-time dev-loop bootstrap after
-cloning), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) —
+cloning), `venv` (`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle,
+CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write
+`uv.lock`), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) —
 extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
@@ -55,10 +57,32 @@ the exact wiring `ns` does, to replicate a narrower version of it.
 Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_check` unconditionally
 (no allowances), so type-check config must exist everywhere `check` runs.
 
-`inv dev-env.setup` is the one command to run once after cloning: `uv sync` + `direnv allow`, plus
-wiring Claude Code's Bash tool to auto-activate the venv too (`claude-hook`, no-ops if the repo has
-no `.envrc`). `inv docs.build`/`docs.serve` assume `zensical` is installed — add it as a project
-`docs` dependency group, it isn't a dependency of this package.
+`inv dev-env.setup` is the one command to run once after cloning: syncs `.venv` from `uv.lock`
+(`venv.sync`) + `direnv allow`, plus wiring Claude Code's Bash tool to auto-activate the venv too
+(`claude-hook`, no-ops if the repo has no `.envrc`). `inv docs.build`/`docs.serve` assume `zensical`
+is installed — add it as a project `docs` dependency group, it isn't a dependency of this package.
+
+### venv/deps: lock-respecting, CI/docker-aware
+
+`venv.sync` (and `venv.create`, its no-args first-time wrapper) always run `uv sync --locked` —
+this fails loudly on a missing or stale `uv.lock` instead of uv's own default of silently
+rewriting it. `inv deps.lock` is the _only_ task in this package that ever runs `uv lock`; every
+other `deps.*`/`venv.*` task is read-only with respect to the lockfile.
+
+Two independent flags cover CI/docker, instead of one opaque `ci=` boolean — a CI test job usually
+still wants dev deps, while a runtime image wants neither:
+
+```shell
+inv venv.sync --no-editable            # CI test job: real (non-editable) install, keep dev deps
+inv venv.sync --no-editable --no-dev   # runtime image: neither dev deps nor an editable install
+inv venv.sync --no-install-project     # deps-only venv, for a Docker/CI layer cache keyed on
+                                        # just pyproject.toml + uv.lock, before any repo code lands
+```
+
+A wheel-based prod image builds on top of that deps-only layer: `inv dist.build` to produce
+`dist/*.whl`, then `inv venv.install_wheel` (`uv pip install --no-deps`) to add just the project
+package to the same `.venv` — no re-resolution, so the shipped container runs exactly the wheel
+that could also go straight to `inv dist.publish`.
 
 ## Developing
 

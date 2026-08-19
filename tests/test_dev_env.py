@@ -15,7 +15,7 @@ def test_venv_syncs_and_allows_direnv(monkeypatch):
     c = MockContext(run=True)
     dev_env.venv.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert c.run.call_args_list == [  # pyright: ignore[reportAttributeAccessIssue]
-        (("uv sync",), {"echo": True}),
+        (("uv sync --locked",), {"echo": True}),
         (("direnv allow",), {"echo": True}),
     ]
 
@@ -24,7 +24,7 @@ def test_venv_skips_direnv_allow_when_direnv_missing(monkeypatch, capsys):
     monkeypatch.setattr(dev_env, "_command_exists", lambda name: False)
     c = MockContext(run=Result())
     dev_env.venv.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv sync", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("uv sync --locked", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
     assert "direnv not found" in capsys.readouterr().out
 
 

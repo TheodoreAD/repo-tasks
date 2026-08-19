@@ -1,5 +1,6 @@
-"""Dev-loop bootstrap tasks: `uv sync` + direnv auto-activation, and wiring Claude Code's Bash
-tool to pick up the same environment. `setup` is the one command to run once after cloning."""
+"""Dev-loop bootstrap tasks: venv lifecycle (delegated to venv.create) + direnv auto-activation,
+and wiring Claude Code's Bash tool to pick up the same environment. `setup` is the one command to
+run once after cloning."""
 
 import json
 import shutil
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 from invoke import task
+
+import repo_tasks.venv as venv_module
 
 _CLAUDE_ENV_CACHE_DIR = Path.home() / ".cache" / "claude-code"
 
@@ -45,8 +48,9 @@ def _direnv_hook_command(env_file: Path) -> str:
 
 @task
 def venv(c):
-    """Create/refresh this repo's .venv (uv sync) and let direnv auto-activate it."""
-    c.run("uv sync", echo=True)
+    """Create/refresh this repo's .venv (venv.sync, lock-respecting) and let direnv
+    auto-activate it."""
+    venv_module.sync(c)
     if _command_exists("direnv"):
         c.run("direnv allow", echo=True)
     else:

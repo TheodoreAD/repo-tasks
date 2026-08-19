@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 updated: 2026-08-20
 ---
 
@@ -11,7 +11,7 @@ conflates three concerns that need to vary independently: (1) core venv lifecycl
 resync from `uv.lock`), (2) dev-loop-only glue (direnv auto-activation, Claude Code's Bash-tool
 hook), (3) dependency-lock-file operations (lock/list/tree), which `dev_env.py` doesn't touch at
 all today. `uv sync`'s own default behavior is also a latent trap for this repo's stated design
-goals: with no `--locked`/`--frozen` flag it will silently *update* `uv.lock` to match
+goals: with no `--locked`/`--frozen` flag it will silently _update_ `uv.lock` to match
 `pyproject.toml` whenever they've drifted — exactly the "mutate state for convenience instead of
 surfacing an issue" failure mode this repo's other tasks are built to avoid (`quality.check` is a
 no-mutation CI-style gate; `gitflow.py` never silently auto-resolves a merge conflict, it fails
@@ -44,9 +44,9 @@ idiom, not a bespoke one.
 no repo code) is exactly this standard pattern, not a novel need — added §1's `no_install_project`
 flag and §6's Docker recipe below. Also surfaced a real cross-cutting gotcha while researching:
 [astral-sh/uv#15643](https://github.com/astral-sh/uv/issues/15643) — `uv sync --locked
---no-install-project` (and `--locked` generally) fails if *only* the project's own version changed
+--no-install-project` (and `--locked` generally) fails if _only_ the project's own version changed
 in `pyproject.toml`, because `uv.lock` embeds that version too. This directly affects
-`release-management.md`'s `version.bump`: a bump commit needs `deps.lock` re-run *before* it's
+`release-management.md`'s `version.bump`: a bump commit needs `deps.lock` re-run _before_ it's
 committed, or the very next `--locked` sync (correctly) fails until someone notices and relocks.
 Not this plan's bug to fix — `version.py` is `release-management.md`'s file — but worth flagging
 there as a known interaction (see that plan for the actual fix).
@@ -65,7 +65,7 @@ there as a known interaction (see that plan for the actual fix).
   artifact build shouldn't link back to a live source tree the way a dev-loop editable install
   does. `--no-dev` skips the dev dependency group, for a slim runtime-only install (a production
   image doesn't need `ruff`/`pytest`). `--no-install-project` ("Do not install the current
-  project") syncs *only* third-party dependencies, skipping the local project entirely — the
+  project") syncs _only_ third-party dependencies, skipping the local project entirely — the
   deps-only venv the request asked for, so a CI job or Docker builder stage can build/cache that
   layer from just `pyproject.toml`+`uv.lock`, before the repo's own code is even present, and reuse
   it across builds no matter whether `--no-dev` is also set. §6 below spells out the concrete
@@ -79,7 +79,7 @@ there as a known interaction (see that plan for the actual fix).
   directory.
 - `install_wheel(c, wheel="dist/*.whl")` — `uv pip install --no-deps <wheel>`. The prod-with-wheel
   path's final piece (§6): once a builder stage has already synced third-party deps via
-  `sync(no_install_project=True, ...)`, this adds *only* the already-built project package
+  `sync(no_install_project=True, ...)`, this adds _only_ the already-built project package
   (`dist.build`'s output, `plans/2026-08-19-python-package-tasks.md`) on top of that same venv —
   `--no-deps` means it never re-resolves or touches anything `sync` already installed, so it can't
   silently pull a dependency version that diverges from what's locked/cached. Distinct from `sync`
@@ -94,7 +94,7 @@ there as a known interaction (see that plan for the actual fix).
 - `lock(c, upgrade=False, package=None)` — `uv lock`, `--upgrade` for a full re-resolve, or
   `--upgrade-package <package>` for one deliberate bump (matches the exact command README.md
   already documents for a consumer bumping pinned `repo-tasks` itself: "a later fix reaches a
-  consumer only via a deliberate `uv lock --upgrade-package repo-tasks`"). This is the *only* task
+  consumer only via a deliberate `uv lock --upgrade-package repo-tasks`"). This is the _only_ task
   in the whole package that ever runs `uv lock` — `venv.sync`'s `--locked` flag guarantees a stale
   lock fails instead of getting silently rewritten by any other task.
 - `check(c)` — `uv lock --check` ("Check if the lockfile is up-to-date"), read-only, no venv
@@ -111,7 +111,7 @@ there as a known interaction (see that plan for the actual fix).
   --locked --no-editable [--no-dev] -o <output>` (confirmed flags via `uv export --help`; `--locked`
   keeps the same never-silently-mutate posture as everything else here). Not needed by the Docker
   recipe in §6 below (that path copies the already-synced `.venv` directly, no requirements file
-  involved) — this exists for every *other* consumer of a plain pinned dependency list: SBOM/
+  involved) — this exists for every _other_ consumer of a plain pinned dependency list: SBOM/
   vulnerability scanners (`pip-audit`, Trivy, Snyk), or any non-uv-aware CI step that only speaks
   `requirements.txt`.
 - Every task here is read-only except `lock` itself — `list`/`tree`/`check`/`export` never write
@@ -129,8 +129,8 @@ there as a known interaction (see that plan for the actual fix).
 ### 4. CI/docker usage (the "we need a CI/docker mode" ask)
 
 No separate `ci=True` task flag — deliberately named after what each flag actually does
-(`no_editable`, `no_dev`) rather than one opaque `ci` boolean, since a real CI *test* job usually
-still wants dev deps (`pytest`, `ruff`) installed to run `quality.check`, while a docker *runtime*
+(`no_editable`, `no_dev`) rather than one opaque `ci` boolean, since a real CI _test_ job usually
+still wants dev deps (`pytest`, `ruff`) installed to run `quality.check`, while a docker _runtime_
 image wants neither dev deps nor an editable install. A Dockerfile or CI job calls
 `inv venv.sync --no-editable` (test job: still wants dev deps) or
 `inv venv.sync --no-editable --no-dev` (runtime image: neither) directly — `venv.create`'s
@@ -168,7 +168,7 @@ second from-source build that merely resolves to the same versions.
   mounted, matching Astral's documented dev workflow (mount project, exclude `.venv` from the
   mount).
 - **Prod image**: `COPY` the real source in (this stage only, never the final one),
-  `inv dist.build` (produces `dist/*.whl`), then `inv venv.install_wheel` against the *same*
+  `inv dist.build` (produces `dist/*.whl`), then `inv venv.install_wheel` against the _same_
   `.venv` populated by the deps-only layer — adds only the project package, no re-resolution.
   Final stage: fresh minimal base, non-root user (`groupadd`/`useradd --system`, matching
   `uv-docker-example`'s pattern exactly), `COPY --from=builder --chown=<user> /app/.venv
