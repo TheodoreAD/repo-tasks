@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-19
 ---
 
@@ -158,3 +158,13 @@ branch-mapping issues entirely, by not depending on automatic inference in the f
 - Manual dry run against this repo itself on a throwaway branch: `feature_start` → `feature_finish`,
   then `release_start --bump=patch` → `release_finish` (no `--push`), inspecting `git log`/`git tag`
   before trusting the flow more broadly.
+
+**Dry run result:** run in an isolated scratch repo (editable-installed from this repo's real
+source) rather than against this repo's own branches, since Phase 1 work was still uncommitted at
+the time. Caught a real bug the unit tests missed: `_start` was bumping the version on whatever
+branch happened to be checked out _before_ switching to `develop`/`main`, so the release/hotfix
+branch got cut from an unbumped base and the bump commit landed on the wrong branch. Fixed by
+checking out the base branch before bumping, not after; added a regression test asserting full
+call _order_ (`tests/test_gitflow.py`'s prior assertions only checked the tail of the call list,
+which is why they didn't catch it). Re-run confirmed: `main` ends at the bumped version, the tag
+lands on the right commit, `develop` stays in sync, no stray branches survive.
