@@ -1,8 +1,10 @@
 # repo-tasks
 
-Shared, reproducible quality-tooling [invoke](https://www.pyinvoke.org/) tasks — `lint`/`format`/
-`type_check`/`shell_check`/`test`, and the composite `fix`/`check`/`precommit` graph — for personal
-Python repos, extracted from
+Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos —
+`quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the composite `fix`/`check`/
+`precommit` graph), `dev_env` (`venv`/`claude_hook`/`setup` — the one-time dev-loop bootstrap after
+cloning), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) —
+extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo.
@@ -52,6 +54,11 @@ the exact wiring `ns` does, to replicate a narrower version of it.
 
 Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_check` unconditionally
 (no allowances), so type-check config must exist everywhere `check` runs.
+
+`inv dev-env.setup` is the one command to run once after cloning: `uv sync` + `direnv allow`, plus
+wiring Claude Code's Bash tool to auto-activate the venv too (`claude-hook`, no-ops if the repo has
+no `.envrc`). `inv docs.build`/`docs.serve` assume `zensical` is installed — add it as a project
+`docs` dependency group, it isn't a dependency of this package.
 
 ## Developing
 

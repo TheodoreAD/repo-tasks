@@ -6,9 +6,11 @@ and no consumer-side change needed when a new module (docker, python_pkg, helm, 
 
 from invoke import Collection
 
-from . import gitflow, quality, version
+from . import dev_env, docs, gitflow, quality, version
 
 ns = Collection()
 ns.add_collection(Collection.from_module(quality), name="quality")
 ns.add_collection(Collection.from_module(version), name="version")
 ns.add_collection(Collection.from_module(gitflow), name="gitflow")
+ns.add_collection(Collection.from_module(dev_env), name="dev_env")
+ns.add_collection(Collection.from_module(docs), name="docs")
