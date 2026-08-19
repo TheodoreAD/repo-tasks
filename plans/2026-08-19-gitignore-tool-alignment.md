@@ -41,8 +41,7 @@ just this one file: reuse actively-maintained upstream work instead of rolling o
 one already exists.** Checked directly (2026-08-19) whether that upstream work already exists for
 the ".gitignore content" half of this problem, rather than assuming `repo_tasks` should author a
 Python `.gitignore` from scratch: **it does, and it's already the thing PyCharm itself is built on.**
-PyCharm/IntelliJ's bundled `.ignore` plugin ([JetBrains/idea-gitignore on
-GitHub](https://github.com/JetBrains/idea-gitignore), formerly `hsz/idea-gitignore`, now maintained
+PyCharm/IntelliJ's bundled `.ignore` plugin ([JetBrains/idea-gitignore on GitHub](https://github.com/JetBrains/idea-gitignore), formerly `hsz/idea-gitignore`, now maintained
 directly by JetBrains — the "New → .gitignore file" generator built into PyCharm/every JetBrains IDE)
 generates its templates from **[github/gitignore](https://github.com/github/gitignore)** — GitHub's
 own officially-maintained template repository — not a bespoke JetBrains list. Confirmed via the
@@ -76,7 +75,7 @@ mainstream, widely-used IDE tool already delegates to instead of maintaining its
 - [NEEDS CLARIFICATION: how much of the "community-standard excludes" set is already covered by (a)
   each tool's own sane defaults — recall `power-user-linux-setup`'s own §C4 gotcha: basedpyright's
   default `exclude` already includes `**/.*`/`**/node_modules`/`**/__pycache__`, and the bug was
-  *replacing* that default rather than the default itself being insufficient — versus (b) genuinely
+  _replacing_ that default rather than the default itself being insufficient — versus (b) genuinely
   needing to be added somewhere. The likely real fix in most cases is "never let a config replace a
   tool's already-sensible default list" rather than "add more excludes" — confirm per tool before
   assuming new rules are needed anywhere.]
@@ -104,7 +103,7 @@ mainstream, widely-used IDE tool already delegates to instead of maintaining its
   - **A small, fixed, always-run, hard-coded check** — worth coding directly, not left to agent
     judgment, because it's cheap, deterministic, and the failure mode it catches is severe and
     non-obvious to debug from the symptom alone: verify (`git check-ignore <path>`, or equivalent)
-    that the short, fixed list of paths `repo_tasks`'s *own* gitignore-reliant tool behavior actually
+    that the short, fixed list of paths `repo_tasks`'s _own_ gitignore-reliant tool behavior actually
     depends on (`.venv` today; whatever the dprint/pytest/shellcheck audit above adds) really are
     ignored in the calling repo. Same shape and same test discipline as every other leaf task in
     `quality.py` (`MockContext`-tested), folded into `configs.diff` (or a small dedicated task) —
