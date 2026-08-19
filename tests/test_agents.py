@@ -1,0 +1,64 @@
+"""Tests for repo_tasks.agents: exercises claude_hook's real filesystem/JSON logic against
+tmp_path — the merge-into-existing-settings behavior and idempotency are the parts worth
+covering directly."""
+
+import json
+from typing import cast
+
+from invoke import MockContext
+
+from repo_tasks import agents
+
+
+def test_claude_hook_noop_without_envrc(tmp_path, capsys):
+    c = MockContext()
+    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert not (tmp_path / ".claude").exists()
+    assert "nothing to hook" in capsys.readouterr().out
+
+
+def test_claude_hook_writes_new_settings(tmp_path):
+    (tmp_path / ".envrc").write_text("use flake\n")
+    c = MockContext()
+    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+    settings_path = tmp_path / ".claude" / "settings.json"
+    settings = cast(
+        agents._ClaudeSettings,  # pyright: ignore[reportPrivateUsage]
+        json.loads(settings_path.read_text()),
+    )
+    env_file = agents._claude_env_file_path(tmp_path.resolve())  # pyright: ignore[reportPrivateUsage]
+    assert settings.get("env", {}).get("CLAUDE_ENV_FILE") == str(env_file)
+    bash_group = next(g for g in settings.get("hooks", {}).get("PreToolUse", []) if g["matcher"] == "Bash")
+    assert bash_group["hooks"][0]["command"] == agents._direnv_hook_command(env_file)  # pyright: ignore[reportPrivateUsage]
+    assert env_file.exists()
+
+
+def test_claude_hook_merges_into_existing_settings(tmp_path):
+    (tmp_path / ".envrc").write_text("use flake\n")
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    existing = {"hooks": {"PreToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "echo hi"}]}]}}
+    (claude_dir / "settings.json").write_text(json.dumps(existing))
+
+    c = MockContext()
+    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+    settings = cast(
+        agents._ClaudeSettings,  # pyright: ignore[reportPrivateUsage]
+        json.loads((claude_dir / "settings.json").read_text()),
+    )
+    matchers = {g["matcher"] for g in settings.get("hooks", {}).get("PreToolUse", [])}
+    assert matchers == {"Write", "Bash"}
+
+
+def test_claude_hook_already_configured_is_idempotent(tmp_path, capsys):
+    (tmp_path / ".envrc").write_text("use flake\n")
+    c = MockContext()
+    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    settings_path = tmp_path / ".claude" / "settings.json"
+    before = settings_path.read_text()
+
+    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert settings_path.read_text() == before
+    assert "already configured" in capsys.readouterr().out

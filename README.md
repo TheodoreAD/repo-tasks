@@ -1,12 +1,13 @@
 # repo-tasks
 
-Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos —
-`quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the composite `fix`/`check`/
-`precommit` graph), `dev_env` (`venv`/`claude_hook`/`setup` — the one-time dev-loop bootstrap after
-cloning), `venv` (`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle,
-CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write
-`uv.lock`), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) —
-extracted from
+Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
+module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the
+composite `fix`/`check`/`precommit` graph), `venv` (`sync`/`create`/`delete`/`install_wheel` —
+lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
+the only tasks that ever write `uv.lock`), `direnv` (`allow` — idempotent shell auto-activation),
+`agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv
+environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above),
+and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo.
@@ -57,10 +58,11 @@ the exact wiring `ns` does, to replicate a narrower version of it.
 Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_check` unconditionally
 (no allowances), so type-check config must exist everywhere `check` runs.
 
-`inv dev-env.setup` is the one command to run once after cloning: syncs `.venv` from `uv.lock`
-(`venv.sync`) + `direnv allow`, plus wiring Claude Code's Bash tool to auto-activate the venv too
-(`claude-hook`, no-ops if the repo has no `.envrc`). `inv docs.build`/`docs.serve` assume `zensical`
-is installed — add it as a project `docs` dependency group, it isn't a dependency of this package.
+`inv dev-env.setup` is the one command to run once after cloning: `venv.create` (syncs `.venv` from
+`uv.lock`) + `direnv.allow` + `agents.claude-hook` (wiring Claude Code's Bash tool to auto-activate
+the venv too, no-ops if the repo has no `.envrc`) — `dev_env.py` itself owns no logic, it's pure
+orchestration of those three modules. `inv docs.build`/`docs.serve` assume `zensical` is installed
+— add it as a project `docs` dependency group, it isn't a dependency of this package.
 
 ### venv/deps: lock-respecting, CI/docker-aware
 

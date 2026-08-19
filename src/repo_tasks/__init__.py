@@ -6,8 +6,8 @@ and no consumer-side change needed when a new module (docker, python_pkg, helm, 
 
 from invoke import Collection
 
+from . import agents, dev_env, direnv, docs, gitflow, quality, version
 from . import deps as deps_module
-from . import dev_env, docs, gitflow, quality, version
 from . import venv as venv_module
 
 ns = Collection()
@@ -18,3 +18,5 @@ ns.add_collection(Collection.from_module(dev_env), name="dev_env")
 ns.add_collection(Collection.from_module(docs), name="docs")
 ns.add_collection(Collection.from_module(venv_module), name="venv")
 ns.add_collection(Collection.from_module(deps_module), name="deps")
+ns.add_collection(Collection.from_module(direnv), name="direnv")
+ns.add_collection(Collection.from_module(agents), name="agents")

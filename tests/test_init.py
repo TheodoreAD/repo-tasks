@@ -1,7 +1,7 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
-from repo_tasks import deps, dev_env, docs, ns, quality
+from repo_tasks import agents, deps, dev_env, direnv, docs, ns, quality
 from repo_tasks import venv as venv_module
 
 
@@ -61,3 +61,23 @@ def test_venv_module_is_individually_importable():
 
 def test_deps_module_is_individually_importable():
     assert deps.lock is not None
+
+
+def test_ns_nests_direnv_under_its_own_name():
+    direnv_collection = ns.collections["direnv"]
+    assert direnv_collection is not None
+    assert "allow" in direnv_collection.task_names
+
+
+def test_ns_nests_agents_under_its_own_name():
+    agents_collection = ns.collections["agents"]
+    assert agents_collection is not None
+    assert "claude-hook" in agents_collection.task_names
+
+
+def test_direnv_module_is_individually_importable():
+    assert direnv.allow is not None
+
+
+def test_agents_module_is_individually_importable():
+    assert agents.claude_hook is not None
