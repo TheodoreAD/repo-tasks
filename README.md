@@ -35,19 +35,20 @@ committed lockfile change, not automatically.
 
 ```python
 # consumer repo's tasks.py, at the repo root
-from invoke import Collection
-from repo_tasks import quality
-
-ns = Collection.from_module(quality)
+from repo_tasks import ns
 ```
 
-That's the entire file — no local override. `inv precommit` is then the single command,
-identical across every consumer repo (`Collection.from_module` assigned directly as `ns` puts the
-module's tasks at the root, not behind a `quality.` prefix — that prefix only shows up in a repo that
-instead does `namespace.add_collection(Collection.from_module(quality))`, e.g.
-`power-user-linux-setup`'s own `tasks/__init__.py`). Every leaf task (`lint_check`, `type_check`,
-`test`, ...) is also individually invocable (`inv test`, etc.) — each has its own docstring, so
-`inv -l` alone is enough to know what's available.
+That's the entire file — no local override, no `add_collection` boilerplate. `ns` is a ready-made
+root `Collection` with every task module this package ships already nested under its own name, so
+`inv quality.precommit` is the one command, identical across every consumer repo, and stays that way
+automatically as new modules (`docker`, `python_pkg`, `helm`, ...) land here — nothing to change on
+the consumer side when they do. Every leaf task (`lint_check`, `type_check`, `test`, ...) is also
+individually invocable (`inv quality.test`, etc.) — each has its own docstring, so `inv -l` alone is
+enough to know what's available.
+
+Each module is also importable on its own (`from repo_tasks import quality`) for a consumer that
+wants to hand-pick a subset rather than take the full `ns` — see `src/repo_tasks/__init__.py` for
+the exact wiring `ns` does, to replicate a narrower version of it.
 
 Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_check` unconditionally
 (no allowances), so type-check config must exist everywhere `check` runs.
@@ -56,8 +57,8 @@ Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_ch
 
 ```shell
 uv sync
-inv precommit
+inv quality.precommit
 ```
 
-This repo dogfoods its own tasks against itself (`tasks.py` wires up the same `quality` module a
-consumer would import).
+This repo dogfoods its own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the
+same one-liner a consumer uses).
