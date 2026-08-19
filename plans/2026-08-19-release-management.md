@@ -312,3 +312,15 @@ failure; after simulating the PR merge (pushing a merge commit directly to the b
 in for GitHub's merge button), `support_hotfix_finalize` fetched, fast-forwarded, tagged
 `v2.1.0` on `support/1.4.x`, and pushed the tag — confirmed no `gh pr create` call at all in that
 run, matching the "no second PR" design.
+
+## Known follow-up (2026-08-20)
+
+Surfaced while designing `plans/2026-08-20-venv-deps-tasks.md`'s `venv.sync --locked`:
+[astral-sh/uv#15643](https://github.com/astral-sh/uv/issues/15643) — `uv sync --locked` (and
+`--no-install-project`) fails if *only* the project's own version changed in `pyproject.toml` with
+no dependency change, because `uv.lock` embeds that version too. `version.bump` here writes the new
+version via `bump-my-version` but never re-runs `uv lock`, so a bump commit leaves `uv.lock` stale
+until something notices via a failed `--locked` sync. Not urgent today (the `venv`/`deps` split
+that would surface this in practice hasn't landed yet), but `_bump` (or `bump`'s caller in
+`gitflow.py`) should run `deps.lock` as part of the bump commit once that module exists, so the
+commit that changes the version and the commit that re-locks never drift apart.
