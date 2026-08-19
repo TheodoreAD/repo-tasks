@@ -7,6 +7,7 @@ dependencies = ["invoke"]
 [dependency-groups]
 dev = [
   "basedpyright>=1.39.10",
+  "bump-my-version",
   "pytest",
   "ruff",
 ]
