@@ -44,3 +44,31 @@ def test_bump_raises_for_an_unknown_group():
     c = MockContext(run=True)
     with pytest.raises(ValueError, match="no-such-project"):
         version.bump.body(c, part="minor", group="no-such-project")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
+def test_current_version_reads_the_resolved_projects_version():
+    c = MockContext(run=True)
+    assert version.current_version(c) == "0.1.0"
+
+
+def test_current_version_raises_for_an_unknown_group():
+    c = MockContext(run=True)
+    with pytest.raises(ValueError, match="no-such-project"):
+        version.current_version(c, group="no-such-project")
+
+
+@pytest.mark.parametrize(
+    ("part", "expected"),
+    [
+        ("major", "2.0.0"),
+        ("minor", "1.3.0"),
+        ("patch", "1.2.4"),
+    ],
+)
+def test_next_version_bumps_the_requested_part_and_resets_lower_parts(part, expected):
+    assert version.next_version("1.2.3", part) == expected
+
+
+def test_next_version_raises_for_an_unknown_part():
+    with pytest.raises(ValueError, match="bogus"):
+        version.next_version("1.2.3", "bogus")

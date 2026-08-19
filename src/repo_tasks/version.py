@@ -12,6 +12,38 @@ from invoke import task
 from .projects import discover_python_projects
 
 
+def _resolve_project(c, group):
+    python_projects = discover_python_projects(c)
+    if group is not None:
+        python_projects = [p for p in python_projects if p.name == group]
+        if not python_projects:
+            raise ValueError(f"no project found for group {group!r}")
+    return python_projects[0]
+
+
+def current_version(c, group=None):
+    """The current version of one group's project, resolved via projects.py."""
+    return _resolve_project(c, group).version
+
+
+def next_version(current, part):
+    """The version `bump` would produce for `part`, computed without writing or committing
+    anything. Safe to hand-roll here (rather than shell out to bump-my-version to compute it):
+    our generated config never customizes parse/serialize, so every version this repo ever bumps
+    is plain major.minor.patch, bump-my-version's own default scheme. gitflow.py uses this to name
+    a release/hotfix branch *before* the bump commit exists — nvie's branch-then-bump order — the
+    actual file-writing/committing still stays fully owned by bump-my-version via `bump` below."""
+    major_s, minor_s, patch_s = current.split(".")
+    major, minor, patch = int(major_s), int(minor_s), int(patch_s)
+    if part == "major":
+        return f"{major + 1}.0.0"
+    if part == "minor":
+        return f"{major}.{minor + 1}.0"
+    if part == "patch":
+        return f"{major}.{minor}.{patch + 1}"
+    raise ValueError(f"unknown version part {part!r}")
+
+
 def _bumpversion_config(project, tag) -> str:
     pyproject_path = project.path / "pyproject.toml"
     tag_config = 'tag = true\ntag_name = "v{new_version}"' if tag else "tag = false"
@@ -29,13 +61,8 @@ replace = 'version = "{{new_version}}"'
 
 
 def _bump(c, part, group=None, tag=True):
-    python_projects = discover_python_projects(c)
-    if group is not None:
-        python_projects = [p for p in python_projects if p.name == group]
-        if not python_projects:
-            raise ValueError(f"no project found for group {group!r}")
-
-    config = _bumpversion_config(python_projects[0], tag)
+    project = _resolve_project(c, group)
+    config = _bumpversion_config(project, tag)
     with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as f:
         _ = f.write(config)
         config_path = Path(f.name)
