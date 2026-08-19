@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 updated: 2026-08-19
 ---
 
@@ -33,13 +33,42 @@ Surveyed the mainstream python versioning/release tools before designing this:
   `basedpyright`, `dprint`, `shfmt` — all already assumed on `PATH`). **Reimplementing the branch
   mechanics directly with raw `git` commands avoids that new dependency.**
 
-**Further research requested before implementation starts:** the survey above (drawn from web
-search summaries, not hands-on trials) isn't considered deep enough yet to fully close out the
-bump-my-version-vs-commitizen-vs-python-semantic-release choice. Before starting Design §1
-(`version.py`), do a proper hands-on comparison — actual CLI walkthroughs of each tool's bump/tag
-flow, real config file examples (`.bumpversion.toml` vs `.cz.toml`), and a closer look at
-commitizen's monorepo tag-format mechanics specifically — rather than relying on the search-result
-summary this plan currently cites.
+**Hands-on comparison (resolves the earlier "further research requested" flag):** all three tools
+were actually installed and driven against a throwaway git repo simulating the docker+helm
+group-bump scenario (a `pyproject.toml` `[project].version` plus a paired `chart/Chart.yaml`'s
+`version`/`appVersion`).
+
+- `bump-my-version` and `commitizen` **both** fully satisfy every hard requirement (explicit bump,
+  multi-file group bump in one commit+tag, configurable tag template, independent-group isolation)
+  — this was a close call, not a blowout. `bump-my-version` still wins on fit: it has no
+  commit-message-inference code path at all (structurally impossible to regress into a "surprise
+  inferred bump," the exact failure mode this plan's explicit-bump-only design existed to avoid),
+  and its own dependency footprint (9 packages: click, httpx2, pydantic, pydantic-settings,
+  questionary, rich, rich-click, tomlkit, wcmatch) doesn't drag in commitizen's
+  changelog/conventional-commit machinery (this plan explicitly defers CHANGELOG generation).
+  commitizen is a legitimate fallback if changelog generation is ever added later — its default
+  substring-replace bumped both `Chart.yaml` keys with zero per-file regex, genuinely simpler there
+  than bump-my-version's exact search/replace.
+- **Real config-shape finding that changes Design §1 below:** bump-my-version's pure-CLI-only mode
+  (`--no-configured-files` + positional file args + one global `--search`/`--replace`) cannot express
+  different search/replace templates per file in one call — confirmed by hitting `Did not find
+  'version = "0.2.0"' in file: 'chart/Chart.yaml'` when a TOML-style pattern was applied to the YAML
+  file. A static, hand-authored `.bumpversion.toml` doesn't work either, since a group's file set
+  (which projects/charts belong to it) isn't fixed — it's whatever `projects.py`/`repo-tasks.toml`
+  resolve for that group at call time. **`version.py` must generate a temporary per-group
+  `.bumpversion.toml` at runtime** (via `--config-file <tmp path>`), built from that call's resolved
+  group members, not maintain a static config file.
+- `python-semantic-release`: the plan's "derives the bump automatically" phrasing is slightly
+  imprecise — real explicit-override flags exist (`--major`/`--minor`/`--patch`). But hands-on
+  testing found two concrete blockers rather than just "fights gitflow's model" in the abstract: (1)
+  `semantic-release version --minor --no-push --no-vcs-release` fails outright with `error: No such
+  remote 'origin'` on a repo with no configured remote — directly conflicts with this plan's
+  local-only-by-default `release_finish`/`hotfix_finish`; (2) `--minor` on a fresh repo with no prior
+  release tag silently no-ops — prints `The next version is: 0.1.0!` (unchanged) and tags `v0.1.0`
+  with no actual bump and no commit; only a second run, after a prior tag existed, bumped correctly.
+  The explicit-override flags force the bump _type_ but don't bypass its release-history/commit-
+  parsing engine, and the very first release is a silent-no-op trap. Confirms the plan's original
+  instinct, on firmer ground than the initial search-summary survey had.
 
 Decisions from review:
 
@@ -47,9 +76,13 @@ Decisions from review:
 - `release_finish`/`hotfix_finish` default to local-only (merge + tag, no push); an explicit `--push`
   flag opts into pushing branches and the tag to the remote in the same command.
 - CHANGELOG generation is deferred — not in this plan's v1.
-- Full gitflow (feature/release/hotfix/support) is what's being built, but `version.py`'s bump logic
-  stays independent of `gitflow.py`'s branch orchestration, leaving a seam for a future trunk-based
-  release module to reuse just the bump step without adopting gitflow's branch model.
+- Feature/release/hotfix gitflow is what's being built (Design §2 below); long-lived `support/*`
+  branches (for patching an old major/minor line) are out of scope for v1 — genuinely separate
+  machinery (branches off an old tag rather than `develop`/`main`), not a trivial variant of the
+  other three, and no concrete need for it yet. `version.py`'s bump logic stays independent of
+  `gitflow.py`'s branch orchestration either way, leaving a seam for a future trunk-based release
+  module (or a later `support` addition) to reuse just the bump step without adopting gitflow's full
+  branch model.
 - Version scope follows `monorepo-workspace-foundation.md`'s grouped/hybrid model: `version.py`
   bumps and tags one _group_ at a time, not always a single project and not always the whole repo.
 
@@ -60,17 +93,25 @@ Decisions from review:
 - New dev dependency: `bump-my-version`.
 - `inv version.bump --part=major|minor|patch [--group=name]` — resolves every
   `projects.py`/`repo-tasks.toml` entry sharing `group` (default: Phase 1's sole implicit project),
-  bumps the requested part, writes every file in that group (a python project's `pyproject.toml`
-  `[project].version`, and/or a paired Helm chart's `Chart.yaml` `version`/`appVersion` per
-  `plans/2026-08-19-helm-chart-tasks.md`), commits, and tags:
+  writes a **temporary per-group `.bumpversion.toml`** from those resolved entries (one
+  `[[tool.bumpversion.files]]` block per file: a python project's `pyproject.toml` `[project].version`,
+  and/or a paired Helm chart's `Chart.yaml` `version`/`appVersion` per
+  `plans/2026-08-19-helm-chart-tasks.md`), invokes `bump-my-version bump <part> --config-file <tmp>`,
+  then deletes the temp file. No static, hand-authored `.bumpversion.toml` — confirmed hands-on that
+  bump-my-version's config-free CLI mode can't express per-file search/replace templates, and a
+  group's file set isn't fixed ahead of time anyway. Tag name is set inside the generated config
+  (`tag_name`), not a separate CLI flag:
   - `vX.Y.Z` when the group is Phase 1's sole implicit project.
   - `<group>-vX.Y.Z` once multiple groups exist (Phase 2), matching commitizen's documented
-    monorepo tag-format precedent.
+    monorepo tag-format precedent (also hands-on confirmed working via bump-my-version's own
+    `tag_name` templating, not just commitizen's).
 - Individually invocable outside a release flow — e.g. a plain point release with no gitflow
-  ceremony at all.
-- Dedicated config file `.bumpversion.toml` (bump-my-version's own default name) rather than a
-  `[tool.bumpversion]` table inside `pyproject.toml`, matching this repo's `ruff.toml`/
-  `pyrightconfig.json`/`pytest.ini` per-tool-own-file precedent.
+  ceremony at all. Returns the new version string so `gitflow.py`'s `release_start`/`hotfix_start`
+  can name the release/hotfix branch after it.
+- `tag=True` keyword arg (default on for standalone use). `gitflow.py`'s `release_start`/
+  `hotfix_start` call `version.bump(..., tag=False)` — the tag belongs on `main` at _finish_ time
+  per Design §2 below, not on `develop`/`main` at _bump_ time, so bump-my-version's own `tag=true`
+  config line is conditional on this flag rather than always on.
 
 ### 2. `src/repo_tasks/gitflow.py` — raw git plumbing
 
@@ -87,7 +128,10 @@ Tasks:
 - `release_start(c, bump, group=None)` — calls `version.bump(part=bump, group=group)` first, then
   creates the `release/*` branch off the now-bumped `develop`.
 - `release_finish(c, push=False)` — merges the release branch into `main` and `develop`, tags `main`
-  at the merge commit, deletes the release branch. Pushes branches + tag only if `push=True`.
+  at the merge commit, deletes the release branch. Pushes branches + tag only if `push=True`. No
+  `name`/branch argument on finish — reads the current branch (via `git rev-parse --abbrev-ref
+  HEAD`), same convention the real `git-flow` tool uses; the tag itself is derived from the branch
+  name (`release/<version>` → `v<version>`), not passed separately.
 - `hotfix_start(c, bump, group=None)` / `hotfix_finish(c, push=False)` — same shape as release,
   sourced from `main` instead of `develop`.
 
@@ -99,11 +143,12 @@ branch-mapping issues entirely, by not depending on automatic inference in the f
 
 ## Files touched
 
-- `src/repo_tasks/version.py` (new)
+- `src/repo_tasks/version.py` (new) — no static `.bumpversion.toml`; generated at runtime per bump.
 - `src/repo_tasks/gitflow.py` (new)
-- `.bumpversion.toml` (new, this repo's own — Phase 1 config bumping its own `pyproject.toml`)
 - `pyproject.toml` — add `bump-my-version` to `dependency-groups.dev`
-- `tasks.py` — wire the new `version`/`gitflow` collections alongside the existing `quality` one
+- `src/repo_tasks/__init__.py` — nest the new `version`/`gitflow` collections into `ns` alongside the
+  existing `quality` one (consumers pick both up automatically via `from repo_tasks import ns`, no
+  `tasks.py` change needed)
 
 ## Verification
 
