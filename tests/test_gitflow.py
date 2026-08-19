@@ -306,3 +306,17 @@ def test_finalize_raises_when_not_on_expected_branch_kind():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match="release/"):
         gitflow.release_finalize.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
+# ---------------------------------------------------------------------------
+# support — start only, no finish/merge-back; matches nvie's own git-flow tool's scope
+# ---------------------------------------------------------------------------
+
+
+def test_support_start_branches_off_the_given_base(capsys):
+    c = MockContext(run=True)
+    gitflow.support_start.body(c, version="1.4.x", base="v1.4.0")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with("git checkout -b support/1.4.x v1.4.0", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    out = capsys.readouterr().out
+    assert "support/1.4.x" in out
+    assert "never merges back" in out

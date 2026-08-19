@@ -213,3 +213,21 @@ def hotfix_finalize(c):
     per nvie, if one exists. PR mode only — local mode's hotfix_finish already does all of this in
     one step."""
     _finalize(c, "hotfix")
+
+
+@task
+def support_start(c, version, base):
+    """Branch support/<version> off <base> (a commit on main — a tag, SHA, or old release branch),
+    for maintaining an old release line in parallel with ongoing development. Matches nvie's own
+    git-flow tool's scope for this exactly (its README: "For support branches, the <base> arg must
+    be a commit on master") — start only, no finish/merge-back task, because there isn't one: a
+    support branch is a long-lived, permanently diverging line, not a short-lived branch that
+    reconverges with develop/main. Patch and tag it directly afterward — inv version.bump
+    --part=patch (any --group your project uses) plus a plain git tag/push work as-is on any
+    checked-out branch, support included; nothing gitflow-specific needed for that part."""
+    c.run(f"git checkout -b support/{version} {base}", echo=True)
+    _next_steps(
+        f"You're on support/{version} now — commit patches directly here.",
+        "Cut a point release on this line with: inv version.bump --part=patch, then git tag/push as usual.",
+        "This branch never merges back into develop/main — that would pull old-line code forward into new development.",
+    )

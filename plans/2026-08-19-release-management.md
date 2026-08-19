@@ -76,13 +76,16 @@ Decisions from review:
 - `release_finish`/`hotfix_finish` default to local-only (merge + tag, no push); an explicit `--push`
   flag opts into pushing branches and the tag to the remote in the same command.
 - CHANGELOG generation is deferred — not in this plan's v1.
-- Feature/release/hotfix gitflow is what's being built (Design §2 below); long-lived `support/*`
-  branches (for patching an old major/minor line) are out of scope for v1 — genuinely separate
-  machinery (branches off an old tag rather than `develop`/`main`), not a trivial variant of the
-  other three, and no concrete need for it yet. `version.py`'s bump logic stays independent of
-  `gitflow.py`'s branch orchestration either way, leaving a seam for a future trunk-based release
-  module (or a later `support` addition) to reuse just the bump step without adopting gitflow's full
-  branch model.
+- Feature/release/hotfix/support gitflow is what's being built (Design §2 below). `support/*`
+  landed after all — needed for real work sooner than expected; scoping it out originally undersold
+  how small it actually is. Correction on attribution while implementing it: `support` branches
+  aren't in nvie's original article at all (confirmed by re-reading it directly — the article only
+  documents feature/release/hotfix) — they're a feature of his companion `git-flow` CLI tool
+  specifically (its README: `git flow support start <release> <base>`, "the `<base>` arg must be a
+  commit on `master`"), which is itself thin on the semantics beyond that. `version.py`'s bump logic
+  stays independent of `gitflow.py`'s branch orchestration regardless, leaving a seam for a future
+  trunk-based release module to reuse just the bump step without adopting gitflow's full branch
+  model.
 - Version scope follows `monorepo-workspace-foundation.md`'s grouped/hybrid model: `version.py`
   bumps and tags one _group_ at a time, not always a single project and not always the whole repo.
 
@@ -200,6 +203,20 @@ confirmed the exact `gh pr create` command construction is reached with correct 
 stopped there (`none of the git remotes configured for this repository point to a known GitHub
 host`) rather than opening a real repo/PR under an account without asking first.
 
+#### `support/*` branches
+
+`support_start(c, version, base)` — `git checkout -b support/<version> <base>`, that's the entire
+task, matching nvie's own `git-flow` tool's scope for this exactly: **start only, no
+finish/merge-back**, because a support branch is a long-lived, permanently diverging maintenance
+line for an old release (`base` is normally an old tag, e.g. `v1.4.0`), not a short-lived branch
+that reconverges with `develop`/`main` — merging it back would pull old-line code forward into new
+development. Patching and tagging a point release on that line afterward needs no new machinery:
+`inv version.bump --part=patch` (any `--group`) and a plain `git tag`/`git push` already work as-is
+on whatever branch is currently checked out, `support/*` included, since neither cares what branch
+it's called from. Prints the same "here's what to do next" guidance as every other stopping point in
+this file. No PR-mode distinction either — branch creation never touches a protected branch,
+same as `release_start`/`hotfix_start`.
+
 ### 3. Explicit bump type only
 
 `major`/`minor`/`patch` is always an explicit argument to `release_start`/`hotfix_start`, never
@@ -264,4 +281,9 @@ develop --head sync/v1.1.0 ...` with correct arguments before hitting the same e
 no-GitHub-host boundary. Every git-only step in both the `*_finish`→PR and `*_finalize`→PR paths is
 confirmed correct; the `gh pr create` calls themselves (and the hotfix-redirect variant of
 `*_finalize`'s second PR) are covered by unit tests but not yet exercised against a real
-GitHub-linked repo.
+GitHub-linked repo. Follow-up plan for that:
+`plans/2026-08-19-gitflow-test-repo-twin.md` (permanent test-repo twin, not started yet).
+
+`support_start` needed no dry run beyond its unit test — it's a single `git checkout -b`, the exact
+same primitive `feature_start`/`release_start`/`hotfix_start` already exercise for real in rounds 1
+and 2 above, just with a caller-supplied `base` instead of a hardcoded `develop`/`main`.
