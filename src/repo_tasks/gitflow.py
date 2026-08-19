@@ -222,12 +222,86 @@ def support_start(c, version, base):
     git-flow tool's scope for this exactly (its README: "For support branches, the <base> arg must
     be a commit on master") — start only, no finish/merge-back task, because there isn't one: a
     support branch is a long-lived, permanently diverging line, not a short-lived branch that
-    reconverges with develop/main. Patch and tag it directly afterward — inv version.bump
-    --part=patch (any --group your project uses) plus a plain git tag/push work as-is on any
-    checked-out branch, support included; nothing gitflow-specific needed for that part."""
+    reconverges with develop/main. Branch creation itself is always local, same as
+    release_start/hotfix_start — nothing to protect yet."""
     c.run(f"git checkout -b support/{version} {base}", echo=True)
     _next_steps(
-        f"You're on support/{version} now — commit patches directly here.",
-        "Cut a point release on this line with: inv version.bump --part=patch, then git tag/push as usual.",
+        f"support/{version} created — protect it exactly like main: it ships to prod just the same.",
+        f"To patch it: inv gitflow.support-hotfix-start --support={version} --bump=patch",
         "This branch never merges back into develop/main — that would pull old-line code forward into new development.",
     )
+
+
+def _support_hotfix_start(c, support, bump, group=None):
+    target = f"support/{support}"
+    c.run(f"git checkout {target}", echo=True)
+    branch = f"support-hotfix/{support}/{next_version(current_version(c, group=group), bump)}"
+    c.run(f"git checkout -b {branch}", echo=True)
+    version_bump(c, bump, group=group, tag=False)
+    return branch
+
+
+@task
+def support_hotfix_start(c, support, bump, group=None):
+    """Branch a patch off support/<support> to fix something on that maintenance line, then bump
+    the version on the patch branch (no tag yet). support/* is protected exactly like main — it
+    produces artifacts that ship to prod — so patching it goes through the same start/finish/
+    finalize shape as a regular hotfix, just targeting the support branch instead of main. Never
+    touches develop or the release-branch redirect rule: those exist to keep an active mainline
+    release in sync, which has nothing to do with an already-diverged support line."""
+    branch = _support_hotfix_start(c, support, bump, group=group)
+    _next_steps(f"When ready to ship: inv gitflow.support-hotfix-finish --support={support} (from the {branch} branch)")
+
+
+def _support_hotfix_branch_and_tag(c, support):
+    branch = _current_branch(c)
+    prefix = f"support-hotfix/{support}/"
+    if not branch.startswith(prefix):
+        raise ValueError(
+            f"not on a {prefix}* branch (currently on {branch!r}) — checkout the {prefix}* branch for this "
+            "support line first"
+        )
+    return branch, f"v{branch.removeprefix(prefix)}"
+
+
+@task
+def support_hotfix_finish(c, support, push=False, local=False):
+    """PR mode (default): opens a PR merging the patch branch into support/<support> and stops —
+    run support_hotfix_finalize once it's merged. --local does the old direct merge+tag+delete in
+    one step; push (--local only) additionally pushes the support branch + tag."""
+    branch, tag = _support_hotfix_branch_and_tag(c, support)
+    target = f"support/{support}"
+
+    if local:
+        c.run(f"git checkout {target}", echo=True)
+        c.run(f"git merge --no-ff {branch}", echo=True)
+        c.run(f"git tag {tag}", echo=True)
+        c.run(f"git branch -d {branch}", echo=True)
+        if push:
+            c.run(f"git push origin {target}", echo=True)
+            c.run(f"git push origin {tag}", echo=True)
+        return
+
+    url = _open_pr(c, branch, target, f"Support patch {tag}", f"Merging {branch} into {target}.")
+    _next_steps(
+        f"PR opened: {url}",
+        f"Once it's approved and merged on GitHub, run: inv gitflow.support-hotfix-finalize --support={support} "
+        f"(from the {branch} branch)",
+    )
+
+
+@task
+def support_hotfix_finalize(c, support):
+    """Run once the PR from support_hotfix_finish has been merged on GitHub: fetches
+    support/<support> and tags the new tip. No second PR — unlike release/hotfix finalize, a
+    support patch never carries into develop. PR mode only — local mode's support_hotfix_finish
+    already does all of this in one step."""
+    _, tag = _support_hotfix_branch_and_tag(c, support)
+    target = f"support/{support}"
+
+    c.run(f"git fetch origin {target}", echo=True)
+    c.run(f"git checkout {target}", echo=True)
+    c.run(f"git merge --ff-only origin/{target}", echo=True)
+    c.run(f"git tag {tag}", echo=True)
+    c.run(f"git push origin {tag}", echo=True)
+    _next_steps(f"{tag} tagged on {target} — this support patch is fully finished, nothing else to run.")

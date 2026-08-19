@@ -6,6 +6,8 @@ run=True stub, since their branch name comes from version.next_version's pure ar
 repo's real pyproject.toml version (same fixture value test_version.py relies on), not from
 actually running bump-my-version."""
 
+import re
+
 import pytest
 from invoke import MockContext, Result
 
@@ -309,7 +311,7 @@ def test_finalize_raises_when_not_on_expected_branch_kind():
 
 
 # ---------------------------------------------------------------------------
-# support — start only, no finish/merge-back; matches nvie's own git-flow tool's scope
+# support_start — start only, no finish/merge-back; matches nvie's own git-flow tool's scope
 # ---------------------------------------------------------------------------
 
 
@@ -320,3 +322,115 @@ def test_support_start_branches_off_the_given_base(capsys):
     out = capsys.readouterr().out
     assert "support/1.4.x" in out
     assert "never merges back" in out
+    assert "support-hotfix-start" in out  # points at the actual patch flow, not "commit directly"
+
+
+# ---------------------------------------------------------------------------
+# support_hotfix — a hotfix-shaped flow targeting a support/* branch instead of main. support/* is
+# protected exactly like main (it ships to prod too), so patching it needs the same PR discipline —
+# but never touches develop or the release-branch redirect rule, since a support line is already
+# permanently diverged from the mainline.
+# ---------------------------------------------------------------------------
+
+
+def test_support_hotfix_start_branches_off_the_support_branch_before_bumping():
+    c = MockContext(run=True)
+    gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert call_strings[0] == "git checkout support/1.4.x"
+    assert call_strings[1] == "git checkout -b support-hotfix/1.4.x/0.1.1"
+    assert "--config-file" in call_strings[2]
+
+
+def test_support_hotfix_finish_pr_mode_opens_a_pr_against_the_support_branch(capsys):
+    c = MockContext(
+        run={
+            **_rev_parse("support-hotfix/1.4.x/0.1.1"),
+            **_ok("git push -u origin support-hotfix/1.4.x/0.1.1"),
+            **_gh_pr(
+                "support/1.4.x",
+                "support-hotfix/1.4.x/0.1.1",
+                "Support patch v0.1.1",
+                "Merging support-hotfix/1.4.x/0.1.1 into support/1.4.x.",
+            ),
+        }
+    )
+    gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    out = capsys.readouterr().out
+    assert "inv gitflow.support-hotfix-finalize --support=1.4.x" in out
+
+
+def test_support_hotfix_finish_local_merges_tags_and_deletes():
+    branch = "support-hotfix/1.4.x/0.1.1"
+    c = MockContext(
+        run={
+            **_rev_parse(branch),
+            "git checkout support/1.4.x": Result(exited=0),
+            f"git merge --no-ff {branch}": Result(exited=0),
+            "git tag v0.1.1": Result(exited=0),
+            f"git branch -d {branch}": Result(exited=0),
+        }
+    )
+    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
+        (("git checkout support/1.4.x",), {"echo": True}),
+        ((f"git merge --no-ff {branch}",), {"echo": True}),
+        (("git tag v0.1.1",), {"echo": True}),
+        ((f"git branch -d {branch}",), {"echo": True}),
+    ]
+
+
+def test_support_hotfix_finish_local_pushes_when_requested():
+    branch = "support-hotfix/1.4.x/0.1.1"
+    c = MockContext(
+        run={
+            **_rev_parse(branch),
+            "git checkout support/1.4.x": Result(exited=0),
+            f"git merge --no-ff {branch}": Result(exited=0),
+            "git tag v0.1.1": Result(exited=0),
+            f"git branch -d {branch}": Result(exited=0),
+            **_ok("git push origin support/1.4.x", "git push origin v0.1.1"),
+        }
+    )
+    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True, push=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert c.run.call_args_list[-2:] == [  # pyright: ignore[reportAttributeAccessIssue]
+        (("git push origin support/1.4.x",), {"echo": True}),
+        (("git push origin v0.1.1",), {"echo": True}),
+    ]
+
+
+def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
+    c = MockContext(
+        run={
+            **_rev_parse("support-hotfix/1.4.x/0.1.1"),
+            "git fetch origin support/1.4.x": Result(exited=0),
+            "git checkout support/1.4.x": Result(exited=0),
+            "git merge --ff-only origin/support/1.4.x": Result(exited=0),
+            "git tag v0.1.1": Result(exited=0),
+            **_ok("git push origin v0.1.1"),
+        }
+    )
+    gitflow.support_hotfix_finalize.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert call_strings == [
+        "git rev-parse --abbrev-ref HEAD",
+        "git fetch origin support/1.4.x",
+        "git checkout support/1.4.x",
+        "git merge --ff-only origin/support/1.4.x",
+        "git tag v0.1.1",
+        "git push origin v0.1.1",
+    ]
+    assert not any(s.startswith("gh pr create") for s in call_strings)  # never carries into develop
+
+
+def test_support_hotfix_raises_when_not_on_the_matching_support_hotfix_branch():
+    c = MockContext(run=_rev_parse("main"))
+    with pytest.raises(ValueError, match=re.escape("support-hotfix/1.4.x/")):
+        gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
+def test_support_hotfix_raises_for_a_different_support_lines_branch():
+    """On support-hotfix/1.5.x/0.1.1 but finishing for support 1.4.x — must not accept it."""
+    c = MockContext(run=_rev_parse("support-hotfix/1.5.x/0.1.1"))
+    with pytest.raises(ValueError, match=re.escape("support-hotfix/1.4.x/")):
+        gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]

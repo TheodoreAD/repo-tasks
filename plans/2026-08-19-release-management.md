@@ -210,12 +210,26 @@ task, matching nvie's own `git-flow` tool's scope for this exactly: **start only
 finish/merge-back**, because a support branch is a long-lived, permanently diverging maintenance
 line for an old release (`base` is normally an old tag, e.g. `v1.4.0`), not a short-lived branch
 that reconverges with `develop`/`main` — merging it back would pull old-line code forward into new
-development. Patching and tagging a point release on that line afterward needs no new machinery:
-`inv version.bump --part=patch` (any `--group`) and a plain `git tag`/`git push` already work as-is
-on whatever branch is currently checked out, `support/*` included, since neither cares what branch
-it's called from. Prints the same "here's what to do next" guidance as every other stopping point in
-this file. No PR-mode distinction either — branch creation never touches a protected branch,
-same as `release_start`/`hotfix_start`.
+development. Prints the same "here's what to do next" guidance as every other stopping point in this
+file. No PR-mode distinction for `support_start` itself — branch creation never touches a protected
+branch, same as `release_start`/`hotfix_start`.
+
+**Correction from review, before this ever shipped:** the original design said patching a support
+branch afterward needed "no new machinery" — just `version.bump` plus a plain `git tag`/`git push`
+directly on the branch. Wrong: **`support/*` produces artifacts that ship to prod, exactly like
+`main`, so it needs to be protected exactly like `main`** — a direct push/commit doesn't work any
+more than it would against a protected `main`. `support_hotfix_start(c, support, bump, group=None)` /
+`support_hotfix_finish(c, support, push=False, local=False)` / `support_hotfix_finalize(c, support)`
+give it the same PR-mode-primary, two-step shape as a regular hotfix (branch off `support/<support>`
+unbumped → bump on the branch → PR into `support/<support>` → once merged, fetch+tag), reusing
+`_open_pr`/`_next_steps`. Two real differences from a regular hotfix, both because a support line is
+already permanently diverged from the mainline: **no `develop` merge at all**, and **no
+release-branch redirect check** — that redirect exists to keep an active mainline release in sync,
+which has nothing to do with an isolated support line. Branch naming: `support-hotfix/<support>/
+<version>` — the `<support>` segment matters because `support_hotfix_finish`/`_finalize` need to
+know which support branch a patch branch belongs to without depending on any persisted state (this
+tool is stateless throughout), and `<support>` is passed again explicitly at finish/finalize time,
+same "no hidden state" posture as everything else here.
 
 ### 3. Explicit bump type only
 
@@ -284,6 +298,17 @@ confirmed correct; the `gh pr create` calls themselves (and the hotfix-redirect 
 GitHub-linked repo. Follow-up plan for that:
 `plans/2026-08-19-gitflow-test-repo-twin.md` (permanent test-repo twin, not started yet).
 
-`support_start` needed no dry run beyond its unit test — it's a single `git checkout -b`, the exact
-same primitive `feature_start`/`release_start`/`hotfix_start` already exercise for real in rounds 1
-and 2 above, just with a caller-supplied `base` instead of a hardcoded `develop`/`main`.
+`support_start` needed no separate dry run — it's a single `git checkout -b`, the exact same
+primitive `feature_start`/`release_start`/`hotfix_start` already exercise for real in rounds 1 and 2
+above, just with a caller-supplied `base` instead of a hardcoded `develop`/`main`.
+
+**Dry run result (round 4, support_hotfix):** local mode verified in a scratch repo (tag `v1.4.0` →
+`support_start` → `support_hotfix_start --bump=patch` → `support_hotfix_finish --local`) — confirmed
+`support/1.4.x` ends up merged, tagged, and the patch branch deleted, with `develop` never entering
+the picture at all. PR mode verified the same two-boundary pattern as round 3, against a local bare
+repo standing in for `origin`: `support_hotfix_finish` reached `gh pr create --base support/1.4.x
+--head support-hotfix/1.4.x/2.1.0 ...` with correct arguments before the expected no-GitHub-host
+failure; after simulating the PR merge (pushing a merge commit directly to the bare repo, standing
+in for GitHub's merge button), `support_hotfix_finalize` fetched, fast-forwarded, tagged
+`v2.1.0` on `support/1.4.x`, and pushed the tag — confirmed no `gh pr create` call at all in that
+run, matching the "no second PR" design.
