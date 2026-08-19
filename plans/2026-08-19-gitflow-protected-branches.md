@@ -1,5 +1,5 @@
 ---
-status: idea
+status: superseded by plans/2026-08-19-release-management.md
 updated: 2026-08-19
 ---
 
@@ -52,3 +52,13 @@ a `repo-tasks.toml`-level default, TBD per the open question above) that changes
 PR URL, and stop — no local merge, no tag yet. A second task (name TBD) run once the PR is actually
 merged does the fetch-`main`-and-tag step. `develop`'s merge-back likely follows the same shape if
 it's also protected, otherwise stays a plain local fast-forward.
+
+## Migrated to
+
+All four open questions above got resolved and implemented directly in
+`plans/2026-08-19-release-management.md`'s Design §2 ("PR mode (default) vs. local mode"), rather
+than as a separate follow-on: PR mode is now the default (not opt-in — reverses this plan's rough
+direction above), `local=True` is the opt-in alternative; finish is async two-step (`*_finish` opens
+the PR and stops, `*_finalize` tags + opens the develop/redirect-target PR once a human has merged
+it); `develop`'s merge-back always goes through a PR too, uniformly, no protection-status detection
+needed. See that file for the actual design and `src/repo_tasks/gitflow.py` for the implementation.

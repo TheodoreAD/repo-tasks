@@ -137,38 +137,68 @@ bump-the-base-then-branch — that would make an aborted release leave a stray b
 part)` computes the branch's name (pure arithmetic — the config our `bump` always generates never
 customizes bump-my-version's parse/serialize, so hand-rolling this one piece doesn't risk diverging
 from what the tool would compute) _before_ the real, file-writing `bump` call runs on the new
-branch.
+branch. `release_start(c, bump, group=None)` / `hotfix_start(c, bump, group=None)` do this — unaffected
+by which finish mode (below) is used, since branch creation never touches a protected branch.
 
-Tasks:
+#### PR mode (default) vs. local mode — a scope decision from review
 
-- `feature_start(c, name)` / `feature_finish(c, name)`
-- `release_start(c, bump, group=None)` — checks out `develop`, branches `release/<next_version>` off
-  it, then calls `version.bump(part=bump, group=group, tag=False)` **on the release branch**.
-- `release_finish(c, push=False)` — merges the release branch into `main` and `develop`, tags `main`
-  at the merge commit, deletes the release branch. Pushes branches + tag only if `push=True`. No
-  `name`/branch argument on finish — reads the current branch (via `git rev-parse --abbrev-ref
-  HEAD`), same convention the real `git-flow` tool uses; the tag itself is derived from the branch
-  name (`release/<version>` → `v<version>`), not passed separately.
-- `hotfix_start(c, bump, group=None)` / `hotfix_finish(c, push=False)` — same shape as release,
-  sourced from `main` instead of `develop`.
+A protected `main`/`develop` (required reviews/CI) rejects a direct push outright, merge or no
+merge — real for any team repo using the full gitflow convention. A single-person repo or one doing
+trunk-based development with feature branches merged straight into `main` has nothing to protect
+against and gains nothing from the ceremony. Decision: **PR mode, via the `gh` CLI, is the default
+and primary path** for every `*_finish` task; **local mode (`local=True`) keeps the old
+direct-merge-and-push behavior**, for a single-person repo or fast local testing with no `gh`, no
+network, no waiting on a human reviewer. GitHub only — no GitLab/Merge Requests investment (see
+`plans/2026-08-19-gitflow-protected-branches.md`, now superseded/absorbed into this section, for the
+scope reasoning).
 
-**Hotfix merge-back exception, also straight from nvie's article** (quoting it directly: _"when a
-release branch currently exists, the hotfix changes need to be merged into that release branch,
-instead of develop"_): `hotfix_finish` checks `git for-each-ref refs/heads/release/*` after tagging
-`main`, and if a `release/*` branch is open, merges into **that** instead of `develop` — `develop`
-picks the fix up later, transitively, when the release itself finishes. Raises if more than one
-`release/*` branch exists (ambiguous — this repo's model assumes at most one release in flight at a
-time, same as nvie's). `--push` pushes whichever branch actually got the merge (`main
-<merge_back_target>`), not a hardcoded `main develop`.
+**Local mode** (`local=True`) is exactly what was designed and verified in dry-run round 2 below,
+unchanged: `feature_finish(c, name, local=True)` merges directly into `develop`;
+`release_finish`/`hotfix_finish(c, push=False, local=True)` merge into `main` (tag there), then into
+`develop` — or, per nvie (quoting the article directly: _"when a release branch currently exists,
+the hotfix changes need to be merged into that release branch, instead of develop"_), into an open
+`release/*` branch instead if one exists for a hotfix (`git for-each-ref
+refs/heads/release/*`, raises if more than one is open — ambiguous, this repo's model assumes at
+most one release in flight at a time). `push=True` additionally pushes branches + tag. **Known,
+accepted rough edge**, confirmed hands-on: a hotfix redirected into an in-flight release branch can
+produce a real git merge conflict if both bumped the same version line — expected, not
+auto-resolved (`git merge --no-ff` just fails, no `warn=True` anywhere in this file), resolved
+exactly as a human running real `git-flow` would (normally keeping the release branch's own, higher
+version), then the remaining steps (branch deletion, etc.) finished by hand — no "resume this task"
+mechanism.
 
-**Known, accepted rough edge:** if a hotfix bumps a version that collides with an in-flight release
-branch's own already-bumped version line, merging into the release branch produces a real git merge
-conflict on that line (both sides touched the same line differently) — confirmed hands-on in the
-dry run below. This is correct, expected behavior, not something to auto-resolve: `git merge --no-ff`
-just fails and the task halts (no `warn=True` anywhere in `gitflow.py`), same as any other `c.run`
-failure. A human resolves it exactly as they would running the real `git-flow` tool by hand
-(normally by keeping the release branch's own, higher version number) and finishes the remaining
-steps (deleting the hotfix branch, etc.) manually — there's no "resume this task" mechanism.
+**PR mode** (default) can't complete synchronously — a real PR needs human review/CI before it
+merges — so it's two steps per branch instead of one:
+
+- `feature_finish(c, name)` — pushes `feature/<name>`, opens a PR against `develop`, stops. Nothing
+  else to run once it's merged (a feature has no version/tag to finalize).
+- `release_finish(c, push=False)` / `hotfix_finish(c, push=False)` — pushes the branch, opens a PR
+  against `main`, stops. **No tag yet, no develop merge yet** — those can't happen until the PR
+  actually merges (`push` is accepted but only meaningful for `local=True`; PR mode always pushes,
+  that's what makes the PR possible).
+- `release_finalize(c)` / `hotfix_finalize(c)` — run once a human has merged that PR on GitHub, from
+  the same `release/*`/`hotfix/*` branch. `git fetch origin main` → `git checkout main` → `git merge
+  --ff-only origin/main` (fails loudly if history unexpectedly diverged — no silent overwrite) →
+  tags `main`'s now-updated tip → pushes the tag → branches a `sync/<tag>` branch off that same
+  updated `main` → opens a **second** PR: `develop`, or (hotfix, same nvie redirect rule as local
+  mode, checked again independently here) an open `release/*` branch. A fresh `sync/<tag>` branch
+  rather than reusing the original `release/*`/`hotfix/*` branch: many GitHub repos auto-delete a
+  branch the moment its first PR merges, which would silently break opening the second PR if it
+  tried to reuse that same branch.
+
+**General rule established here, meant to extend beyond this file**: any command that stops short of
+"the whole flow is fully done" — because a PR was opened and needs a human, or because a guard
+clause tripped — prints exactly what to run next (a private `_next_steps(*lines)` helper), rather
+than leaving the caller to go read source to figure out what happens now. Applied throughout this
+file: every `*_start`/`*_finish`/`*_finalize` in PR mode, and worth applying to any future task
+elsewhere in this package with the same "stops for an external reason" shape.
+
+**Known limitation, not yet verified:** the actual `gh pr create` call itself needs a real
+GitHub-linked repo to exercise — the dry run below verified every git-only step (push, fetch,
+ff-only merge, tag, tag push, sync-branch push) against a local bare repo standing in for `origin`,
+confirmed the exact `gh pr create` command construction is reached with correct arguments, but
+stopped there (`none of the git remotes configured for this repository point to a known GitHub
+host`) rather than opening a real repo/PR under an account without asking first.
 
 ### 3. Explicit bump type only
 
@@ -179,8 +209,12 @@ branch-mapping issues entirely, by not depending on automatic inference in the f
 ## Files touched
 
 - `src/repo_tasks/version.py` (new) — no static `.bumpversion.toml`; generated at runtime per bump.
-- `src/repo_tasks/gitflow.py` (new)
-- `pyproject.toml` — add `bump-my-version` to `dependency-groups.dev`
+- `src/repo_tasks/gitflow.py` (new) — PR mode (default, via the `gh` CLI) and local mode
+  (`local=True`), per the "PR mode vs. local mode" subsection above.
+- `pyproject.toml` — add `bump-my-version` to `dependency-groups.dev`. `gh` itself is not a python
+  dependency — assumed already on `PATH`, same posture as `git`/`ruff`/`basedpyright`/`dprint`/
+  `shfmt` elsewhere in this repo, only needed at all when PR mode's `*_finish`/`*_finalize` tasks
+  actually run.
 - `src/repo_tasks/__init__.py` — nest the new `version`/`gitflow` collections into `ns` alongside the
   existing `quality` one (consumers pick both up automatically via `from repo_tasks import ns`, no
   `tasks.py` change needed)
@@ -216,3 +250,18 @@ branch's version, then finished the release — confirmed `main` and `develop` b
 unrelated real bug in the same pass: `_open_release_branch`'s `git for-each-ref
 --format=%(refname:short)` wasn't shell-quoted, so the bare parentheses broke the shell `c.run`
 invokes through — fixed by single-quoting the format string.
+
+**Dry run result (round 3, PR mode):** scratch repo with a local **bare** repo standing in for
+`origin` (no real GitHub host). `release_start` → `release_finish` (PR mode, default) pushed
+`release/1.1.0` to that bare "origin" correctly, then reached `gh pr create --base main --head
+release/1.1.0 ...` with exactly the expected arguments before failing on `none of the git remotes
+configured for this repository point to a known GitHub host` — the correct, expected boundary for a
+non-GitHub remote. Simulated "the PR was merged" by pushing a merge commit directly to the bare
+repo's `main` (standing in for what GitHub's merge button would produce), then ran
+`release_finalize`: fetched that merged `main` correctly, fast-forwarded local `main` to it, tagged
+`v1.1.0`, pushed the tag, branched and pushed `sync/v1.1.0`, then reached `gh pr create --base
+develop --head sync/v1.1.0 ...` with correct arguments before hitting the same expected
+no-GitHub-host boundary. Every git-only step in both the `*_finish`→PR and `*_finalize`→PR paths is
+confirmed correct; the `gh pr create` calls themselves (and the hotfix-redirect variant of
+`*_finalize`'s second PR) are covered by unit tests but not yet exercised against a real
+GitHub-linked repo.
