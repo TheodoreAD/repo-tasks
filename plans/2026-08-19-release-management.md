@@ -317,7 +317,7 @@ run, matching the "no second PR" design.
 
 Surfaced while designing `plans/2026-08-20-venv-deps-tasks.md`'s `venv.sync --locked`:
 [astral-sh/uv#15643](https://github.com/astral-sh/uv/issues/15643) — `uv sync --locked` (and
-`--no-install-project`) fails if *only* the project's own version changed in `pyproject.toml` with
+`--no-install-project`) fails if _only_ the project's own version changed in `pyproject.toml` with
 no dependency change, because `uv.lock` embeds that version too. `version.bump` here writes the new
 version via `bump-my-version` but never re-runs `uv lock`, so a bump commit leaves `uv.lock` stale
 until something notices via a failed `--locked` sync. Not urgent today (the `venv`/`deps` split

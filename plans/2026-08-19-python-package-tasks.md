@@ -84,7 +84,7 @@ build`/`uv publish`/index query against the repo root, no `--project` flag neede
 ### 6. No interaction with venv/CI-editable mode
 
 `dist.py` never touches `.venv` or installs anything editable — `uv build` always produces a real,
-non-editable sdist/wheel regardless of how the *dev* environment happens to be installed, so the
+non-editable sdist/wheel regardless of how the _dev_ environment happens to be installed, so the
 sibling `plans/2026-08-20-venv-deps-tasks.md`'s `--no-editable`/CI-mode design has nothing to plug
 into here; the two modules are orthogonal by construction.
 
