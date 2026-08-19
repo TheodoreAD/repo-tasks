@@ -16,3 +16,9 @@ to repeat them here, only what's specific to this repo.
 ## Conventions
 
 This repo dogfoods its own tasks (`tasks.py` is `from repo_tasks import ns`, same as any consumer).
+
+One module per facility, named after what it owns (`venv.py`, `deps.py`, `direnv.py`, `agents.py`,
+...) — not a broad grab-bag module. A module that only composes other modules' tasks into a
+one-command entrypoint (`dev_env.py`'s `setup`) is fine and owns no logic of its own, but avoid
+naming a module after the composite's purpose in a way that reads like it could own real
+responsibilities that actually belong to `venv`/`deps`/`dist`/etc.
