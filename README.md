@@ -41,10 +41,13 @@ from repo_tasks import quality
 ns = Collection.from_module(quality)
 ```
 
-That's the entire file — no local override. `inv quality.precommit` is then the single command,
-identical across every consumer repo. Every leaf task (`lint_check`, `type_check`, `test`, ...) is
-also individually invocable (`inv quality.test`, etc.) — each has its own docstring, so `inv -l`
-alone is enough to know what's available.
+That's the entire file — no local override. `inv precommit` is then the single command,
+identical across every consumer repo (`Collection.from_module` assigned directly as `ns` puts the
+module's tasks at the root, not behind a `quality.` prefix — that prefix only shows up in a repo that
+instead does `namespace.add_collection(Collection.from_module(quality))`, e.g.
+`power-user-linux-setup`'s own `tasks/__init__.py`). Every leaf task (`lint_check`, `type_check`,
+`test`, ...) is also individually invocable (`inv test`, etc.) — each has its own docstring, so
+`inv -l` alone is enough to know what's available.
 
 Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_check` unconditionally
 (no allowances), so type-check config must exist everywhere `check` runs.
