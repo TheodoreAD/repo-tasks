@@ -4,10 +4,12 @@ Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Pyth
 module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the
 composite `fix`/`check`/`precommit` graph), `venv` (`sync`/`create`/`delete`/`install_wheel` —
 lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
-the only tasks that ever write `uv.lock`), `direnv` (`allow` — idempotent shell auto-activation),
-`agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv
-environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above),
-and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) — extracted from
+the only tasks that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a
+wheel, publish it, and query a package index for a project's released versions), `direnv` (`allow`
+— idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
+execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone
+bootstrap composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
+[zensical](https://zensical.org/)) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo.
@@ -85,6 +87,17 @@ A wheel-based prod image builds on top of that deps-only layer: `inv dist.build`
 `dist/*.whl`, then `inv venv.install_wheel` (`uv pip install --no-deps`) to add just the project
 package to the same `.venv` — no re-resolution, so the shipped container runs exactly the wheel
 that could also go straight to `inv dist.publish`.
+
+### dist: build, publish, and query a package index
+
+`inv dist.build` builds a wheel (`--sdist` for the sdist+wheel pair PyPI conventionally expects)
+into a freshly-cleaned `dist/` — a stale wheel from a previous version can never survive into a
+fresh build. `inv dist.publish` always builds fresh first (`pre=[build]`) and runs `uv publish`
+(`--index`/`--dry-run` passed through). `inv dist.versions` lists a project's published versions
+by querying a package index directly — PEP 691 JSON Simple API, falling back to the PEP 503 HTML
+file listing if the index doesn't serve the JSON media type — since `uv` itself has no
+list-remote-versions subcommand. `dist.py` never touches `.venv` or installs anything editable;
+it's orthogonal to `venv.py`/`deps.py` by construction.
 
 ## Developing
 
