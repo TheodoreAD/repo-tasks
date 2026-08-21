@@ -119,12 +119,15 @@ there as a known interaction (see that plan for the actual fix).
 
 ### 3. `dev_env.py` trim — dev-loop glue only, delegates lifecycle to `venv.py`
 
-- `venv` task's body becomes `venv.create(c)` (imported) + the existing `direnv allow` /
-  "direnv not found" logic, unchanged behavior for a consumer — `inv dev-env.venv` and
-  `inv dev-env.setup` keep working exactly as README.md already documents, just delegating the
-  actual sync to the new module instead of inlining `uv sync` directly. No consumer-facing rename;
-  purely an internal delegation, so this stays additive rather than breaking.
-- `claude_hook` and `setup` unchanged.
+- Landed as a first pass with `dev_env.venv` (`venv.create(c)` + `direnv allow`/"direnv not found")
+  and `claude_hook` staying put in `dev_env.py` alongside `setup`.
+- **2026-08-21 follow-up:** further split per review — `dev_env.py` was still contending with
+  `venv`/`deps`/`dist` for the same kind of responsibility (naming feedback: one module per
+  facility, not a grab-bag). `direnv.py` (new) now owns `allow`; `agents.py` (new) now owns
+  `claude_hook` (and its Claude-Code-specific settings.json/hook-command helpers); `dev_env.py`'s
+  `venv` task is gone entirely — `setup` composes `venv.create`, `direnv.allow`, and
+  `agents.claude_hook` directly (`pre=[...]`), so `dev_env.py` owns no logic of its own anymore,
+  purely orchestration. See `AGENTS.md`'s Conventions section for the resulting naming rule.
 
 ### 4. CI/docker usage (the "we need a CI/docker mode" ask)
 
