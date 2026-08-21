@@ -6,12 +6,15 @@
   // instead of an ever-growing "don't check this" blocklist that has to be kept in sync by hand as
   // new non-source content (docs, generated caches, example snippets, ...) gets added — the
   // opposite failure mode of an accidentally-too-broad exclude silently un-checking real code.
-  // Confirmed equivalent (0 errors, identical warning count) to the old
-  // `exclude: [defaults, ...]` shape it replaced, both here and in `power-user-linux-setup`'s own
-  // config, which is why this is the canonical shape every consumer's `pyrightconfig.json` should
-  // use, adjusted only for that repo's real top-level source dirs (`src`/`tests` for `src`-layout
-  // consumers, `tasks`/`tests` for `power-user-linux-setup`'s own flat layout).
-  "include": ["src", "tests"],
+  // Confirmed equivalent (0 errors, identical warning count) to the old `exclude: [defaults, ...]`
+  // shape it replaced, both here and in `power-user-linux-setup`'s own config.
+  //
+  // Same fixed list for every consumer's `pyrightconfig.json`, not parameterized per repo:
+  // `src`/`tests` (library layout) + `tasks`/`tasks.py` (a flat-layout repo like
+  // `power-user-linux-setup`, and every consumer's own `tasks.py` entry point) together —
+  // basedpyright silently no-ops on whichever entries don't exist in a given repo, so one shared
+  // list works everywhere with nothing to adjust per consumer.
+  "include": ["src", "tests", "tasks", "tasks.py"],
   "failOnWarnings": false,
 
   "reportAny": "error",
