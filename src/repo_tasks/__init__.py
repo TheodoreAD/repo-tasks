@@ -6,11 +6,17 @@ and no consumer-side change needed when a new module (helm, ...) ships here."""
 
 from invoke import Collection
 
-from . import agents, dev_env, direnv, dist, docker, docs, gitflow, quality, version
+from . import agents, configs, configure, dev_env, direnv, dist, docker, docs, gitflow, quality, version
 from . import deps as deps_module
 from . import venv as venv_module
 
-ns = Collection()
+# Unnested, unlike every other module below — the one command anything outside this package
+# should ever need to depend on by name (see configure.py). Mirrors power-user-linux-setup's own
+# `namespace = Collection(setup.setup, ...)` pattern for its single top-level entrypoint. Passed
+# to the constructor, not `ns.add_task()` — invoke's `@task` decorator has no type stub, so
+# pyright falls back to the plain undecorated function signature for anything decorated with it;
+# the constructor's `*args: Any` tolerates that, `add_task`'s `task: Task` parameter doesn't.
+ns = Collection(configure.configure)
 ns.add_collection(Collection.from_module(quality), name="quality")
 ns.add_collection(Collection.from_module(version), name="version")
 ns.add_collection(Collection.from_module(gitflow), name="gitflow")
@@ -22,3 +28,4 @@ ns.add_collection(Collection.from_module(direnv), name="direnv")
 ns.add_collection(Collection.from_module(agents), name="agents")
 ns.add_collection(Collection.from_module(dist), name="dist")
 ns.add_collection(Collection.from_module(docker), name="docker")
+ns.add_collection(Collection.from_module(configs), name="configs")

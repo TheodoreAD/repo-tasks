@@ -1,7 +1,7 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
-from repo_tasks import agents, deps, dev_env, direnv, dist, docker, docs, ns, quality
+from repo_tasks import agents, configs, configure, deps, dev_env, direnv, dist, docker, docs, ns, quality
 from repo_tasks import venv as venv_module
 
 
@@ -101,3 +101,24 @@ def test_ns_nests_docker_under_its_own_name():
 
 def test_docker_module_is_individually_importable():
     assert docker.build is not None
+
+
+def test_ns_nests_configs_under_its_own_name():
+    configs_collection = ns.collections["configs"]
+    assert configs_collection is not None
+    assert {"pull", "diff"} <= set(configs_collection.task_names)
+
+
+def test_configs_module_is_individually_importable():
+    assert configs.pull is not None
+
+
+def test_ns_has_configure_unnested_at_the_top_level():
+    # Not a collection — the one command anything outside this package should ever need to
+    # depend on by name (see configure.py), so it's a bare top-level task, same as
+    # power-user-linux-setup's own `inv setup`.
+    assert "configure" in ns.task_names
+
+
+def test_configure_module_is_individually_importable():
+    assert configure.configure is not None
