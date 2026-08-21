@@ -22,3 +22,11 @@ One module per facility, named after what it owns (`venv.py`, `deps.py`, `direnv
 one-command entrypoint (`dev_env.py`'s `setup`) is fine and owns no logic of its own, but avoid
 naming a module after the composite's purpose in a way that reads like it could own real
 responsibilities that actually belong to `venv`/`deps`/`dist`/etc.
+
+When one submodule needs a sibling's task (e.g. `dev_env.py` composing `venv.create` into its own
+`pre=[...]`), import it as `from .sibling import name` — not `from . import sibling` and not
+`import repo_tasks.sibling as sibling`. Since every module here is also wired into this package's
+own `__init__.py`, those other two forms both trigger a `reportImportCycles` false positive in
+basedpyright (the submodule ends up depending on `__init__.py` itself, which already depends on
+it). `from .sibling import name` targets the submodule file directly and avoids it — see
+`version.py`/`gitflow.py` for the existing pattern.
