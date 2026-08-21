@@ -1,6 +1,6 @@
 ---
 status: landed
-updated: 2026-08-21
+updated: 2026-08-22
 ---
 
 ## Context
@@ -69,6 +69,11 @@ the buildx path only when explicitly passed — no builder bootstrap, no QEMU co
 constraint on the common path.
 
 ### 4. Auth — deferred, not dropped
+
+See `plans/2026-08-22-docker-registry-integration.md` for the real-registry (GHCR) auth/CI wiring
+this plan's v1 deliberately left out — that plan's CI path uses `docker/login-action` +
+`GITHUB_TOKEN` and doesn't need the retry logic below at all; the auto-re-auth cycle here stays
+relevant for a human's local/interactive session only.
 
 Phase 2 (not blocking this plan's v1, but written down so it isn't silently forgotten): on a clear
 auth failure (`docker push` output containing `401`/`unauthorized`), `docker.py` attempts one

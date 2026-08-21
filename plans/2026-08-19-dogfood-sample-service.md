@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-19
+updated: 2026-08-22
 ---
 
 ## Context
@@ -14,6 +14,10 @@ share one `group` to prove a single version bump actually updates both together.
 
 Decision from review: add exactly this — a minimal sample Dockerfile + matching Helm chart, living
 in this repo, purely to dogfood the docker/helm/version-grouping task modules against something real.
+
+`plans/2026-08-22-docker-registry-integration.md` is what eventually pushes this Dockerfile's image
+to a real registry (GHCR) once it exists — that plan's auth/CI wiring can land independently, but
+its actual `docker.release` verification is blocked on this plan.
 
 ## Open questions
 

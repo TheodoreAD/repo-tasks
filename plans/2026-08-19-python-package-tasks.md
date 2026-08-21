@@ -1,6 +1,6 @@
 ---
 status: landed
-updated: 2026-08-21
+updated: 2026-08-22
 ---
 
 ## Context
@@ -72,7 +72,9 @@ Once `repo-tasks`'s task-module surface is stable enough to commit to a public A
 PyPI as `repo-tasks` (name availability to be checked at that time) using this very `publish` task,
 authenticated via a PyPI API token or trusted-publisher OIDC config set up in CI at that point —
 that setup is a one-time account/CI-secret step tracked separately when it's actually attempted, not
-part of this plan's file changes.
+part of this plan's file changes. See `plans/2026-08-22-pypi-publish-integration.md` for the
+concrete follow-through on this paragraph (TestPyPI-first rollout, trusted-publishing setup, CI
+workflow).
 
 ### 5. Monorepo phase
 

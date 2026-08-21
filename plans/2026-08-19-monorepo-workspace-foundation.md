@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-21
+updated: 2026-08-22
 ---
 
 ## Context
@@ -21,6 +21,10 @@ flows, and semver bumping — see the sibling plans this one underlies:
   this plan's grouping model and the docker/helm task modules for real)
 - `plans/2026-08-20-venv-deps-tasks.md` (venv lifecycle + lock-file task modules; Phase 2 iterates
   this plan's `projects.discover_python_projects(c)` the same way `python-package-tasks.md` does)
+- `plans/2026-08-22-local-index-and-registry-testing.md` (local devpi-server/registry:3 stand-ins
+  for testing `dist.py`/`docker.py`'s real network logic in pytest, without touching anything real)
+- `plans/2026-08-22-pypi-publish-integration.md` / `plans/2026-08-22-docker-registry-integration.md`
+  (the real test.pypi.org/pypi.org and GHCR wiring `dist.py`/`docker.py` eventually publish to)
 
 All five need the same thing this plan provides: a way for a task module to answer "what project(s)
 exist in this consumer repo, where, what kind (python package / docker image / helm chart), and
