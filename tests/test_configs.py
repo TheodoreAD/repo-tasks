@@ -12,8 +12,25 @@ from repo_tasks import configs
 def test_pull_materializes_every_file_from_installed_package(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     configs.pull.body(MockContext(), source=None)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    for name in configs._CONFIG_FILES:  # pyright: ignore[reportPrivateUsage]
+    # pyrightconfig.json's `include` gets filtered to what actually exists at the pull target
+    # (see test_pull_filters_pyright_include_to_existing_paths below) — every other file is a
+    # verbatim copy of the canonical source.
+    for name in [n for n in configs._CONFIG_FILES if n != "pyrightconfig.json"]:  # pyright: ignore[reportPrivateUsage]
         assert (tmp_path / name).read_text() == (configs._source_dir(None) / name).read_text()  # pyright: ignore[reportPrivateUsage]
+
+
+def test_pull_filters_pyright_include_to_existing_paths(tmp_path, monkeypatch):
+    # basedpyright hard-errors (exit 3) on an `include` entry that isn't a real path, unlike
+    # `exclude`, which tolerates missing entries fine — this is the fix for that, confirmed live
+    # against the actual installed basedpyright, not just this filtering logic in isolation.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_something.py").write_text("")
+    configs.pull.body(MockContext(), source=None)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    pyright_text = (tmp_path / "pyrightconfig.json").read_text()
+    assert '"include": ["tests"]' in pyright_text
+    for missing in ("src", "tasks", "tasks.py"):
+        assert f'"{missing}"' not in pyright_text
 
 
 def test_pull_overwrites_existing_file(tmp_path, monkeypatch):
