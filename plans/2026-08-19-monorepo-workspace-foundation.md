@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-19
+updated: 2026-08-21
 ---
 
 ## Context
@@ -83,6 +83,16 @@ An absent file or empty arrays means zero images/charts. Every task that reads i
 cleanly — the same pattern `quality.shell_check` already uses for "no `*.sh` files in this repo,"
 safe to wire unconditionally into a future top-level composite without a per-repo opt-out.
 
+**2026-08-21 (landed, docker half):** `[[docker]]` reading landed as `projects.discover_docker_images(c)
+-> list[DockerImage]`, with one addition beyond the original design: when `repo-tasks.toml` is
+absent or has no `[[docker]]` entries, a `Dockerfile` at the repo root is treated as one implicit
+image — same zero-config ergonomics as Design §1's Phase 1 python-project fallback (per review:
+"make sure there is also some smart default for the most basic cases"). It's named after the
+repo's python project (so `group` naturally matches for version resolution), or the repo
+directory's own name if there's no `pyproject.toml`; `image` defaults to that same name as a
+local-only placeholder. See `plans/2026-08-19-docker-image-tasks.md` (now landed) for `docker.py`
+itself. `[[helm]]` reading doesn't exist yet — `helm-chart-tasks.md` is still unimplemented.
+
 ### 3. Grouping for shared version/tag tracks
 
 Optional `group` key on `[[docker]]` and `[[helm]]` entries (python projects get an implicit group
@@ -112,9 +122,10 @@ it.
 
 ## Files touched
 
-- `src/repo_tasks/projects.py` (new) — `discover_python_projects`, `PythonProject` dataclass.
-- `repo-tasks.toml` (new, this repo's own) — empty until `dogfood-sample-service.md`'s Dockerfile
-  and chart land and add the first real `[[docker]]`/`[[helm]]` entries.
+- `src/repo_tasks/projects.py` — `discover_python_projects`/`PythonProject` (landed), plus
+  `discover_docker_images`/`DockerImage` (landed 2026-08-21, docker half of Design §2).
+- `repo-tasks.toml` — this repo's own copy still doesn't exist; not needed until
+  `dogfood-sample-service.md`'s Dockerfile lands (the zero-config default covers it until then).
 - `pyproject.toml` — unchanged for Phase 1; Phase 2 adds `[tool.uv.workspace]` once
   `dogfood-sample-service.md` introduces a second workspace member.
 

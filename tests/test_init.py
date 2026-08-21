@@ -1,7 +1,7 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
-from repo_tasks import agents, deps, dev_env, direnv, dist, docs, ns, quality
+from repo_tasks import agents, deps, dev_env, direnv, dist, docker, docs, ns, quality
 from repo_tasks import venv as venv_module
 
 
@@ -91,3 +91,13 @@ def test_ns_nests_dist_under_its_own_name():
 
 def test_dist_module_is_individually_importable():
     assert dist.build is not None
+
+
+def test_ns_nests_docker_under_its_own_name():
+    docker_collection = ns.collections["docker"]
+    assert docker_collection is not None
+    assert {"build", "push", "release"} <= set(docker_collection.task_names)
+
+
+def test_docker_module_is_individually_importable():
+    assert docker.build is not None

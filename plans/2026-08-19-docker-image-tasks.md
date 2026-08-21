@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-08-19
+status: landed
+updated: 2026-08-21
 ---
 
 ## Context
@@ -54,8 +54,13 @@ Registry and image name come from `repo-tasks.toml`'s `[[docker]]` entries (`nam
 hardcoded in `docker.py` itself, keeping the task _logic_ identical across every consumer repo (the
 README's stated design goal) even though registry/image-name legitimately differs per repo.
 
-No-op cleanly when `repo-tasks.toml` has zero `[[docker]]` entries, matching
-`quality.shell_check`'s existing "no shell scripts in this repo" pattern.
+No-op cleanly when `repo-tasks.toml` has zero `[[docker]]` entries — landed as
+`projects.discover_docker_images(c)`, which additionally treats a root `Dockerfile` as one
+implicit image when there's no config at all (per review, "make sure there is also some smart
+default for the most basic cases"; see `monorepo-workspace-foundation.md`'s Design §2 for the
+full rationale). `build`/`push`/`release` all take `project=None` and resolve against whichever
+entry that returns, raising loudly (not silently picking one) if `--project` names something that
+isn't discovered.
 
 ### 3. Multi-arch (`--platforms`)
 

@@ -5,11 +5,13 @@ module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`test
 composite `fix`/`check`/`precommit` graph), `venv` (`sync`/`create`/`delete`/`install_wheel` —
 lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
 the only tasks that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a
-wheel, publish it, and query a package index for a project's released versions), `direnv` (`allow`
-— idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
-execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone
-bootstrap composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
-[zensical](https://zensical.org/)) — extracted from
+wheel, publish it, and query a package index for a project's released versions), `docker`
+(`build`/`push`/`release` — image name/Dockerfile resolved from `repo-tasks.toml` or a zero-config
+root `Dockerfile`, tagged from the version-grouping model), `direnv` (`allow` — idempotent shell
+auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up
+the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of
+the above), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)) —
+extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo.
@@ -48,7 +50,7 @@ from repo_tasks import ns
 That's the entire file — no local override, no `add_collection` boilerplate. `ns` is a ready-made
 root `Collection` with every task module this package ships already nested under its own name, so
 `inv quality.precommit` is the one command, identical across every consumer repo, and stays that way
-automatically as new modules (`docker`, `python_pkg`, `helm`, ...) land here — nothing to change on
+automatically as new modules (`helm`, ...) land here — nothing to change on
 the consumer side when they do. Every leaf task (`lint_check`, `type_check`, `test`, ...) is also
 individually invocable (`inv quality.test`, etc.) — each has its own docstring, so `inv -l` alone is
 enough to know what's available.
@@ -98,6 +100,18 @@ by querying a package index directly — PEP 691 JSON Simple API, falling back t
 file listing if the index doesn't serve the JSON media type — since `uv` itself has no
 list-remote-versions subcommand. `dist.py` never touches `.venv` or installs anything editable;
 it's orthogonal to `venv.py`/`deps.py` by construction.
+
+### docker: build, push, and release an image
+
+`inv docker.build` builds a docker image (`docker build`, or `docker buildx build --platform
+... --push` when `--platforms` is given — buildx can't `--load` a multi-platform result locally,
+so that path pushes as part of `build` itself). `inv docker.push` pushes the single-arch path.
+`inv docker.release` builds and pushes an image tagged with its version group's current version,
+plus `latest`. Image name/Dockerfile/path always come from `projects.discover_docker_images(c)` —
+`repo-tasks.toml`'s `[[docker]]` entries if present, or a zero-config default: a `Dockerfile` at
+the repo root becomes one implicit image, named after the repo's python project (so its version
+group resolves for free) or the repo directory if there isn't one. `--project` selects among
+multiple discovered images; omit it for the common single-image case.
 
 ## Developing
 
