@@ -2,7 +2,16 @@
   // "recommended", not "strict" — see power-user-linux-setup's pyrightconfig.json (the origin repo
   // this package was extracted from) for the full profile rationale.
   "typeCheckingMode": "recommended",
-  "exclude": ["**/node_modules", "**/__pycache__", "**/.*"],
+  // `include`, not `exclude`: scopes basedpyright to this project's own code by construction,
+  // instead of an ever-growing "don't check this" blocklist that has to be kept in sync by hand as
+  // new non-source content (docs, generated caches, example snippets, ...) gets added — the
+  // opposite failure mode of an accidentally-too-broad exclude silently un-checking real code.
+  // Confirmed equivalent (0 errors, identical warning count) to the old
+  // `exclude: [defaults, ...]` shape it replaced, both here and in `power-user-linux-setup`'s own
+  // config, which is why this is the canonical shape every consumer's `pyrightconfig.json` should
+  // use, adjusted only for that repo's real top-level source dirs (`src`/`tests` for `src`-layout
+  // consumers, `tasks`/`tests` for `power-user-linux-setup`'s own flat layout).
+  "include": ["src", "tests"],
   "failOnWarnings": false,
 
   "reportAny": "error",
