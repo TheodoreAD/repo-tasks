@@ -4,12 +4,12 @@ real implementation lives in its own module (venv.py, direnv.py, agents.py)."""
 
 from invoke import task
 
-import repo_tasks.agents as agents
-import repo_tasks.direnv as direnv
-import repo_tasks.venv as venv_module
+from .agents import claude_hook
+from .direnv import allow
+from .venv import create
 
 
-@task(pre=[venv_module.create, direnv.allow, agents.claude_hook])
+@task(pre=[create, allow, claude_hook])
 def setup(c):
     """Run once after cloning: create/refresh .venv, let direnv auto-activate it, and wire
     Claude Code's Bash tool to auto-activate it too. The one command to run before anything else."""
