@@ -4,7 +4,7 @@ installed-package source, exercised via the default no-source-override path) plu
 (configs.pull --source local:<path>, then configs-promote) actually relies on."""
 
 import pytest
-from invoke import Exit, MockContext
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import configs
 
@@ -81,3 +81,70 @@ def test_diff_never_writes(tmp_path, monkeypatch):
     with pytest.raises(Exit):
         configs.diff.body(MockContext(), source=None)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert list(tmp_path.iterdir()) == []
+
+
+def test_ensure_deps_creates_pyproject_when_missing(tmp_path, monkeypatch):
+    project_dir = tmp_path / "some-repo"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+    c = MockContext(run=Result(exited=1))  # no git remote (and no git repo at all)
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    text = (project_dir / "pyproject.toml").read_text()
+    assert 'name = "some-repo"' in text
+    assert "package = false" in text
+    assert "[tool.uv.sources]" not in text
+    for dep in configs._quality_deps():  # pyright: ignore[reportPrivateUsage]
+        assert f'"{dep}"' in text
+    assert '"repo-tasks"' not in text
+    assert '"invoke"' not in text
+    for name in configs._CONFIG_FILES:  # pyright: ignore[reportPrivateUsage]
+        assert (project_dir / name).exists()  # quality.check needs these, not just the deps
+
+
+def test_ensure_deps_creates_tasks_py_alongside_dummy_pyproject(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    c = MockContext(run=Result(exited=1))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert "from repo_tasks import ns" in (tmp_path / "tasks.py").read_text()
+
+
+def test_ensure_deps_does_not_overwrite_existing_tasks_py(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "tasks.py").write_text("# hand-written\n")
+    c = MockContext(run=Result(exited=1))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert (tmp_path / "tasks.py").read_text() == "# hand-written\n"
+
+
+def test_ensure_deps_derives_name_from_git_remote(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    c = MockContext(run=Result(stdout="git@github.com:someone/my-project.git\n", exited=0))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert 'name = "my-project"' in (tmp_path / "pyproject.toml").read_text()
+
+
+def test_ensure_deps_adds_missing_and_leaves_present_entries_untouched(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n\n'
+        "[dependency-groups]\n"
+        'dev = [\n  "ruff>=0.0.1",\n  "repo-tasks",\n  "invoke",\n]\n'
+    )
+    c = MockContext(run=Result(exited=1))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    text = (tmp_path / "pyproject.toml").read_text()
+    assert '"ruff>=0.0.1"' in text  # untouched, not reversioned to the canonical ruff spec
+    assert text.count('"repo-tasks"') == 1  # untouched, never duplicated or removed
+    assert text.count('"invoke"') == 1
+    for dep in configs._quality_deps():  # pyright: ignore[reportPrivateUsage]
+        if configs._bare_name(dep) != "ruff":  # pyright: ignore[reportPrivateUsage]
+            assert f'"{dep}"' in text
+
+
+def test_ensure_deps_idempotent_on_second_run(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    c = MockContext(run=Result(exited=1))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    first = (tmp_path / "pyproject.toml").read_text()
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert (tmp_path / "pyproject.toml").read_text() == first
