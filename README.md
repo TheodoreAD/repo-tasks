@@ -174,12 +174,15 @@ stamped script currently expects — as a quick drift check.
 ## Developing
 
 ```shell
-uv sync
+./bootstrap.sh          # uv sync + inv venv.create -- the one place a raw uv call is needed
+inv dev-env.setup       # direnv + Claude Code hook, on top of the venv bootstrap.sh just built
 inv quality.precommit
 ```
 
-This repo dogfoods its own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the
-same one-liner a consumer uses).
+`./bootstrap.sh` is also exactly what CI runs (`.github/workflows/ci.yml`) before its own bare
+`inv quality.check` — same commands as local dev, no separate CI-only recipe. This repo dogfoods its
+own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the same one-liner a consumer
+uses).
 
 `inv quality.test_integration` runs an opt-in real-service tier (`tests/integration/`) exercising
 `dist.py`/`docker.py` against a real local `devpi-server` and a real local `registry:3` container —

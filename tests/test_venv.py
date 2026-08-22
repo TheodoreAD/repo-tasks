@@ -71,3 +71,22 @@ def test_install_wheel_explicit_path():
     c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
         "uv pip install --no-deps dist/repo_tasks-0.1.0-py3-none-any.whl", echo=True
     )
+
+
+def test_sync_does_not_touch_github_path_when_unset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GITHUB_PATH", raising=False)
+    c = MockContext(run=True)
+    venv.sync.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    # No GITHUB_PATH file was ever created/written -- nothing to assert on disk beyond this not
+    # raising, since there's no path to check.
+
+
+def test_sync_registers_venv_bin_on_github_path_when_set(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    github_path_file = tmp_path / "github_path"
+    github_path_file.touch()
+    monkeypatch.setenv("GITHUB_PATH", str(github_path_file))
+    c = MockContext(run=True)
+    venv.sync.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert github_path_file.read_text() == f"{(tmp_path / '.venv' / 'bin').resolve()}\n"

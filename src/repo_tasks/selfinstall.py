@@ -33,26 +33,31 @@ command -v uv >/dev/null 2>&1 || {{
   echo "uv not found on PATH — install uv first" >&2
   exit 1
 }}
-{install_cmd} 'repo-tasks @ git+{repo_url}@v{pinned_version}'
+{install_cmd} 'repo-tasks @ git+{repo_url}{pinned_ref}'
 """
 
 
-def _latest_tag(c) -> str | None:
-    """The newest `vX.Y.Z` tag on the upstream repo, or None if it has no tags yet (repo-tasks
-    itself, pre-first-release, is exactly this case today)."""
+def _remote_tags(c) -> list[str]:
+    """Every `vX.Y.Z` tag on the upstream repo, newest first — empty if it has none yet
+    (repo-tasks itself, pre-first-release, is exactly this case today)."""
     result = c.run(f"git ls-remote --tags --refs --sort=-v:refname {_REPO_URL} 'v*'", hide=True, warn=True)
     if not result.ok or not result.stdout.strip():
-        return None
-    first_ref = result.stdout.strip().splitlines()[0]
-    return first_ref.rsplit("refs/tags/", 1)[-1]
+        return []
+    return [ref.rsplit("refs/tags/", 1)[-1] for ref in result.stdout.strip().splitlines()]
+
+
+def _latest_tag(c) -> str | None:
+    tags = _remote_tags(c)
+    return tags[0] if tags else None
 
 
 def _stamped_version() -> str | None:
     """The version pinned in this repo's own bootstrap-repo-tasks.sh, or None if it hasn't been
-    stamped yet (run `inv configure`)."""
+    stamped yet (run `inv configure`) or was stamped before any tag existed (unpinned form,
+    nothing to compare against)."""
     if not _STAMP_PATH.exists():
         return None
-    match = re.search(r"repo-tasks @ git\+[^@]+@v([^']+)'", _STAMP_PATH.read_text())
+    match = re.search(r"repo-tasks @ git\+[^@']+@v([^']+)'", _STAMP_PATH.read_text())
     return match.group(1) if match else None
 
 
@@ -75,11 +80,17 @@ def status(c):
     """Compare the globally-installed repo-tasks version against what this repo was last
     `configure`d against — drift detection, read-only."""
     installed = _installed_version("repo-tasks")
-    expected = _stamped_version()
-    if expected is None:
+    if not _STAMP_PATH.exists():
         print(
             f"[repo-tasks.status] installed: {installed}; this repo has no stamped "
             "bootstrap-repo-tasks.sh yet (run `inv configure`)"
+        )
+        return
+    expected = _stamped_version()
+    if expected is None:
+        print(
+            f"[repo-tasks.status] installed: {installed}; {_STAMP_PATH} is pinned to an unpinned "
+            "(default-branch) install — nothing to compare a version against"
         )
         return
     if installed == expected:
@@ -103,9 +114,14 @@ def version(c):
 def stamp(c):
     """Regenerate bootstrap-repo-tasks.sh, pinning the repo-tasks version active right now. Runs
     as part of `inv configure` — see the generated script's own header for why a human shouldn't
-    run it directly."""
+    run it directly. Falls back to an unpinned install if `v{installed version}` isn't an actual
+    upstream tag (e.g. this checkout is ahead of the last release, or nothing's been tagged yet) —
+    pinning to a tag that doesn't exist would make the generated script fail every time it runs."""
     installed = _installed_version("repo-tasks")
-    script = _STAMP_TEMPLATE.format(install_cmd=_INSTALL_CMD, repo_url=_REPO_URL, pinned_version=installed)
+    pinned_ref = f"@v{installed}" if f"v{installed}" in _remote_tags(c) else ""
+    if not pinned_ref:
+        print(f"[repo-tasks.stamp] v{installed} isn't a real upstream tag yet — stamping an unpinned install")
+    script = _STAMP_TEMPLATE.format(install_cmd=_INSTALL_CMD, repo_url=_REPO_URL, pinned_ref=pinned_ref)
     _STAMP_PATH.write_text(script)
     _STAMP_PATH.chmod(_STAMP_PATH.stat().st_mode | 0o111)
-    print(f"[repo-tasks.stamp] wrote {_STAMP_PATH}, pinned to v{installed}")
+    print(f"[repo-tasks.stamp] wrote {_STAMP_PATH}" + (f", pinned to v{installed}" if pinned_ref else ""))

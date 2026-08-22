@@ -11,4 +11,4 @@ command -v uv > /dev/null 2>&1 || {
   echo "uv not found on PATH — install uv first" >&2
   exit 1
 }
-uv tool install --force --with-executables-from invoke 'repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks@v0.1.0'
+uv tool install --force --with-executables-from invoke 'repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks'

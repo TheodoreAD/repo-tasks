@@ -2,12 +2,26 @@
 `uv lock`; every sync here passes --locked, so a stale/missing lock fails loudly instead of uv's
 own default of silently rewriting it."""
 
+import os
 import shutil
 from pathlib import Path
 
 from invoke import task
 
 _VENV_DIR = Path(".venv")
+
+
+def _register_github_path(bin_dir: Path) -> None:
+    """CI's equivalent of direnv: GitHub Actions has no shell-hook mechanism, so a freshly-synced
+    .venv/bin needs to be added to PATH explicitly for later steps' bare `inv <task>` calls (e.g.
+    quality.check's ruff/pytest/basedpyright) to resolve it — appending to $GITHUB_PATH is the
+    documented way a step extends PATH for the rest of the job. No-ops outside GitHub Actions
+    (GITHUB_PATH unset), so this is always safe to call unconditionally after a sync."""
+    github_path = os.environ.get("GITHUB_PATH")
+    if not github_path:
+        return
+    with Path(github_path).open("a") as f:
+        f.write(f"{bin_dir.resolve()}\n")
 
 
 @task(
@@ -28,6 +42,7 @@ def sync(c, no_editable=False, no_dev=False, no_install_project=False):
     if no_install_project:
         cmd += " --no-install-project"
     c.run(cmd, echo=True)
+    _register_github_path(_VENV_DIR / "bin")
 
 
 @task(pre=[sync])
