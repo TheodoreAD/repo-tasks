@@ -73,6 +73,17 @@ def test_versions_derives_from_json_files_when_versions_key_absent(monkeypatch, 
     assert capsys.readouterr().out.splitlines() == ["1.0", "2.0"]
 
 
+def test_versions_derives_from_json_filename_when_version_key_absent(monkeypatch, capsys):
+    # Real-world gap found against devpi: PEP 691's per-file "version" key is optional and devpi
+    # omits it entirely — the version must come from the filename instead.
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project("repo-tasks"))
+    files = [{"filename": "repo_tasks-1.0.0-py3-none-any.whl"}, {"filename": "repo_tasks-2.0.0.tar.gz"}]
+    payload = json.dumps({"files": files})
+    monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
+    dist.versions.body(MockContext())  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
+
+
 def test_versions_falls_back_to_html_when_json_unavailable(monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
 
@@ -88,6 +99,25 @@ def test_versions_falls_back_to_html_when_json_unavailable(monkeypatch, capsys):
     monkeypatch.setattr(dist, "_get", fake_get)
     dist.versions.body(MockContext())  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
+
+
+def test_versions_html_fallback_strips_sha256_fragment(monkeypatch, capsys):
+    # Real-world gap found against devpi: real PEP 503 indices append #sha256=... to hrefs — the
+    # regex must stop at '#', or the captured "filename" never matches _version_from_filename.
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project("repo-tasks"))
+
+    def fake_get(url, accept=None):
+        if accept == dist._JSON_ACCEPT:  # pyright: ignore[reportPrivateUsage]
+            raise urllib.error.URLError("no json support")
+        html = (
+            '<a href="../../+f/aa/repo_tasks-1.0.0-py3-none-any.whl#sha256=abc123">'
+            "repo_tasks-1.0.0-py3-none-any.whl</a>\n"
+        )
+        return html.encode()
+
+    monkeypatch.setattr(dist, "_get", fake_get)
+    dist.versions.body(MockContext())  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert capsys.readouterr().out.splitlines() == ["1.0.0"]
 
 
 def test_versions_no_releases_found_on_404(monkeypatch, capsys):

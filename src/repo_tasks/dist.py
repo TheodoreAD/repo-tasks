@@ -60,17 +60,30 @@ def _get(url: str, accept: str | None = None) -> bytes:
         raise
 
 
-def _json_versions(payload: bytes) -> list[str]:
+def _json_versions(payload: bytes, normalized_name: str) -> list[str]:
     data = cast(dict[str, object], json.loads(payload))
     found = data.get("versions")
     if found:
         return [str(v) for v in cast(list[object], found)]
     files = cast(list[dict[str, object]], data.get("files", []))
-    return sorted({str(f["version"]) for f in files if "version" in f})
+    versions: set[str] = set()
+    for f in files:
+        if "version" in f:
+            versions.add(str(f["version"]))
+            continue
+        # PEP 691's per-file "version" key is optional — devpi, among others, omits it, so fall
+        # back to deriving it from the filename exactly like the HTML path already does.
+        filename = f.get("filename")
+        if isinstance(filename, str) and (v := _version_from_filename(filename, normalized_name)) is not None:
+            versions.add(v)
+    return sorted(versions)
 
 
 def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
-    filenames = cast(list[str], re.findall(r'href="[^"]*/([^"/]+)"', payload.decode()))
+    # Real PEP 503 indices (devpi, PyPI itself) commonly append a #sha256=... fragment to the
+    # href — stop the capture at '#' too, or the fragment rides along and _version_from_filename
+    # never matches the (now-mangled) "filename".
+    filenames = cast(list[str], re.findall(r'href="[^"]*/([^"/#]+)', payload.decode()))
     return sorted({v for fn in filenames if (v := _version_from_filename(fn, normalized_name)) is not None})
 
 
@@ -133,7 +146,7 @@ def versions(c, project=None, index=None):
 
     try:
         try:
-            found = _json_versions(_get(url, accept=_JSON_ACCEPT))
+            found = _json_versions(_get(url, accept=_JSON_ACCEPT), normalized)
         except (json.JSONDecodeError, urllib.error.URLError):
             found = _html_versions(_get(url), normalized)
     except _NotFoundError:
