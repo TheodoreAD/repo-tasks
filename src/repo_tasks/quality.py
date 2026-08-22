@@ -2,11 +2,11 @@
 (echo=True) so both a human and an agent see exactly what ran — the only
 exception is a step that would involve a secret, and none here do."""
 
-from invoke import task
+from invoke import Exit, task
 
 
 def _sh_files(c):
-    result = c.run("fd -e sh .", hide=True, warn=True)
+    result = c.run("git ls-files --cached --others --exclude-standard -- '*.sh'", hide=True, warn=True)
     return result.stdout.split() if result.ok else []
 
 
@@ -74,8 +74,14 @@ def shell_format_apply(c):
 
 @task
 def test(c):
-    """Run the pytest suite."""
-    c.run("pytest", echo=True)
+    """Run the pytest suite. No-ops cleanly when there are no tests to collect at all (pytest's
+    own exit code 5) — same "safe to run unconditionally" contract as shell_check/
+    shell_format_check, needed for a quality-gates-only repo with no Python tests (e.g. one
+    bootstrapped via configs.ensure-deps with nothing but shell scripts) to pass `quality.check`
+    cleanly."""
+    result = c.run("pytest", echo=True, warn=True)
+    if not result.ok and result.exited != 5:
+        raise Exit(code=result.exited)
 
 
 @task
