@@ -11,6 +11,11 @@ dev = [
   "pytest",
   "ruff",
 ]
+integration = [
+  "devpi-client>=7.3.0",
+  "devpi-server>=6.20.3",
+  "testcontainers>=4.15.0",
+]
 
 [build-system]
 requires = ["hatchling"]

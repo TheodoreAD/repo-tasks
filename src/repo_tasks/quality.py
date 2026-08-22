@@ -78,6 +78,16 @@ def test(c):
     c.run("pytest", echo=True)
 
 
+@task
+def test_integration(c):
+    """Run the opt-in integration tier (tests/integration/) against real local services — a
+    devpi-server and a docker registry:3 container. Not part of check/precommit's default gate
+    (pytest.ini's --ignore=tests/integration already excludes it from plain `pytest`/`test`), so
+    nobody's everyday `inv quality.precommit` starts silently requiring Docker or devpi-server.
+    Overrides addopts to drop that --ignore for this one invocation."""
+    c.run('pytest tests/integration -o addopts="-ra --strict-markers --strict-config"', echo=True)
+
+
 @task(pre=[lint_apply, format_apply, shell_format_apply])
 def fix(c):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""

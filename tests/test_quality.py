@@ -54,6 +54,14 @@ def test_test():
     c.run.assert_called_once_with("pytest", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
+def test_test_integration():
+    c = MockContext(run=True)
+    quality.test_integration.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
+        'pytest tests/integration -o addopts="-ra --strict-markers --strict-config"', echo=True
+    )
+
+
 def test_sh_files_empty():
     c = MockContext(run=Result(stdout="", exited=0))
     assert quality._sh_files(c) == []  # pyright: ignore[reportPrivateUsage] — testing the one piece of real logic directly
