@@ -7,8 +7,8 @@ updated: 2026-08-19
 
 Goal: gitflow branch flows (feature/release/hotfix start & finish) and semver version bumping, as
 reproducible `inv` tasks matching this repo's existing `quality.py` philosophy — dedicated config,
-every command echoed, no per-repo allowances, safe no-ops where an artifact kind is absent. Builds on
-`plans/2026-08-19-monorepo-workspace-foundation.md` for project/group discovery.
+every command echoed, no per-repo allowances, safe no-ops where an artifact kind is absent. Builds
+on `plans/2026-08-19-monorepo-workspace-foundation.md` for project/group discovery.
 
 Surveyed the mainstream python versioning/release tools before designing this:
 
@@ -39,8 +39,8 @@ group-bump scenario (a `pyproject.toml` `[project].version` plus a paired `chart
 `version`/`appVersion`).
 
 - `bump-my-version` and `commitizen` **both** fully satisfy every hard requirement (explicit bump,
-  multi-file group bump in one commit+tag, configurable tag template, independent-group isolation)
-  — this was a close call, not a blowout. `bump-my-version` still wins on fit: it has no
+  multi-file group bump in one commit+tag, configurable tag template, independent-group isolation) —
+  this was a close call, not a blowout. `bump-my-version` still wins on fit: it has no
   commit-message-inference code path at all (structurally impossible to regress into a "surprise
   inferred bump," the exact failure mode this plan's explicit-bump-only design existed to avoid),
   and its own dependency footprint (9 packages: click, httpx2, pydantic, pydantic-settings,
@@ -50,36 +50,39 @@ group-bump scenario (a `pyproject.toml` `[project].version` plus a paired `chart
   substring-replace bumped both `Chart.yaml` keys with zero per-file regex, genuinely simpler there
   than bump-my-version's exact search/replace.
 - **Real config-shape finding that changes Design §1 below:** bump-my-version's pure-CLI-only mode
-  (`--no-configured-files` + positional file args + one global `--search`/`--replace`) cannot express
-  different search/replace templates per file in one call — confirmed by hitting `Did not find
-  'version = "0.2.0"' in file: 'chart/Chart.yaml'` when a TOML-style pattern was applied to the YAML
-  file. A static, hand-authored `.bumpversion.toml` doesn't work either, since a group's file set
-  (which projects/charts belong to it) isn't fixed — it's whatever `projects.py`/`repo-tasks.toml`
-  resolve for that group at call time. **`version.py` must generate a temporary per-group
-  `.bumpversion.toml` at runtime** (via `--config-file <tmp path>`), built from that call's resolved
-  group members, not maintain a static config file.
+  (`--no-configured-files` + positional file args + one global `--search`/`--replace`) cannot
+  express different search/replace templates per file in one call — confirmed by hitting
+  `Did not find
+  'version = "0.2.0"' in file: 'chart/Chart.yaml'` when a TOML-style pattern was
+  applied to the YAML file. A static, hand-authored `.bumpversion.toml` doesn't work either, since a
+  group's file set (which projects/charts belong to it) isn't fixed — it's whatever
+  `projects.py`/`repo-tasks.toml` resolve for that group at call time. **`version.py` must generate
+  a temporary per-group `.bumpversion.toml` at runtime** (via `--config-file <tmp path>`), built
+  from that call's resolved group members, not maintain a static config file.
 - `python-semantic-release`: the plan's "derives the bump automatically" phrasing is slightly
   imprecise — real explicit-override flags exist (`--major`/`--minor`/`--patch`). But hands-on
   testing found two concrete blockers rather than just "fights gitflow's model" in the abstract: (1)
-  `semantic-release version --minor --no-push --no-vcs-release` fails outright with `error: No such
-  remote 'origin'` on a repo with no configured remote — directly conflicts with this plan's
-  local-only-by-default `release_finish`/`hotfix_finish`; (2) `--minor` on a fresh repo with no prior
-  release tag silently no-ops — prints `The next version is: 0.1.0!` (unchanged) and tags `v0.1.0`
-  with no actual bump and no commit; only a second run, after a prior tag existed, bumped correctly.
-  The explicit-override flags force the bump _type_ but don't bypass its release-history/commit-
-  parsing engine, and the very first release is a silent-no-op trap. Confirms the plan's original
-  instinct, on firmer ground than the initial search-summary survey had.
+  `semantic-release version --minor --no-push --no-vcs-release` fails outright with
+  `error: No such
+  remote 'origin'` on a repo with no configured remote — directly conflicts with
+  this plan's local-only-by-default `release_finish`/`hotfix_finish`; (2) `--minor` on a fresh repo
+  with no prior release tag silently no-ops — prints `The next version is: 0.1.0!` (unchanged) and
+  tags `v0.1.0` with no actual bump and no commit; only a second run, after a prior tag existed,
+  bumped correctly. The explicit-override flags force the bump _type_ but don't bypass its
+  release-history/commit- parsing engine, and the very first release is a silent-no-op trap.
+  Confirms the plan's original instinct, on firmer ground than the initial search-summary survey
+  had.
 
 Decisions from review:
 
 - Main branch: `main`.
-- `release_finish`/`hotfix_finish` default to local-only (merge + tag, no push); an explicit `--push`
-  flag opts into pushing branches and the tag to the remote in the same command.
+- `release_finish`/`hotfix_finish` default to local-only (merge + tag, no push); an explicit
+  `--push` flag opts into pushing branches and the tag to the remote in the same command.
 - CHANGELOG generation is deferred — not in this plan's v1.
-- Feature/release/hotfix/support gitflow is what's being built (Design §2 below). `support/*`
-  landed after all — needed for real work sooner than expected; scoping it out originally undersold
-  how small it actually is. Correction on attribution while implementing it: `support` branches
-  aren't in nvie's original article at all (confirmed by re-reading it directly — the article only
+- Feature/release/hotfix/support gitflow is what's being built (Design §2 below). `support/*` landed
+  after all — needed for real work sooner than expected; scoping it out originally undersold how
+  small it actually is. Correction on attribution while implementing it: `support` branches aren't
+  in nvie's original article at all (confirmed by re-reading it directly — the article only
   documents feature/release/hotfix) — they're a feature of his companion `git-flow` CLI tool
   specifically (its README: `git flow support start <release> <base>`, "the `<base>` arg must be a
   commit on `master`"), which is itself thin on the semantics beyond that. `version.py`'s bump logic
@@ -97,28 +100,28 @@ Decisions from review:
 - `inv version.bump --part=major|minor|patch [--group=name]` — resolves every
   `projects.py`/`repo-tasks.toml` entry sharing `group` (default: Phase 1's sole implicit project),
   writes a **temporary per-group `.bumpversion.toml`** from those resolved entries (one
-  `[[tool.bumpversion.files]]` block per file: a python project's `pyproject.toml` `[project].version`,
-  and/or a paired Helm chart's `Chart.yaml` `version`/`appVersion` per
-  `plans/2026-08-19-helm-chart-tasks.md`), invokes `bump-my-version bump <part> --config-file <tmp>`,
-  then deletes the temp file. No static, hand-authored `.bumpversion.toml` — confirmed hands-on that
-  bump-my-version's config-free CLI mode can't express per-file search/replace templates, and a
-  group's file set isn't fixed ahead of time anyway. Tag name is set inside the generated config
-  (`tag_name`), not a separate CLI flag:
+  `[[tool.bumpversion.files]]` block per file: a python project's `pyproject.toml`
+  `[project].version`, and/or a paired Helm chart's `Chart.yaml` `version`/`appVersion` per
+  `plans/2026-08-19-helm-chart-tasks.md`), invokes
+  `bump-my-version bump <part> --config-file <tmp>`, then deletes the temp file. No static,
+  hand-authored `.bumpversion.toml` — confirmed hands-on that bump-my-version's config-free CLI mode
+  can't express per-file search/replace templates, and a group's file set isn't fixed ahead of time
+  anyway. Tag name is set inside the generated config (`tag_name`), not a separate CLI flag:
   - `vX.Y.Z` when the group is Phase 1's sole implicit project.
-  - `<group>-vX.Y.Z` once multiple groups exist (Phase 2), matching commitizen's documented
-    monorepo tag-format precedent (also hands-on confirmed working via bump-my-version's own
-    `tag_name` templating, not just commitizen's).
+  - `<group>-vX.Y.Z` once multiple groups exist (Phase 2), matching commitizen's documented monorepo
+    tag-format precedent (also hands-on confirmed working via bump-my-version's own `tag_name`
+    templating, not just commitizen's).
 - Individually invocable outside a release flow — e.g. a plain point release with no gitflow
   ceremony at all. Returns the new version string.
 - `tag=True` keyword arg (default on for standalone use). `gitflow.py`'s `release_start`/
   `hotfix_start` call `version.bump(..., tag=False)` — the tag belongs on `main` at _finish_ time
   per Design §2 below, not on `develop`/`main` at _bump_ time, so bump-my-version's own `tag=true`
   config line is conditional on this flag rather than always on.
-- `current_version(c, group=None)` and `next_version(current, part)` — two small additions on top
-  of the original design, needed once `gitflow.py`'s branch-then-bump order (Design §2) was
-  corrected to match nvie's actual sequence: the release/hotfix branch has to be _named_ before the
-  real, writing `bump` call runs on it. `next_version` is plain arithmetic (no subprocess) rather
-  than shelling out to `bump-my-version show --increment` — safe to hand-roll because the config
+- `current_version(c, group=None)` and `next_version(current, part)` — two small additions on top of
+  the original design, needed once `gitflow.py`'s branch-then-bump order (Design §2) was corrected
+  to match nvie's actual sequence: the release/hotfix branch has to be _named_ before the real,
+  writing `bump` call runs on it. `next_version` is plain arithmetic (no subprocess) rather than
+  shelling out to `bump-my-version show --increment` — safe to hand-roll because the config
   `bump`/`_bumpversion_config` always generates uses bump-my-version's untouched default
   parse/serialize (`major.minor.patch`), so there's no scheme this could diverge from. The actual
   file-writing/committing stays 100% owned by bump-my-version either way.
@@ -136,17 +139,19 @@ mirroring nvie's git-flow branch-naming and merge-back conventions:
 original design here had it backwards): the release/hotfix branch is cut _first_, unbumped, off its
 base; the version bump commit is made **on the branch itself**, after it exists. Not
 bump-the-base-then-branch — that would make an aborted release leave a stray bump commit sitting on
-`develop`/`main` even with no release branch to show for it. `version.py`'s `next_version(current,
-part)` computes the branch's name (pure arithmetic — the config our `bump` always generates never
-customizes bump-my-version's parse/serialize, so hand-rolling this one piece doesn't risk diverging
-from what the tool would compute) _before_ the real, file-writing `bump` call runs on the new
-branch. `release_start(c, bump, group=None)` / `hotfix_start(c, bump, group=None)` do this — unaffected
-by which finish mode (below) is used, since branch creation never touches a protected branch.
+`develop`/`main` even with no release branch to show for it. `version.py`'s
+`next_version(current,
+part)` computes the branch's name (pure arithmetic — the config our `bump`
+always generates never customizes bump-my-version's parse/serialize, so hand-rolling this one piece
+doesn't risk diverging from what the tool would compute) _before_ the real, file-writing `bump` call
+runs on the new branch. `release_start(c, bump, group=None)` / `hotfix_start(c, bump, group=None)`
+do this — unaffected by which finish mode (below) is used, since branch creation never touches a
+protected branch.
 
 #### PR mode (default) vs. local mode — a scope decision from review
 
-A protected `main`/`develop` (required reviews/CI) rejects a direct push outright, merge or no
-merge — real for any team repo using the full gitflow convention. A single-person repo or one doing
+A protected `main`/`develop` (required reviews/CI) rejects a direct push outright, merge or no merge
+— real for any team repo using the full gitflow convention. A single-person repo or one doing
 trunk-based development with feature branches merged straight into `main` has nothing to protect
 against and gains nothing from the ceremony. Decision: **PR mode, via the `gh` CLI, is the default
 and primary path** for every `*_finish` task; **local mode (`local=True`) keeps the old
@@ -161,14 +166,14 @@ unchanged: `feature_finish(c, name, local=True)` merges directly into `develop`;
 `develop` — or, per nvie (quoting the article directly: _"when a release branch currently exists,
 the hotfix changes need to be merged into that release branch, instead of develop"_), into an open
 `release/*` branch instead if one exists for a hotfix (`git for-each-ref
-refs/heads/release/*`, raises if more than one is open — ambiguous, this repo's model assumes at
-most one release in flight at a time). `push=True` additionally pushes branches + tag. **Known,
-accepted rough edge**, confirmed hands-on: a hotfix redirected into an in-flight release branch can
-produce a real git merge conflict if both bumped the same version line — expected, not
-auto-resolved (`git merge --no-ff` just fails, no `warn=True` anywhere in this file), resolved
-exactly as a human running real `git-flow` would (normally keeping the release branch's own, higher
-version), then the remaining steps (branch deletion, etc.) finished by hand — no "resume this task"
-mechanism.
+refs/heads/release/*`,
+raises if more than one is open — ambiguous, this repo's model assumes at most one release in flight
+at a time). `push=True` additionally pushes branches + tag. **Known, accepted rough edge**,
+confirmed hands-on: a hotfix redirected into an in-flight release branch can produce a real git
+merge conflict if both bumped the same version line — expected, not auto-resolved
+(`git merge --no-ff` just fails, no `warn=True` anywhere in this file), resolved exactly as a human
+running real `git-flow` would (normally keeping the release branch's own, higher version), then the
+remaining steps (branch deletion, etc.) finished by hand — no "resume this task" mechanism.
 
 **PR mode** (default) can't complete synchronously — a real PR needs human review/CI before it
 merges — so it's two steps per branch instead of one:
@@ -180,14 +185,15 @@ merges — so it's two steps per branch instead of one:
   actually merges (`push` is accepted but only meaningful for `local=True`; PR mode always pushes,
   that's what makes the PR possible).
 - `release_finalize(c)` / `hotfix_finalize(c)` — run once a human has merged that PR on GitHub, from
-  the same `release/*`/`hotfix/*` branch. `git fetch origin main` → `git checkout main` → `git merge
-  --ff-only origin/main` (fails loudly if history unexpectedly diverged — no silent overwrite) →
-  tags `main`'s now-updated tip → pushes the tag → branches a `sync/<tag>` branch off that same
-  updated `main` → opens a **second** PR: `develop`, or (hotfix, same nvie redirect rule as local
-  mode, checked again independently here) an open `release/*` branch. A fresh `sync/<tag>` branch
-  rather than reusing the original `release/*`/`hotfix/*` branch: many GitHub repos auto-delete a
-  branch the moment its first PR merges, which would silently break opening the second PR if it
-  tried to reuse that same branch.
+  the same `release/*`/`hotfix/*` branch. `git fetch origin main` → `git checkout main` →
+  `git merge
+  --ff-only origin/main` (fails loudly if history unexpectedly diverged — no silent
+  overwrite) → tags `main`'s now-updated tip → pushes the tag → branches a `sync/<tag>` branch off
+  that same updated `main` → opens a **second** PR: `develop`, or (hotfix, same nvie redirect rule
+  as local mode, checked again independently here) an open `release/*` branch. A fresh `sync/<tag>`
+  branch rather than reusing the original `release/*`/`hotfix/*` branch: many GitHub repos
+  auto-delete a branch the moment its first PR merges, which would silently break opening the second
+  PR if it tried to reuse that same branch.
 
 **General rule established here, meant to extend beyond this file**: any command that stops short of
 "the whole flow is fully done" — because a PR was opened and needs a human, or because a guard
@@ -200,8 +206,10 @@ elsewhere in this package with the same "stops for an external reason" shape.
 GitHub-linked repo to exercise — the dry run below verified every git-only step (push, fetch,
 ff-only merge, tag, tag push, sync-branch push) against a local bare repo standing in for `origin`,
 confirmed the exact `gh pr create` command construction is reached with correct arguments, but
-stopped there (`none of the git remotes configured for this repository point to a known GitHub
-host`) rather than opening a real repo/PR under an account without asking first.
+stopped there
+(`none of the git remotes configured for this repository point to a known GitHub
+host`) rather than
+opening a real repo/PR under an account without asking first.
 
 #### `support/*` branches
 
@@ -218,18 +226,20 @@ branch, same as `release_start`/`hotfix_start`.
 branch afterward needed "no new machinery" — just `version.bump` plus a plain `git tag`/`git push`
 directly on the branch. Wrong: **`support/*` produces artifacts that ship to prod, exactly like
 `main`, so it needs to be protected exactly like `main`** — a direct push/commit doesn't work any
-more than it would against a protected `main`. `support_hotfix_start(c, support, bump, group=None)` /
-`support_hotfix_finish(c, support, push=False, local=False)` / `support_hotfix_finalize(c, support)`
-give it the same PR-mode-primary, two-step shape as a regular hotfix (branch off `support/<support>`
-unbumped → bump on the branch → PR into `support/<support>` → once merged, fetch+tag), reusing
-`_open_pr`/`_next_steps`. Two real differences from a regular hotfix, both because a support line is
-already permanently diverged from the mainline: **no `develop` merge at all**, and **no
-release-branch redirect check** — that redirect exists to keep an active mainline release in sync,
-which has nothing to do with an isolated support line. Branch naming: `support-hotfix/<support>/
-<version>` — the `<support>` segment matters because `support_hotfix_finish`/`_finalize` need to
-know which support branch a patch branch belongs to without depending on any persisted state (this
-tool is stateless throughout), and `<support>` is passed again explicitly at finish/finalize time,
-same "no hidden state" posture as everything else here.
+more than it would against a protected `main`. `support_hotfix_start(c, support, bump, group=None)`
+/ `support_hotfix_finish(c, support, push=False, local=False)` /
+`support_hotfix_finalize(c, support)` give it the same PR-mode-primary, two-step shape as a regular
+hotfix (branch off `support/<support>` unbumped → bump on the branch → PR into `support/<support>` →
+once merged, fetch+tag), reusing `_open_pr`/`_next_steps`. Two real differences from a regular
+hotfix, both because a support line is already permanently diverged from the mainline: **no
+`develop` merge at all**, and **no release-branch redirect check** — that redirect exists to keep an
+active mainline release in sync, which has nothing to do with an isolated support line. Branch
+naming: `support-hotfix/<support>/
+<version>` — the `<support>` segment matters because
+`support_hotfix_finish`/`_finalize` need to know which support branch a patch branch belongs to
+without depending on any persisted state (this tool is stateless throughout), and `<support>` is
+passed again explicitly at finish/finalize time, same "no hidden state" posture as everything else
+here.
 
 ### 3. Explicit bump type only
 
@@ -246,9 +256,9 @@ branch-mapping issues entirely, by not depending on automatic inference in the f
   dependency — assumed already on `PATH`, same posture as `git`/`ruff`/`basedpyright`/`dprint`/
   `shfmt` elsewhere in this repo, only needed at all when PR mode's `*_finish`/`*_finalize` tasks
   actually run.
-- `src/repo_tasks/__init__.py` — nest the new `version`/`gitflow` collections into `ns` alongside the
-  existing `quality` one (consumers pick both up automatically via `from repo_tasks import ns`, no
-  `tasks.py` change needed)
+- `src/repo_tasks/__init__.py` — nest the new `version`/`gitflow` collections into `ns` alongside
+  the existing `quality` one (consumers pick both up automatically via `from repo_tasks import ns`,
+  no `tasks.py` change needed)
 
 ## Verification
 
@@ -264,10 +274,10 @@ real source) rather than against this repo's own branches, since Phase 1 work wa
 at the time. Caught a real bug the unit tests missed: `_start` was bumping the version on whatever
 branch happened to be checked out _before_ switching to `develop`/`main`, so the release/hotfix
 branch got cut from an unbumped base and the bump commit landed on the wrong branch. Fixed by
-checking out the base branch before bumping, not after; added a regression test asserting full
-call _order_ (`tests/test_gitflow.py`'s prior assertions only checked the tail of the call list,
-which is why they didn't catch it). Re-run confirmed: `main` ends at the bumped version, the tag
-lands on the right commit, `develop` stays in sync, no stray branches survive.
+checking out the base branch before bumping, not after; added a regression test asserting full call
+_order_ (`tests/test_gitflow.py`'s prior assertions only checked the tail of the call list, which is
+why they didn't catch it). Re-run confirmed: `main` ends at the bumped version, the tag lands on the
+right commit, `develop` stays in sync, no stray branches survive.
 
 **Dry run result (round 2, after the nvie-alignment corrections above):** re-verified branch-then-
 bump ordering directly (`develop`'s/`main`'s version file confirmed untouched right after
@@ -278,25 +288,29 @@ redirect specifically: opened `release/1.1.0` off `develop` (left unfinished), c
 so (matches the "known, accepted rough edge" noted above); resolved it by hand keeping the release
 branch's version, then finished the release — confirmed `main` and `develop` both converge on
 `1.1.0`, both tags (`v1.0.1`, `v1.1.0`) land on the correct commits. Also caught and fixed an
-unrelated real bug in the same pass: `_open_release_branch`'s `git for-each-ref
---format=%(refname:short)` wasn't shell-quoted, so the bare parentheses broke the shell `c.run`
-invokes through — fixed by single-quoting the format string.
+unrelated real bug in the same pass: `_open_release_branch`'s
+`git for-each-ref
+--format=%(refname:short)` wasn't shell-quoted, so the bare parentheses broke the
+shell `c.run` invokes through — fixed by single-quoting the format string.
 
 **Dry run result (round 3, PR mode):** scratch repo with a local **bare** repo standing in for
 `origin` (no real GitHub host). `release_start` → `release_finish` (PR mode, default) pushed
-`release/1.1.0` to that bare "origin" correctly, then reached `gh pr create --base main --head
-release/1.1.0 ...` with exactly the expected arguments before failing on `none of the git remotes
-configured for this repository point to a known GitHub host` — the correct, expected boundary for a
-non-GitHub remote. Simulated "the PR was merged" by pushing a merge commit directly to the bare
-repo's `main` (standing in for what GitHub's merge button would produce), then ran
-`release_finalize`: fetched that merged `main` correctly, fast-forwarded local `main` to it, tagged
-`v1.1.0`, pushed the tag, branched and pushed `sync/v1.1.0`, then reached `gh pr create --base
-develop --head sync/v1.1.0 ...` with correct arguments before hitting the same expected
-no-GitHub-host boundary. Every git-only step in both the `*_finish`→PR and `*_finalize`→PR paths is
-confirmed correct; the `gh pr create` calls themselves (and the hotfix-redirect variant of
+`release/1.1.0` to that bare "origin" correctly, then reached
+`gh pr create --base main --head
+release/1.1.0 ...` with exactly the expected arguments before
+failing on `none of the git remotes
+configured for this repository point to a known GitHub host` —
+the correct, expected boundary for a non-GitHub remote. Simulated "the PR was merged" by pushing a
+merge commit directly to the bare repo's `main` (standing in for what GitHub's merge button would
+produce), then ran `release_finalize`: fetched that merged `main` correctly, fast-forwarded local
+`main` to it, tagged `v1.1.0`, pushed the tag, branched and pushed `sync/v1.1.0`, then reached
+`gh pr create --base
+develop --head sync/v1.1.0 ...` with correct arguments before hitting the same
+expected no-GitHub-host boundary. Every git-only step in both the `*_finish`→PR and `*_finalize`→PR
+paths is confirmed correct; the `gh pr create` calls themselves (and the hotfix-redirect variant of
 `*_finalize`'s second PR) are covered by unit tests but not yet exercised against a real
-GitHub-linked repo. Follow-up plan for that:
-`plans/2026-08-19-gitflow-test-repo-twin.md` (permanent test-repo twin, not started yet).
+GitHub-linked repo. Follow-up plan for that: `plans/2026-08-19-gitflow-test-repo-twin.md` (permanent
+test-repo twin, not started yet).
 
 `support_start` needed no separate dry run — it's a single `git checkout -b`, the exact same
 primitive `feature_start`/`release_start`/`hotfix_start` already exercise for real in rounds 1 and 2
@@ -306,12 +320,13 @@ above, just with a caller-supplied `base` instead of a hardcoded `develop`/`main
 `support_start` → `support_hotfix_start --bump=patch` → `support_hotfix_finish --local`) — confirmed
 `support/1.4.x` ends up merged, tagged, and the patch branch deleted, with `develop` never entering
 the picture at all. PR mode verified the same two-boundary pattern as round 3, against a local bare
-repo standing in for `origin`: `support_hotfix_finish` reached `gh pr create --base support/1.4.x
---head support-hotfix/1.4.x/2.1.0 ...` with correct arguments before the expected no-GitHub-host
-failure; after simulating the PR merge (pushing a merge commit directly to the bare repo, standing
-in for GitHub's merge button), `support_hotfix_finalize` fetched, fast-forwarded, tagged
-`v2.1.0` on `support/1.4.x`, and pushed the tag — confirmed no `gh pr create` call at all in that
-run, matching the "no second PR" design.
+repo standing in for `origin`: `support_hotfix_finish` reached
+`gh pr create --base support/1.4.x
+--head support-hotfix/1.4.x/2.1.0 ...` with correct arguments
+before the expected no-GitHub-host failure; after simulating the PR merge (pushing a merge commit
+directly to the bare repo, standing in for GitHub's merge button), `support_hotfix_finalize`
+fetched, fast-forwarded, tagged `v2.1.0` on `support/1.4.x`, and pushed the tag — confirmed no
+`gh pr create` call at all in that run, matching the "no second PR" design.
 
 ## Known follow-up (2026-08-20)
 
@@ -320,7 +335,7 @@ Surfaced while designing `plans/2026-08-20-venv-deps-tasks.md`'s `venv.sync --lo
 `--no-install-project`) fails if _only_ the project's own version changed in `pyproject.toml` with
 no dependency change, because `uv.lock` embeds that version too. `version.bump` here writes the new
 version via `bump-my-version` but never re-runs `uv lock`, so a bump commit leaves `uv.lock` stale
-until something notices via a failed `--locked` sync. Not urgent today (the `venv`/`deps` split
-that would surface this in practice hasn't landed yet), but `_bump` (or `bump`'s caller in
-`gitflow.py`) should run `deps.lock` as part of the bump commit once that module exists, so the
-commit that changes the version and the commit that re-locks never drift apart.
+until something notices via a failed `--locked` sync. Not urgent today (the `venv`/`deps` split that
+would surface this in practice hasn't landed yet), but `_bump` (or `bump`'s caller in `gitflow.py`)
+should run `deps.lock` as part of the bump commit once that module exists, so the commit that
+changes the version and the commit that re-locks never drift apart.

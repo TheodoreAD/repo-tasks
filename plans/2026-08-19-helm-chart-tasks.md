@@ -30,15 +30,16 @@ near-term exerciser, same as the docker plan.
 ### 2. Config
 
 Chart entries come from the same `repo-tasks.toml` file `monorepo-workspace-foundation.md`
-introduces for docker images — a `[[helm]]` array-of-tables with `name`, `path`, `registry`, optional
-`group`. No-op cleanly with zero `[[helm]]` entries, matching `quality.shell_check`'s existing
-pattern and `docker-image-tasks.md`'s equivalent no-op behavior.
+introduces for docker images — a `[[helm]]` array-of-tables with `name`, `path`, `registry`,
+optional `group`. No-op cleanly with zero `[[helm]]` entries, matching `quality.shell_check`'s
+existing pattern and `docker-image-tasks.md`'s equivalent no-op behavior.
 
 ### 3. Grouped version bump
 
 Chart version is written by `version.py` as part of its group's bump (`Chart.yaml`'s
 `version`/`appVersion`) — no separate helm-specific version flow. For the dogfood sample, the chart
-and its paired docker image share `group = "sample-service"`, so a single `inv version.bump
+and its paired docker image share `group = "sample-service"`, so a single
+`inv version.bump
 --group=sample-service --part=minor` updates both together in one commit+tag, per
 `monorepo-workspace-foundation.md` Design §3 and `release-management.md` Design §1.
 

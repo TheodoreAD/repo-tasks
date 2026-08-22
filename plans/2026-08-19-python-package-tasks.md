@@ -12,15 +12,16 @@ backend, `src/repo_tasks`, already built implicitly whenever a consumer does
 `plans/2026-08-19-monorepo-workspace-foundation.md` for multi-project iteration later, and on
 `plans/2026-08-19-release-management.md` as the sole writer of each project's version.
 
-**2026-08-20 update:** folded into a three-module split alongside `plans/2026-08-20-venv-deps-tasks.md`
-(`venv.py` for venv lifecycle, `deps.py` for lock-file operations). This plan's module is renamed
-from the original `python_pkg.py` to **`dist.py`** to match that split, and gains `clean`/`versions`
-tasks (Design §1 below) — the sibling plan covers venv/deps only, not repeated here.
+**2026-08-20 update:** folded into a three-module split alongside
+`plans/2026-08-20-venv-deps-tasks.md` (`venv.py` for venv lifecycle, `deps.py` for lock-file
+operations). This plan's module is renamed from the original `python_pkg.py` to **`dist.py`** to
+match that split, and gains `clean`/`versions` tasks (Design §1 below) — the sibling plan covers
+venv/deps only, not repeated here.
 
 Decision from review: include `publish(c)`, not just `build(c)`. `repo-tasks` will itself eventually
-be published to PyPI as a deliberate dogfood of the `publish` task — proving it against a real index,
-not just a private/test one — while the git-dependency install path documented in README.md stays
-the primary, supported route. PyPI becomes an _additional_ channel, not a replacement.
+be published to PyPI as a deliberate dogfood of the `publish` task — proving it against a real
+index, not just a private/test one — while the git-dependency install path documented in README.md
+stays the primary, supported route. PyPI becomes an _additional_ channel, not a replacement.
 
 ## Design
 
@@ -28,12 +29,11 @@ the primary, supported route. PyPI becomes an _additional_ channel, not a replac
 
 - `clean(c)` — remove the built `dist/` directory. Exact `docs.clean` pattern (`shutil.rmtree` if
   present, else a "nothing to clean" no-op message) — same shape, different directory.
-- `build(c, project=None, sdist=False)` — `pre=[clean]`, matching `docs.build`'s own
-  `pre=[clean]` shape, so a stale wheel from a previous version can never survive into a fresh
-  build. Defaults to `uv build --wheel` (confirmed via `uv build --help`) — the request asked for
-  "build distribution as wheel" specifically; `sdist=True` drops `--wheel` and runs plain `uv build`
-  for the sdist+wheel pair PyPI conventionally expects. No twine/setuptools dependency; `uv build`
-  covers both natively.
+- `build(c, project=None, sdist=False)` — `pre=[clean]`, matching `docs.build`'s own `pre=[clean]`
+  shape, so a stale wheel from a previous version can never survive into a fresh build. Defaults to
+  `uv build --wheel` (confirmed via `uv build --help`) — the request asked for "build distribution
+  as wheel" specifically; `sdist=True` drops `--wheel` and runs plain `uv build` for the sdist+wheel
+  pair PyPI conventionally expects. No twine/setuptools dependency; `uv build` covers both natively.
 - `publish(c, project=None, index=None, dry_run=False)` — `pre=[build]` (which itself implies
   `clean`), so publish always ships a just-built, correct `dist/` rather than whatever happened to
   be sitting there — strengthens the "never mutate/ship stale state" posture the sibling
@@ -78,9 +78,10 @@ workflow).
 
 ### 5. Monorepo phase
 
-Phase 1 (this repo, single implicit project): `build(c)`/`publish(c)`/`versions(c)` run bare `uv
-build`/`uv publish`/index query against the repo root, no `--project` flag needed. Phase 2: iterate
-`projects.py`'s discovered members, or scope to one via `uv build --package <name>` /
+Phase 1 (this repo, single implicit project): `build(c)`/`publish(c)`/`versions(c)` run bare
+`uv
+build`/`uv publish`/index query against the repo root, no `--project` flag needed. Phase 2:
+iterate `projects.py`'s discovered members, or scope to one via `uv build --package <name>` /
 `--project=<name>`.
 
 ### 6. No interaction with venv/CI-editable mode

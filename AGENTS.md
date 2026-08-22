@@ -1,8 +1,8 @@
 # Agent instructions for repo-tasks
 
 Cross-tool instructions for AI coding agents working in this repo. Universal conventions (sudo/ssh
-askpass, Bash/allowlist discipline, cross-session memory policy) live in `~/AGENTS.md` — no need
-to repeat them here, only what's specific to this repo.
+askpass, Bash/allowlist discipline, cross-session memory policy) live in `~/AGENTS.md` — no need to
+repeat them here, only what's specific to this repo.
 
 ## Build & test
 
@@ -27,6 +27,6 @@ When one submodule needs a sibling's task (e.g. `dev_env.py` composing `venv.cre
 `pre=[...]`), import it as `from .sibling import name` — not `from . import sibling` and not
 `import repo_tasks.sibling as sibling`. Since every module here is also wired into this package's
 own `__init__.py`, those other two forms both trigger a `reportImportCycles` false positive in
-basedpyright (the submodule ends up depending on `__init__.py` itself, which already depends on
-it). `from .sibling import name` targets the submodule file directly and avoids it — see
+basedpyright (the submodule ends up depending on `__init__.py` itself, which already depends on it).
+`from .sibling import name` targets the submodule file directly and avoids it — see
 `version.py`/`gitflow.py` for the existing pattern.

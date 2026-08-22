@@ -6,14 +6,15 @@ updated: 2026-08-22
 ## Context
 
 `plans/2026-08-19-docker-image-tasks.md` and `plans/2026-08-19-helm-chart-tasks.md` both need a real
-Dockerfile and Helm chart to exercise against — unit tests can mock `c.run`, but only a real artifact
-proves `docker build`/`docker push`/`helm lint`/`helm package`/`helm push` actually work end to end.
-`plans/2026-08-19-monorepo-workspace-foundation.md`'s grouped/hybrid versioning model
+Dockerfile and Helm chart to exercise against — unit tests can mock `c.run`, but only a real
+artifact proves `docker build`/`docker push`/`helm lint`/`helm package`/`helm push` actually work
+end to end. `plans/2026-08-19-monorepo-workspace-foundation.md`'s grouped/hybrid versioning model
 (`plans/2026-08-19-release-management.md` Design §1) also needs a concrete pair of artifacts that
 share one `group` to prove a single version bump actually updates both together.
 
 Decision from review: add exactly this — a minimal sample Dockerfile + matching Helm chart, living
-in this repo, purely to dogfood the docker/helm/version-grouping task modules against something real.
+in this repo, purely to dogfood the docker/helm/version-grouping task modules against something
+real.
 
 `plans/2026-08-22-docker-registry-integration.md` is what eventually pushes this Dockerfile's image
 to a real registry (GHCR) once it exists — that plan's auth/CI wiring can land independently, but
@@ -22,15 +23,15 @@ its actual `docker.release` verification is blocked on this plan.
 ## Open questions
 
 [NEEDS CLARIFICATION: what should the sample app actually do? A trivial stdlib-only HTTP server
-(e.g. Python's `http.server`) is probably enough to prove the Dockerfile/chart round-trip end to end.
-Does it need to demonstrate more — e.g. actually importing `repo_tasks` itself, to prove the
+(e.g. Python's `http.server`) is probably enough to prove the Dockerfile/chart round-trip end to
+end. Does it need to demonstrate more — e.g. actually importing `repo_tasks` itself, to prove the
 monorepo's own python package can be a dependency of another project living in the same repo once
 Phase 2 workspace support exists?]
 
-[NEEDS CLARIFICATION: where does it live? Two options: (a) become a real `[tool.uv.workspace]` member
-immediately (e.g. `examples/sample-service/` with its own `pyproject.toml`), turning `repo-tasks`
-into an actual (if minimal) monorepo right away; or (b) start as a bare `Dockerfile` + `chart/` pair
-with no python component at all, deferring the workspace-member step until
+[NEEDS CLARIFICATION: where does it live? Two options: (a) become a real `[tool.uv.workspace]`
+member immediately (e.g. `examples/sample-service/` with its own `pyproject.toml`), turning
+`repo-tasks` into an actual (if minimal) monorepo right away; or (b) start as a bare `Dockerfile` +
+`chart/` pair with no python component at all, deferring the workspace-member step until
 `monorepo-workspace-foundation.md`'s Phase 2 is actually being built. Leaning toward (b) — keep it
 docker+helm-only first, added as soon as those two task modules land, and only fold it into a real
 workspace member later when Phase 2 needs a concrete second project to resolve against.]

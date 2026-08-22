@@ -10,8 +10,8 @@ plus the `fix`/`check`/`precommit` composite. It assumes exactly one project liv
 repo's root (this repo's own `src/repo_tasks` is the only exerciser so far, via `tasks.py`
 dogfooding itself).
 
-The broader goal is to add docker image build/push, python package build/push, gitflow branch
-flows, and semver bumping — see the sibling plans this one underlies:
+The broader goal is to add docker image build/push, python package build/push, gitflow branch flows,
+and semver bumping — see the sibling plans this one underlies:
 
 - `plans/2026-08-19-release-management.md` (gitflow + semver)
 - `plans/2026-08-19-docker-image-tasks.md`
@@ -50,11 +50,13 @@ once `dogfood-sample-service.md` gives it a real second project to resolve.
 Reuses `uv`'s own workspace mechanism as the source of truth for python projects instead of
 inventing a parallel manifest for something `uv` already models well.
 
-- **Phase 1 (land now):** no `[tool.uv.workspace]` present in the consumer's root `pyproject.toml`
-  → the repo root's own `[project]` table _is_ the one implicit project. `discover_python_projects(c)
-  -> list[PythonProject]` (dataclass: `name`, `path`, `version`) returns a single entry. This must
-  keep working with zero new config — it's the common case, and the current zero-config ergonomics
-  (README: "That's the entire file — no local override") must not regress.
+- **Phase 1 (land now):** no `[tool.uv.workspace]` present in the consumer's root `pyproject.toml` →
+  the repo root's own `[project]` table _is_ the one implicit project.
+  `discover_python_projects(c)
+  -> list[PythonProject]` (dataclass: `name`, `path`, `version`)
+  returns a single entry. This must keep working with zero new config — it's the common case, and
+  the current zero-config ergonomics (README: "That's the entire file — no local override") must not
+  regress.
 - **Phase 2 (once a real multi-member consumer exists — see `dogfood-sample-service.md`):** resolve
   each `[tool.uv.workspace].members` glob's own `pyproject.toml` into its own `PythonProject`.
 - Every later task module (`docker.py`, `python_pkg.py`, `helm.py`, `version.py`) calls this instead
@@ -83,19 +85,21 @@ registry = "oci://ghcr.io/org/charts"
 group = "sample-service"
 ```
 
-An absent file or empty arrays means zero images/charts. Every task that reads it must no-op
-cleanly — the same pattern `quality.shell_check` already uses for "no `*.sh` files in this repo,"
-safe to wire unconditionally into a future top-level composite without a per-repo opt-out.
+An absent file or empty arrays means zero images/charts. Every task that reads it must no-op cleanly
+— the same pattern `quality.shell_check` already uses for "no `*.sh` files in this repo," safe to
+wire unconditionally into a future top-level composite without a per-repo opt-out.
 
-**2026-08-21 (landed, docker half):** `[[docker]]` reading landed as `projects.discover_docker_images(c)
--> list[DockerImage]`, with one addition beyond the original design: when `repo-tasks.toml` is
-absent or has no `[[docker]]` entries, a `Dockerfile` at the repo root is treated as one implicit
-image — same zero-config ergonomics as Design §1's Phase 1 python-project fallback (per review:
-"make sure there is also some smart default for the most basic cases"). It's named after the
-repo's python project (so `group` naturally matches for version resolution), or the repo
-directory's own name if there's no `pyproject.toml`; `image` defaults to that same name as a
-local-only placeholder. See `plans/2026-08-19-docker-image-tasks.md` (now landed) for `docker.py`
-itself. `[[helm]]` reading doesn't exist yet — `helm-chart-tasks.md` is still unimplemented.
+**2026-08-21 (landed, docker half):** `[[docker]]` reading landed as
+`projects.discover_docker_images(c)
+-> list[DockerImage]`, with one addition beyond the original
+design: when `repo-tasks.toml` is absent or has no `[[docker]]` entries, a `Dockerfile` at the repo
+root is treated as one implicit image — same zero-config ergonomics as Design §1's Phase 1
+python-project fallback (per review: "make sure there is also some smart default for the most basic
+cases"). It's named after the repo's python project (so `group` naturally matches for version
+resolution), or the repo directory's own name if there's no `pyproject.toml`; `image` defaults to
+that same name as a local-only placeholder. See `plans/2026-08-19-docker-image-tasks.md` (now
+landed) for `docker.py` itself. `[[helm]]` reading doesn't exist yet — `helm-chart-tasks.md` is
+still unimplemented.
 
 ### 3. Grouping for shared version/tag tracks
 
@@ -106,8 +110,8 @@ one unit — e.g. a service's docker image and its Helm chart share `group = "sa
 release in lockstep, while an unrelated shared python library elsewhere in the repo keeps its own
 independent version, untouched by that release.
 
-An entry with no `group` key defaults to being its own independent group (`group == name`) — this
-is the ordinary case for a standalone project with no paired image/chart.
+An entry with no `group` key defaults to being its own independent group (`group == name`) — this is
+the ordinary case for a standalone project with no paired image/chart.
 
 ### 4. `--project` filtering
 
@@ -118,11 +122,12 @@ annoying.
 
 ### 5. Distribution model
 
-`repo-tasks` stays an external git dependency only (`uv add --dev
-git+https://github.com/TheodoreAD/repo-tasks`) — no vendoring/forking scenario to design around.
-This doesn't change any discovery logic here, but confirms `repo-tasks.toml` and `projects.py` only
-ever need to reason about _the consumer's_ workspace root, never a copy of `repo-tasks` living inside
-it.
+`repo-tasks` stays an external git dependency only
+(`uv add --dev
+git+https://github.com/TheodoreAD/repo-tasks`) — no vendoring/forking scenario to
+design around. This doesn't change any discovery logic here, but confirms `repo-tasks.toml` and
+`projects.py` only ever need to reason about _the consumer's_ workspace root, never a copy of
+`repo-tasks` living inside it.
 
 ## Files touched
 
