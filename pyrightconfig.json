@@ -15,6 +15,13 @@
   // basedpyright silently no-ops on whichever entries don't exist in a given repo, so one shared
   // list works everywhere with nothing to adjust per consumer.
   "include": ["src", "tests", "tasks.py"],
+  // tests/integration/ needs `uv sync --group integration` (devpi-server/testcontainers) to even
+  // import cleanly — an opt-in tier by design (README.md's "Developing" section, pytest.ini's own
+  // --ignore=tests/integration), so basedpyright shouldn't require that group installed just to
+  // type-check everything else either. Root-only divergence from the canonical copy (this repo's
+  // own tests/integration/ isn't part of the shared config every consumer gets) — see
+  // configs_promote's docstring on this being the one place root and package may diverge.
+  "exclude": ["tests/integration"],
   "failOnWarnings": false,
 
   "reportAny": "error",
