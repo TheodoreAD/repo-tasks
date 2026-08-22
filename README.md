@@ -136,3 +136,11 @@ inv quality.precommit
 
 This repo dogfoods its own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the
 same one-liner a consumer uses).
+
+`inv quality.test_integration` runs an opt-in real-service tier (`tests/integration/`) exercising
+`dist.py`/`docker.py` against a real local `devpi-server` and a real local `registry:3` container —
+never part of `check`/`precommit`, and not collected by a plain `inv quality.test` either
+(`pytest.ini`'s `--ignore=tests/integration`). Needs `uv sync --group integration` (adds
+`devpi-server`/`devpi-client`/`testcontainers`) and a reachable Docker daemon; a missing
+`devpi-server` skips that half of the tier, a missing/unreachable Docker daemon fails it outright
+rather than skipping.
