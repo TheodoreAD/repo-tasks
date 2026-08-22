@@ -2,14 +2,22 @@
 name = "repo-tasks"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["invoke", "python-dotenv"]
+dependencies = ["invoke", "python-dotenv", "bump-my-version"]
+
+[project.scripts]
+repo-tasks = "repo_tasks.cli:program.run"
 
 [dependency-groups]
-dev = [
+quality = [
   "basedpyright>=1.39.10",
-  "bump-my-version",
   "pytest",
   "ruff",
+  "shellcheck-py",
+  "shfmt-py",
+  "dprint-py",
+]
+dev = [
+  { include-group = "quality" },
 ]
 integration = [
   "devpi-client>=7.3.0",
@@ -23,3 +31,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/repo_tasks"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"pyproject.toml" = "repo_tasks/pyproject.toml"
