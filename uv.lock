@@ -1075,6 +1075,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "invoke" },
+    { name = "python-dotenv" },
 ]
 
 [package.dev-dependencies]
@@ -1091,7 +1092,10 @@ integration = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "invoke" }]
+requires-dist = [
+    { name = "invoke" },
+    { name = "python-dotenv" },
+]
 
 [package.metadata.requires-dev]
 dev = [

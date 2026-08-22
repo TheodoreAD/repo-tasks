@@ -1,7 +1,7 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
-from repo_tasks import agents, configs, configure, deps, dev_env, direnv, dist, docker, docs, ns, quality
+from repo_tasks import agents, configs, configure, deps, dev_env, direnv, dist, docker, docs, ns, quality, selfinstall
 from repo_tasks import venv as venv_module
 
 
@@ -122,3 +122,15 @@ def test_ns_has_configure_unnested_at_the_top_level():
 
 def test_configure_module_is_individually_importable():
     assert configure.configure is not None
+
+
+def test_ns_nests_selfinstall_under_repo_tasks_name():
+    # invoke dashifies the collection name for the CLI (`inv repo-tasks.update`) — nested
+    # deliberately so these names can never collide with a consuming project's own local tasks.
+    repo_tasks_collection = ns.collections["repo-tasks"]
+    assert repo_tasks_collection is not None
+    assert {"update", "status", "version", "stamp"} <= set(repo_tasks_collection.task_names)
+
+
+def test_selfinstall_module_is_individually_importable():
+    assert selfinstall.update is not None

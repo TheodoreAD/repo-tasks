@@ -6,7 +6,7 @@ and no consumer-side change needed when a new module (helm, ...) ships here."""
 
 from invoke import Collection
 
-from . import agents, configs, configure, dev_env, direnv, dist, docker, docs, gitflow, quality, version
+from . import agents, configs, configure, dev_env, direnv, dist, docker, docs, gitflow, quality, selfinstall, version
 from . import deps as deps_module
 from . import venv as venv_module
 
@@ -29,3 +29,4 @@ ns.add_collection(Collection.from_module(agents), name="agents")
 ns.add_collection(Collection.from_module(dist), name="dist")
 ns.add_collection(Collection.from_module(docker), name="docker")
 ns.add_collection(Collection.from_module(configs), name="configs")
+ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")

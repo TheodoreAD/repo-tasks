@@ -10,9 +10,11 @@ it, and query a package index for a project's released versions), `docker` (`bui
 from the version-grouping model), `direnv` (`allow` — idempotent shell auto-activation), `agents`
 (`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv environment),
 `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above), and `docs`
-(`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), and `configs` (`pull`/`diff`
-— materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from
-this package's own canonical copies) — extracted from
+(`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs` (`pull`/`diff` —
+materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this
+package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
+`update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
+decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo. `inv configure`
@@ -45,13 +47,37 @@ diff/replace one file cleanly instead of risking a monolithic block.
 
 ## Installing
 
+**Recommended: the global daily-driver tool.** One install serves every repo in the family,
+decoupled from any single repo's own dependency groups — the point of the runtime/dev-venv split
+(see `power-user-linux-setup`'s
+[`plans/2026-08-20-runtime-dev-venv-split.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/plans/2026-08-20-runtime-dev-venv-split.md)):
+
+```shell
+uv tool install --with-executables-from invoke 'repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks'
+```
+
+`--with-executables-from invoke` is required, not optional — confirmed hands-on that
+`uv tool
+install` does not expose a dependency's own console scripts by default (the same limitation
+pipx historically had, `--include-deps` was the required opt-in there). Without this flag you'd get
+`repo-tasks` installed but no `inv`/`invoke` binary on `PATH` at all. This one install puts
+`inv`/`invoke` on `PATH` globally; every consumer repo's own `tasks.py`
+(`from repo_tasks import
+ns`) then resolves `repo_tasks` from this same install — no per-repo
+dependency needed at all. `inv repo-tasks.update` moves this install forward later (to the latest
+tagged release); `inv repo-tasks.status`/`.version` inspect what's currently active.
+
+**Alternative: a pinned per-repo dev dependency**, for a repo that wants its own locked version
+independent of the shared global install:
+
 ```shell
 uv add --dev git+https://github.com/TheodoreAD/repo-tasks
 ```
 
-Git-as-artifact-store, no PyPI. `uv.lock` freezes an exact commit — a later fix reaches a consumer
-only via a deliberate `uv lock --upgrade-package repo-tasks` (or a pinned `@<tag>` bump) plus a
-committed lockfile change, not automatically.
+Git-as-artifact-store, no PyPI either way. Under this pinned path, `uv.lock` freezes an exact commit
+— a later fix reaches that consumer only via a deliberate `uv lock --upgrade-package
+repo-tasks` (or
+a pinned `@<tag>` bump) plus a committed lockfile change, not automatically.
 
 ## Using
 
@@ -126,6 +152,24 @@ group's current version, plus `latest`. Image name/Dockerfile/path always come f
 zero-config default: a `Dockerfile` at the repo root becomes one implicit image, named after the
 repo's python project (so its version group resolves for free) or the repo directory if there isn't
 one. `--project` selects among multiple discovered images; omit it for the common single-image case.
+
+### repo-tasks: managing the global daily-driver install
+
+`inv repo-tasks.version` prints the currently-active `repo-tasks` version (whatever `inv` process is
+running — normally the global daily-driver install from the "Installing" section above).
+`inv repo-tasks.update` moves that global install forward to the latest tagged release (falls back
+to the default branch with a printed warning if nothing's been tagged yet — true of this repo itself
+pre-first-release). There's deliberately no version pinning for this day-to-day path: updates are
+manual either way, and reproducibility is handled separately, below.
+
+`inv configure` stamps a `bootstrap-repo-tasks.sh` at the repo root, pinning whichever `repo-tasks`
+version was active when `configure` last ran. **This script is for CI and reproducibility
+archaeology only — never run it as a human on your own machine.** Running it would silently
+reinstall the _global_ tool to whatever version _this_ repo happens to be pinned to, yanking it out
+from under any other repo you're working on. A human always runs `inv repo-tasks.update` instead; CI
+runs the committed, version-pinned script (before `inv` exists), then bare `inv <task>` after.
+`inv repo-tasks.status` compares the two — the globally-installed version against what this repo's
+stamped script currently expects — as a quick drift check.
 
 ## Developing
 
