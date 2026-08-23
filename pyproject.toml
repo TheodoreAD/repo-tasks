@@ -25,6 +25,13 @@ integration = [
   "testcontainers>=4.15.0",
 ]
 
+[tool.uv.workspace]
+# The one member is this repo's dogfood sample (examples/sample-service) — a real second project
+# so `projects.py`'s workspace resolution, the docker/helm task modules, and the shared version
+# group are exercised against something real rather than only mocked. A consumer repo needs this
+# table only if it actually has members; the single-project fallback stays zero-config.
+members = ["examples/*"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

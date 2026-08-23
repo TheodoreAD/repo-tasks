@@ -33,6 +33,14 @@ def test_discover_python_projects_returns_repo_root_first():
     assert result[0] == projects.PythonProject(name="repo-tasks", path=Path(), version="0.1.0")
 
 
+def test_discover_python_projects_finds_this_repos_own_dogfood_member():
+    """This repo is its own workspace consumer — examples/sample-service is a real member, and the
+    docker image and helm chart in repo-tasks.toml resolve their version group against it."""
+    c = MockContext(run=True)
+    names = [p.name for p in projects.discover_python_projects(c)]
+    assert names == ["repo-tasks", "sample-service"]
+
+
 def test_discover_python_projects_no_workspace_table_means_root_alone(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text(_ROOT_PYPROJECT)
