@@ -272,10 +272,11 @@ Phase 6 — the skill itself (own commit, in a different repo). The skill is **a
 
 [PITFALL: a skill edit does not reach the installed copy until `inv ai.skills` is re-run, so
 `~/.agents/skills/<name>/` stays stale in the meantime — and a Claude Code session loads the
-_installed_ copy, not the source. `inv ai.skills` does refresh it (digest comparison against the
-source, then a full replace); `-y` skips the per-skill prompt for an unattended run. The one case it
+_installed_ copy, not the source. Refresh just the edited one with `inv ai.skills --skill=<name> -y`
+— the `--skill` flag was added for exactly this (power-user-linux-setup `2f67630`). The one case it
 will not touch is content whose `.pulse-source` marker is missing or points elsewhere, which it
-treats as foreign and leaves alone even with `-y`.]
+treats as foreign and leaves alone even with `-y` — deliberately, since that marker is the ownership
+model and a flag overriding it would make ownership mean two different things.]
 
 ## Verification
 
