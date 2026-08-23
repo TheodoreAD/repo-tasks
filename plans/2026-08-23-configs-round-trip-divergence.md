@@ -84,7 +84,18 @@ either way.
 paths that exist, so the next pull drops any locally-added entry. A local fix here is not durable —
 only a change to the shipped baseline is.]
 
-## Both defects may dissolve rather than need fixing
+## Both divergences are gone (2026-08-24)
+
+Not theory any more — implemented. `pytest.ini`'s `--ignore=tests/integration` became
+`testpaths = tests/unit`, and `pyrightconfig.json`'s `tests/integration` exclude was deleted along
+with the dependency group that caused it. Root and package are now byte-identical for `pytest.ini`,
+and differ for `pyrightconfig.json` only by the `"tasks"` entry that `configs.pull` filters out of
+the root copy — i.e. only by defect 1a, which is the mechanism problem rather than a divergence.
+
+So defect 1 has almost nothing left to clobber. It is still worth fixing, because 1a means a
+promote of `pyrightconfig.json` would still narrow the canonical include list.
+
+### The reasoning that got there
 
 Direction taken 2026-08-24, after the tool audit in `plans/2026-08-19-gitignore-tool-alignment.md`:
 excludes don't belong in tool configs outside `.gitignore` as a default posture, and everything that

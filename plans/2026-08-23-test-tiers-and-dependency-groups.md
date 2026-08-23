@@ -1,5 +1,5 @@
 ---
-status: idea
+status: in-progress
 updated: 2026-08-24
 ---
 
@@ -44,6 +44,42 @@ All three hit live while landing the dogfood sample:
 - It is the sole reason `pyrightconfig.json` carries `"exclude": ["tests/integration"]`: those
   modules cannot import without the group. That one exclude is the root of the whole root-vs-package
   config divergence tracked in `plans/2026-08-23-configs-round-trip-divergence.md`.
+
+## Landed 2026-08-24
+
+Everything in Recommended direction below is implemented except §3 (where the dogfood sample lives),
+which is still awaiting a call:
+
+- Every dependency group folded into `dev`; `quality` renamed `repo-tasks-quality` and kept only
+  because it is an exported manifest. `pyrightconfig.json`'s `tests/integration` exclude deleted
+  with the group that caused it, which type-checked that tier for the first time and turned up two
+  real defects, both fixed.
+- `tests/unit/` and `tests/integration/`, three conftests, `testpaths = tests/unit`, `smoke`
+  registered as a marker.
+- `src/repo_tasks/testing.py` nested as `test`: `unit`/`integration`/`smoke`/`regression`/`all`,
+  with only `unit` in `check`'s `pre=[...]`.
+
+Verified against real repos, not only mocks: `test.smoke` deselects all 19 integration tests cleanly
+with nothing marked yet; `test.integration` no-ops in a scratch repo with no tier; and `test.unit`
+in a scratch repo with a flat `tests/` emits pytest's own warning and finds the tests. Each of the
+three commits was checked out in a worktree and run against its own source, since the venv's
+editable install otherwise resolves `repo_tasks` to the working tree and hides breakage.
+
+### Sibling repos: no breakage, one latent hazard
+
+`power-user-linux-setup` and `scaffoldapy` both declare only a `dev` group and both run
+`inv quality.check` in CI, so neither the rename nor the namespace move touches them — every hit for
+the old names is prose in docs and plans.
+
+[PITFALL: both have a flat `tests/` and no `tests/unit`, so when they next run `configs.pull` they
+inherit `testpaths = tests/unit` and fall back to pytest's "searching recursively from the current
+directory". That works — and the warning usefully nudges toward the convention — but the fallback
+search is _broader_ than `tests/`, and pytest does not respect `.gitignore`.
+`power-user-linux-setup` has a gitignored `reference/` tree of vendored clones; it contains no
+test-looking files today (checked), but the day one appears, that repo's default `pytest` run starts
+collecting it. `norecursedirs` would bound it, at the cost of being an exclude — which the
+excludes-are-brittle rule of thumb argues against. Adopting `tests/unit` in those repos removes the
+question entirely and is the intended direction.]
 
 ## Open questions
 

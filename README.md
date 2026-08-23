@@ -1,22 +1,23 @@
 # repo-tasks
 
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
-module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`test`, and the composite
-`fix`/`check`/`precommit` graph), `venv` (`sync`/`create`/`delete`/`install_wheel` — lock-respecting
-venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` — the only tasks
-that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a wheel, publish
-it, and query a package index for a project's released versions), `docker` (`build`/`push`/`release`
-— image name/Dockerfile resolved from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged
-from the version-grouping model), `helm` (`lint`/`package`/`push` — charts resolved from
-`repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
-idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
-execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap
-composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
-[zensical](https://zensical.org/)), `configs` (`pull`/`diff` — materializes
-`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this package's own
-canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
-`update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
-decoupled from any consumer's dependency groups) — extracted from
+module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`, and the composite
+`fix`/`check`/`precommit` graph), `test` (`unit`/`integration`/`smoke`/`regression`/`all` — one
+target per tier, with only the unit tier in the default gate), `venv`
+(`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle, CI/docker-aware), `deps`
+(`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write `uv.lock`), `dist`
+(`clean`/`build`/`publish`/`versions` — build a wheel, publish it, and query a package index for a
+project's released versions), `docker` (`build`/`push`/`release` — image name/Dockerfile resolved
+from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged from the version-grouping model),
+`helm` (`lint`/`package`/`push` — charts resolved from `repo-tasks.toml`'s `[[helm]]` entries,
+versioned by that same grouping model), `direnv` (`allow` — idempotent shell auto-activation),
+`agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv
+environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above),
+and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs`
+(`pull`/`diff` — materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/
+`.editorconfig` from this package's own canonical copies), and `repo_tasks` (nested as
+`repo-tasks.*` on the CLI — `update`/`status`/`version`/`stamp`, managing this package's own
+daily-driver global install, decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo. `inv configure`
@@ -93,8 +94,8 @@ root `Collection` with every task module this package ships already nested under
 `inv quality.precommit` is the one command, identical across every consumer repo, and stays that way
 automatically as new modules (`helm`, ...) land here — nothing to change on the consumer side when
 they do. Every leaf task (`lint_check`, `type_check`, `test`, ...) is also individually invocable
-(`inv quality.test`, etc.) — each has its own docstring, so `inv -l` alone is enough to know what's
-available.
+(`inv quality.lint-check`, `inv test.unit`, etc.) — each has its own docstring, so `inv -l` alone is
+enough to know what's available.
 
 Each module is also importable on its own (`from repo_tasks import quality`) for a consumer that
 wants to hand-pick a subset rather than take the full `ns` — see `src/repo_tasks/__init__.py` for
@@ -191,7 +192,7 @@ service's image, the chart that deploys it, and the python project they're built
 service that is simultaneously a workspace member, the `[[docker]]` image built by a multi-stage
 Dockerfile following the venv/deps recipe above, and the `[[helm]]` chart that deploys it, all under
 `group = "sample-service"`. It exists to be exercised, not imitated wholesale: the integration tier
-builds, pushes, and reads it back on every run of `inv quality.test-integration`.
+builds, pushes, and reads it back on every run of `inv test.integration`.
 
 ### repo-tasks: managing the global daily-driver install
 
@@ -224,11 +225,17 @@ inv quality.precommit
 own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the same one-liner a consumer
 uses).
 
-`inv quality.test_integration` runs an opt-in real-service tier (`tests/integration/`) exercising
-`dist.py`/`docker.py`/`helm.py`/`version.py` — including the whole `examples/sample-service` round
-trip — against a real local `devpi-server` and a real local `registry:3` container — never part of
-`check`/`precommit`, and not collected by a plain `inv quality.test` either (`pytest.ini`'s
-`--ignore=tests/integration`). Needs `uv sync --group integration` (adds
-`devpi-server`/`devpi-client`/`testcontainers`) and a reachable Docker daemon; a missing
-`devpi-server` skips that half of the tier, a missing/unreachable Docker daemon fails it outright
-rather than skipping.
+Tests live in their own `test` namespace, one target per tier: `inv test.unit` (the only one in
+`check`/`precommit` — no Docker, no network), `inv test.integration`, `inv test.smoke` and
+`inv test.regression` (the `smoke` marker and its inverse), and `inv test.all`. A plain `pytest`
+runs the unit tier alone, because `pytest.ini`'s `testpaths` names `tests/unit` and nothing else; in
+a simpler repo with a flat `tests/`, pytest's own testpaths warning falls back to searching from the
+working directory, so `test.unit` works there unchanged.
+
+`inv test.integration` exercises `dist.py`/`docker.py`/`helm.py`/`version.py` — including the whole
+`examples/sample-service` round trip — against a real local `devpi-server` and a real local
+`registry:3` container. It needs a reachable Docker daemon and is never part of `check`/`precommit`.
+No extra dependency group to install: everything that isn't a main dependency lives in `dev`. A
+missing `devpi-server` skips that half of the tier; a missing or unreachable Docker daemon fails it
+outright rather than skipping. Every integration target no-ops cleanly in a repo with no
+`tests/integration` directory.

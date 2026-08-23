@@ -2,28 +2,65 @@
 
 Three tiers, with deliberately different prerequisites. The default one must stay runnable anywhere.
 
-| tier        | command                        | needs                                                | runs on every commit? |
-| ----------- | ------------------------------ | ---------------------------------------------------- | --------------------- |
-| unit        | `inv quality.test`             | nothing beyond the dev dependency group              | yes                   |
-| integration | `inv quality.test-integration` | Docker daemon, `devpi-server`, `--group integration` | no — opt-in           |
-| clean-OS    | part of the integration tier   | Docker daemon                                        | no — opt-in           |
+| tier        | command                      | needs                                   | runs on every commit? |
+| ----------- | ---------------------------- | --------------------------------------- | --------------------- |
+| unit        | `inv test.unit`              | nothing beyond the dev dependency group | yes                   |
+| integration | `inv test.integration`       | Docker daemon                           | no — opt-in           |
+| clean-OS    | part of the integration tier | Docker daemon                           | no — opt-in           |
+
+`inv test.all` runs the unit tier then the whole integration tier. `inv test.smoke` and
+`inv test.regression` slice the integration tier by the `smoke` marker — the fast happy-path set
+versus everything else — and are registered before anything is marked, since `--strict-markers`
+rejects an unregistered marker.
 
 ## Why the split is enforced structurally
 
-`quality.test`/`check`/`precommit` must never start silently requiring Docker. Enforced by
-`pytest.ini`'s `addopts` carrying `--ignore=tests/integration`, with `quality.test_integration`
-overriding it (`-o addopts=...`) for its own invocation only. Directory-level exclusion was enough —
-no pytest marker needed.
+`test.unit`/`check`/`precommit` must never start silently requiring Docker. Enforced by
+`pytest.ini`'s `testpaths = tests/unit`: the default run reaches the unit tier and nothing else,
+because that is the only directory it names.
 
-Each integration fixture **skips gracefully** (`pytest.skip`, never a hard failure) when its
-prerequisite is missing — `shutil.which("devpi-server")`, a Docker-daemon reachability check. A
-missing prerequisite must never look like a real regression.
+[DECISION: an include, not an exclude. This was `--ignore=tests/integration` in `addopts`, which is
+the brittle shape — a _new_ directory under `tests/` joins the default run the moment somebody adds
+one, and nobody remembers to update an exclude. With `testpaths`, a new tier is invisible until it
+is named. Same rule of thumb as `plans/2026-08-19-gitignore-tool-alignment.md`.]
 
-`test_integration` is deliberately _not_ in `check`/`precommit`'s `pre=[...]`.
+[PITFALL: `testpaths` must list `tests/unit` **alone**. Listing `tests/unit tests` looks like a
+tidier fallback for a repo without the split, but measured, with both directories present it
+collects the integration tier into the default run — exactly what this is meant to prevent.]
+
+The fallback for a simple repo with a flat `tests/` comes from pytest itself, not from task code:
+with `testpaths` naming a directory that does not exist, pytest warns
+(`No files were found in testpaths ... Searching recursively from the current directory instead`)
+and finds the tests anyway. That is why `test.unit` runs a bare `pytest` and names no path — naming
+one would defeat it, since an explicit path that does not exist is a hard exit-4 usage error rather
+than a warning. The other targets do name a path, so each checks the directory exists first and
+prints-and-returns when it does not.
+
+`test.integration` is deliberately _not_ in `check`/`precommit`'s `pre=[...]`; only `test.unit` is.
+
+## Conftest layout
+
+Three files, which is most of the reason the directories are split at all:
+
+- `tests/conftest.py` — what both tiers share. Deliberately thin.
+- `tests/unit/conftest.py` — the `c` `MockContext` fixture nearly every unit test wants. A test
+  needing a specific exit code still builds its own `MockContext(run=Result(exited=...))`; that is
+  the intended split, not an oversight.
+- `tests/integration/conftest.py` — the container and index fixtures, which no unit test should be
+  able to reach by accident.
+
+It is exemplary by being read, not distributed: this package ships tool config and the quality
+dependency manifest, never project structure or tests. That is `scaffoldapy`'s half of the split.
+
+The devpi fixture still **skips gracefully** (`pytest.skip`, never a hard failure) when
+`devpi-server` isn't on PATH. That is now belt-and-braces rather than the main path — devpi lives in
+`dev` like everything else, so a plain `inv venv.sync` installs it — but it keeps a half-synced
+environment from looking like a real regression. A missing Docker daemon deliberately fails loudly
+instead.
 
 ## Unit tier: mocked `c.run`
 
-Every task module has a `tests/test_<module>.py` following `tests/test_quality.py`'s
+Every task module has a `tests/unit/test_<module>.py` following `tests/unit/test_quality.py`'s
 `MockContext`/`Result` pattern, asserting exact command-string construction. This is the whole tier
 — fast, hermetic, no external anything.
 
@@ -101,7 +138,7 @@ fixtures, whose JSON/HTML payloads happened not to hit either gap:
 
 Both fixed, with unit-level regressions pinning them:
 `test_versions_derives_from_json_filename_when_version_key_absent` and
-`test_versions_html_fallback_strips_sha256_fragment` in `tests/test_dist.py`.
+`test_versions_html_fallback_strips_sha256_fragment` in `tests/unit/test_dist.py`.
 
 ### The dogfood sample: `examples/sample-service`
 
@@ -128,12 +165,14 @@ of this tier's services — `bump-my-version` is a runtime dependency, so the mo
 lives here only because it shells out for real (git commits, git tags, a subprocess), which is
 exactly what the unit tier promises not to do.
 
-It closed a standing [UNVERIFIED]: `tests/test_version.py` pins the _generated config_, but whether
-bump-my-version actually finds those search strings in a real `Chart.yaml` had never been executed.
+It closed a standing [UNVERIFIED]: `tests/unit/test_version.py` pins the _generated config_, but
+whether bump-my-version actually finds those search strings in a real `Chart.yaml` had never been
+executed.
 
-[PITFALL: `tests/integration/conftest.py` imports `testcontainers` at module scope, so the whole
-directory is uncollectable without `uv sync --group integration` — including modules like this one
-that need nothing from it. A "never skips" module still won't run without the group installed.]
+This module used to be uncollectable in practice: `tests/integration/conftest.py` imports
+`testcontainers` at module scope, and `testcontainers` lived in a separate opt-in dependency group,
+so the whole directory failed to import without it — including this module, which needs nothing from
+it. Folding every group into `dev` removed the cause rather than working around it.
 
 ## Clean-OS tier: testing user-wide effects
 
