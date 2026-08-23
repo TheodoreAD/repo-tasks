@@ -60,13 +60,11 @@ that a task which _can detect_ a bad state should say so at the point of failure
 some of this out of `contributing/` and into `gitflow.py` — a code change, not a docs change, and
 arguably the better fix for (3) specifically.]
 
-### `contributing/test-tiers.md` — the clean-OS tier is described, not yet exercised
+### `contributing/test-tiers.md` — resolved 2026-08-23
 
-[NEEDS CLARIFICATION: the clean-OS section documents the fixture and its rationale, but the tier has
-no real mutating test yet — `plans/2026-08-23-clean-os-integration-testing.md` carries that as a
-`[DEFERRED:]` item. Once those tests land, the section needs the fixture-scope decision folded in
-(module-shared vs. fresh container per test) and a note on what the tier actually covers. Purely a
-follow-on writing task, blocked on that plan rather than on any question here.]
+The clean-OS mutating tests landed (`tests/integration/test_clean_os_user_effects.py`), and the
+section gained its "What the tier covers" and "Fixture scope" subsections in the same pass — this
+file's test-tiers gap is closed.
 
 ### `contributing/task-module-conventions.md` — assembled, needs a coherence pass
 

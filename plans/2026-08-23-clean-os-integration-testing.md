@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-23
 ---
 
@@ -76,22 +76,21 @@ This plan lands the Dockerfile + fixture + one smoke test proving the fixture wo
 test yet. Those are real, separate pieces of follow-up work once this infra exists; scoping them in
 now would be speculative given no such test has been written or reviewed yet.
 
-[DEFERRED: the real mutating tests — `selfinstall.py`, `agents.py`, `direnv.py` exercised against
-this isolated `$HOME` — are the actual point of building the fixture, and none exist yet. This is
-the next piece of work on this plan, not a separate concern someone else picks up.]
-
-[DEFERRED: fixture scope needs revisiting when that first mutating test is written. The smoke test's
-module scope is fine only because it is the only test in its module; once several tests share one
-container's `$HOME`, they can leak state into each other — which `devpi_index`/`docker_registry`
-avoid only because every test there uploads or pushes a distinctly-named artifact, a property a
-`$HOME`-mutating test does not have. Decide module-shared vs. a fresh container per test then, with
-a real test in hand, rather than guessing now.]
+Both deferred items resolved 2026-08-23: the mutating tests landed as
+`tests/integration/test_clean_os_user_effects.py` (selfinstall's real install command → global
+`inv`, `direnv.allow`, `agents.claude-hook`), and the fixture-scope question was decided with those
+tests in hand — one module-scoped container per module, disjoint mutation paths within the mutating
+module, a function-scoped container only if a future test can't keep that property. Both are
+documented in [`contributing/test-tiers.md`](../contributing/test-tiers.md) ("What the tier covers"
+/ "Fixture scope").
 
 ## Files touched
 
 - `tests/integration/clean-os.Dockerfile` (new)
 - `tests/integration/conftest.py` — add `clean_os_container` fixture
 - `tests/integration/test_clean_os_integration.py` (new) — smoke test only, per Design §3
+- `tests/integration/test_clean_os_user_effects.py` (new) — the real mutating tests, per the Design
+  §3 follow-up
 
 ## Verification
 
@@ -103,5 +102,24 @@ a real test in hand, rather than guessing now.]
 - `$HOME` starts clean — no `.claude`, no repo-tasks-specific state, before anything runs.
 - The bind-mounted repo source lands at `/home/tester/repo-tasks` and is readable (`pyproject.toml`
   present).
-- Real `selfinstall.py`/`agents.py`/`direnv.py` tests against this fixture are not written yet —
-  tracked by the `[DEFERRED:]` items in Design §3, which is what keeps this plan `in-progress`.
+- **Confirmed (2026-08-23):** `tests/integration/test_clean_os_user_effects.py` — 4 tests, all
+  passing against the real container: selfinstall's `_INSTALL_CMD` against the container's source
+  copy yields `/home/tester/.local/bin/inv`; that `inv --list` resolves the repo's own tasks.py;
+  `inv direnv.allow` flips `direnv export` from failing to succeeding; `inv agents.claude-hook`
+  writes a fresh project's `.claude/settings.json` and materializes the env cache file under
+  `~/.cache/claude-code`.
+
+## Migrated to
+
+- The tier's coverage description and the fixture-scope decision (module-per-module containers,
+  disjoint mutation paths, when to reach for a function-scoped container) →
+  [`contributing/test-tiers.md`](../contributing/test-tiers.md), "What the tier covers" and "Fixture
+  scope" subsections of the clean-OS section, which already carried this plan's Dockerfile
+  rationale, non-root rationale, dogfooded-build decision, and the docker-py eager-credentials
+  `[PITFALL:]`.
+- Fixture mechanics (why not testcontainers' `DockerImage`, the fresh-`Context`/`MonkeyPatch` scope
+  workaround, the tar-copy of the source) → `tests/integration/conftest.py`'s own docstrings, where
+  they already live next to the code.
+- Deliberately not migrated: the verification log above (transcripts of what ran when — the tests
+  themselves are the durable proof), and the Design-section prose restating what the Dockerfile and
+  fixture do, which the code and `contributing/test-tiers.md` now state directly.

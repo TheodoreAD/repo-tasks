@@ -168,7 +168,7 @@ name), and not a byte budget. Four files, derived from the Class A+B inventory:
 3. `contributing/test-tiers.md` — the unit / opt-in integration / clean-OS tier split, devpi-server
    over pypiserver (PEP 691 coverage), `registry:3` via testcontainers, the `127.0.0.1`-not-
    `localhost` pitfall, skip-don't-fail posture. From `local-index-and-registry-testing.md`, joined
-   later by `clean-os-integration-testing.md`.
+   later by `clean-os-integration-testing.md` (itself since retired into that file too).
 4. `contributing/task-module-conventions.md` — echo every command; no-op cleanly on an absent
    artifact kind; never silently mutate (`--locked`, never `--frozen`, never bare `uv sync`);
    single-writer rules (`deps.lock` owns `uv.lock`, `version.py` owns the version field); named
@@ -201,8 +201,9 @@ discovered later as silence:
   (the hotfix-into-release-branch merge conflict is documented as an accepted rough edge) but never
   how to get out of one. Also missing: aborting a release branch, a tag pushed to the wrong commit,
   `*_finalize` run before the PR actually merged, a `sync/<tag>` PR closed without merging.
-- `test-tiers.md` — thinnest gap; mostly needs the clean-OS tier folded in once
-  `clean-os-integration-testing.md` lands its first real mutating test.
+- `test-tiers.md` — thinnest gap; mostly needed the clean-OS tier folded in once
+  `clean-os-integration-testing.md` (now retired) landed its first real mutating test — done
+  2026-08-23.
 - `task-module-conventions.md` — assembled from five sources, so it needs a coherence pass rather
   than new facts.
 
