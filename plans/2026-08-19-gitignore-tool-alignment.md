@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-23
+updated: 2026-08-24
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -25,10 +25,9 @@ result was not what documentation-only reasoning would have predicted:
   `reference/` tree and standalone example snippets getting type-checked. Needs permanent, explicit
   excludes.
 
-`pytest`, `dprint`, `shellcheck`, `shfmt` (and `fd`, which several leaf tasks already shell out to
-for file discovery — `quality.py`'s `_sh_files`) haven't been checked at all yet — their behavior is
-currently assumed, not verified, and the ruff/basedpyright split is direct evidence that assuming is
-the wrong move here.
+`pytest`, `dprint`, `shellcheck` and `shfmt` were unchecked when this plan was written — their
+behavior assumed rather than verified, with the ruff/basedpyright split as direct evidence that
+assuming is the wrong move. That audit has since been done; see "The audit, done" below.
 
 A related, second concern surfaced in the same discussion: rather than reactively discovering
 repo-specific excludes one at a time (as happened for `power-user-linux-setup`'s
@@ -60,23 +59,106 @@ is the right upstream to adapt from for the "canonical `.gitignore` baseline" op
 not something to author independently, and not a choice unique to this plan: it's the same source a
 mainstream, widely-used IDE tool already delegates to instead of maintaining its own list.
 
+## The audit, done (2026-08-23)
+
+Measured per tool, against probe trees, not read off documentation. This is the reference table the
+"Recommended direction" section asked for.
+
+| tool               | respects `.gitignore`                      | additive exclude                                   | additive include               | config inheritance                  |
+| ------------------ | ------------------------------------------ | -------------------------------------------------- | ------------------------------ | ----------------------------------- |
+| ruff               | **yes**, `respect-gitignore` on by default | `extend-exclude`                                   | `extend-include`               | `extend`                            |
+| dprint             | **yes**, plus `.git/info/exclude`          | `excludes` is already additive on top of gitignore | —                              | `extends`                           |
+| shellcheck / shfmt | **inherited**, see below                   | n/a                                                | n/a                            | n/a                                 |
+| pytest             | **no**                                     | `norecursedirs` **replaces** its default list      | `testpaths`                    | —                                   |
+| basedpyright       | **no**, and rejected upstream              | **none** — open feature request                    | none, but see the glob finding | `extends`, top-level keys overwrite |
+
+- **ruff.** Confirmed locally against ruff 0.16.3: a gitignored `generated/` directory produced zero
+  findings with no `exclude` of any kind in `ruff.toml`, while the tracked `src/` file was flagged.
+  An `extend-exclude` naming a directory that does not exist is not an error.
+- **dprint.** Respects `.gitignore` and `.git/info/exclude` by default (`--no-gitignore` opts out);
+  a gitignored file can be un-excluded with a negated glob. Git's _global_ excludes file is
+  deliberately **not** respected unless `DPRINT_GLOBAL_GITIGNORE=1`, because it is machine-specific
+  and would make CI disagree with a developer's machine. So `dprint.json`'s `excludes` only ever
+  needs entries for **tracked** files that must not be formatted — `uv.lock` and the helm
+  `templates/*.yaml` entries are exactly that, and neither could be expressed via `.gitignore`.
+- **shellcheck / shfmt.** Both are invoked over whatever `quality.py`'s `_sh_files` returns, which
+  is `git ls-files --cached --others --exclude-standard -- '*.sh'` — gitignore-aware by
+  construction, since `--exclude-standard` is git's own ignore handling. Nothing to configure.
+  [PITFALL: this plan previously described `_sh_files` as calling `fd -e sh .`. It does not, and has
+  not for some time. The conclusion happened to be the same (gitignore-aware for free) but for the
+  wrong reason — a reminder that a plan is not evidence about current code.]
+- **pytest.** No git integration. `norecursedirs` has a default list (`.*`, `build`, `dist`, `CVS`,
+  `_darcs`, `{arch}`, `*.egg`, `venv`) and **setting it replaces that default** — the same trap as
+  basedpyright's `exclude`. `testpaths` is the include-shaped lever and is the one to reach for.
+- **basedpyright.** No `.gitignore` support, and pyright rejected the idea on the grounds that
+  source-control configuration and tool configuration have different semantics
+  ([pyright#129](https://github.com/microsoft/pyright/issues/129)). There is no `extend-exclude`; it
+  is an open request ([pyright#10795](https://github.com/microsoft/pyright/issues/10795)). So for
+  this one tool an explicit list genuinely is the only lever — which is precisely why its include
+  list should be doing the work instead.
+
+### Two basedpyright findings that contradict its own documentation
+
+[PITFALL: setting `exclude` **replaces** basedpyright's documented defaults (`**/node_modules`,
+`**/__pycache__`, `**/.*`), and the documentation's further promise that "pyright also excludes any
+virtual environment directories regardless of the exclude paths specified... cannot be overridden"
+does **not** hold. Measured: with `include: ["**/src"]` and `exclude: ["tests/integration"]`, a
+probe analysed `.venv/lib/python3.13/site-packages/dep/src/` and `node_modules/thing/src/` — and
+still did so after adding a real `pyvenv.cfg` **and** declaring `venvPath`/`venv` explicitly.
+Restating the three defaults alongside the real exclude fixed it. Any `exclude` this family ships
+must restate them.]
+
+[PITFALL: an `include` entry that is a **literal** path which does not exist is a hard config error
+— exit 3, `File or directory "..." does not exist`, printed alongside an otherwise clean summary
+line. An `include` entry that is a **glob** matching nothing is fine. Measured both ways. This is
+the entire reason `configs.py`'s `_resolve_content` filters the include list per consumer, and the
+reason that filtering causes the ratchet described in
+`plans/2026-08-23-configs-round-trip-divergence.md`.]
+
+Note the live contradiction this leaves in the repo: `pyrightconfig.json`'s own comment claims
+"basedpyright silently no-ops on whichever entries don't exist in a given repo, so one shared list
+works everywhere with nothing to adjust per consumer." That is false for `include`, and
+`configs.py`'s docstring states the opposite correctly. The comment should go.
+
+## Rule of thumb: includes, not excludes
+
+[DECISION: excludes do not belong in tool configs outside `.gitignore`, as a default posture. An
+exclude list is brittle in a way an include list is not — it goes wrong the moment somebody adds a
+directory, and nobody remembers to update it, whereas a new directory simply isn't picked up by an
+include-shaped config until someone opts it in. Stated 2026-08-23.]
+
+How far each tool can actually honour that, given the audit above:
+
+- **ruff, dprint, shellcheck/shfmt** — fully. `.gitignore` does the work; the only excludes that
+  remain are for _tracked_ files that must not be touched (`uv.lock`, helm `templates/*.yaml`),
+  which `.gitignore` cannot express by definition.
+- **pytest** — fully, via `testpaths` instead of `--ignore`/`norecursedirs`. See
+  `plans/2026-08-23-test-tiers-and-dependency-groups.md`.
+- **basedpyright** — the rule holds here too, and more easily than it first appeared. A narrow
+  include list needs no excludes at all: `["src", "tests", "tasks", "tasks.py"]` never reaches
+  `.venv`, which is why this repo has never leaked despite carrying an exclude that replaces the
+  defaults. The apparent tension — that covering a workspace member's nested `src/` seemed to need a
+  recursive `**/src`, which _does_ reach into `.venv` and forces excludes back in — turned out to be
+  false. **A directory include is already recursive**: measured, a literal `examples` entry reaches
+  `examples/svc/src/svcpkg/c.py`. Named directories cover nested layouts with no glob and no
+  exclude, so `**/src` is simply not needed.
+
 ## Open questions
 
-- [NEEDS CLARIFICATION: does `dprint check`/`dprint fmt` respect `.gitignore` by default, or does it
-  need explicit `excludes` entries for anything gitignored? Verify the same way ruff/basedpyright
-  were — run against a gitignored probe file with and without an explicit exclude, diff the result —
-  don't trust the docs alone given how wrong that would have been for basedpyright.]
-- [NEEDS CLARIFICATION: does pytest's test collection ever walk into a gitignored directory on its
-  own? pytest has no git integration that I'm aware of, so it likely needs explicit
-  `testpaths`/`norecursedirs` regardless of `.gitignore` state either way — but not verified, and
-  worth confirming rather than assuming.]
-- [NEEDS CLARIFICATION: `shellcheck`/`shfmt` are invoked over whatever `_sh_files`'s `fd -e sh .`
-  call returns — `fd` itself respects `.gitignore` by default, so this pair likely already inherits
-  gitignore-awareness for free, with zero config of its own needed. Confirm this rather than assume
-  it transfers automatically.]
-- [NEEDS CLARIFICATION: for `basedpyright` — the one tool confirmed not to respect `.gitignore` — is
-  there any config toggle that changes that (some linters/type-checkers ship a "respect VCS ignore"
-  option), or is an explicit, permanent exclude list genuinely the only lever available?]
+- [NEEDS CLARIFICATION: given that directory includes are recursive, the only remaining reason to
+  prefer globs is that a literal entry **hard-errors when absent** while a glob matching nothing is
+  fine — the sole cause of `configs.pull`'s per-consumer filtering and its ratchet
+  (`plans/2026-08-23-configs-round-trip-divergence.md` §1a). Is there a glob spelling of each
+  canonical entry that tolerates absence _without_ widening reach — `examples`, `tests`, `tasks`
+  each expressed so they match only a top-level directory of that name? If yes the filtering can be
+  deleted outright, root and package go byte-identical, and the ratchet disappears with no merge
+  mechanism. Not yet tested; the highest-leverage measurement left.]
+- [NEEDS CLARIFICATION: is basedpyright's `extends` a better distribution mechanism than copying the
+  file at all? A consumer's `pyrightconfig.json` could be three lines extending the canonical copy
+  shipped inside the installed `repo_tasks` package. Blockers to check: `extends` resolves relative
+  paths against the config file's own location, and the docs say nothing about pointing into an
+  installed package; the path would also vary by environment. If it works it dissolves the whole
+  pull/promote round trip for this one file — the highest-leverage thing on this list.]
 - [NEEDS CLARIFICATION: how much of the "community-standard excludes" set is already covered by (a)
   each tool's own sane defaults — recall `power-user-linux-setup`'s own §C4 gotcha: basedpyright's
   default `exclude` already includes `**/.*`/`**/node_modules`/`**/__pycache__`, and the bug was

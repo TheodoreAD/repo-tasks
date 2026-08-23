@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-23
+updated: 2026-08-24
 ---
 
 ## Context
@@ -56,8 +56,8 @@ the filtered list canonical for everyone.
 
 Consequence, had it been committed: `power-user-linux-setup` — the flat-layout `tasks/` consumer
 this entry exists for, named as such in the config's own comment — would silently stop type-checking
-that directory on its next `configs.pull`. Silently, because basedpyright no-ops on include entries
-that aren't present.
+that directory on its next `configs.pull`. Silently, because a directory that no include entry names
+is simply not part of the project — there is no diagnostic for coverage you never asked for.
 
 [PITFALL: `pull`'s filtering is deliberate and correct on its own (it keeps a consumer's config free
 of entries that don't apply to it). It only becomes destructive when composed with `promote`, whose
@@ -66,10 +66,11 @@ their composition is.]
 
 ### 2. `pyrightconfig.json`'s `include` allowlist silently leaves new source trees unchecked
 
-`include` is the fixed list `["src", "tests", "tasks.py"]`, shared by every consumer, on the
-reasoning that basedpyright silently no-ops on entries that don't exist so one list works
-everywhere. The cost is the inverse: source living anywhere else is silently **not** type-checked,
-with nothing to notice it.
+`include` is the fixed list `["src", "tests", "tasks.py"]`, shared by every consumer. The config's
+own comment justifies this by claiming basedpyright "silently no-ops on whichever entries don't
+exist" — which is false for a literal path (it hard-errors, exit 3); what actually makes one list
+work everywhere is `configs.pull` filtering it per consumer. Either way the cost is the same: source
+living outside those entries is silently **not** type-checked, with nothing to notice it.
 
 `examples/sample-service` is the live instance. Measured 2026-08-23: a plain `basedpyright` run
 analyses 36 files and reports nothing from `examples/`; pointing it at
@@ -82,6 +83,31 @@ either way.
 `configs.pull`'s `_resolve_content` rewrites the `include` array to the canonical list filtered to
 paths that exist, so the next pull drops any locally-added entry. A local fix here is not durable —
 only a change to the shipped baseline is.]
+
+## Both defects may dissolve rather than need fixing
+
+Direction taken 2026-08-24, after the tool audit in `plans/2026-08-19-gitignore-tool-alignment.md`:
+excludes don't belong in tool configs outside `.gitignore` as a default posture, and everything that
+isn't a main dependency goes in `dev`.
+
+Follow both through and most of this plan stops applying:
+
+- The `pytest.ini` divergence goes away entirely —
+  `plans/2026-08-23-test-tiers-and-dependency-groups.md` replaces `--ignore=tests/integration` with
+  `testpaths = tests/unit`, an include rather than an exclude, identical for every consumer.
+- The `pyrightconfig.json` divergence goes away too, for a different reason: that exclude exists
+  only because `tests/integration` can't import without the `integration` dependency group. Move
+  `testcontainers` into `dev` and there is nothing to exclude.
+
+With both gone, root and package are byte-identical, defect 1 has nothing left to clobber, and only
+the `include`-filtering ratchet (1a) survives as a real mechanism problem.
+
+[PITFALL: 1a does **not** dissolve, and it is the one to keep. It is caused by basedpyright
+hard-erroring on a literal `include` path that does not exist — measured, and the reason
+`_resolve_content` filters at all. Nothing about dependency groups or the excludes rule touches it.]
+
+Defect 2 is likewise unaffected: `examples/` stays untype-checked whatever happens to the excludes,
+because it is an `include` question.
 
 ## Open questions
 
@@ -96,12 +122,16 @@ only a change to the shipped baseline is.]
   already sketched and this package deliberately hasn't built. If that existed, `tests/integration`
   would be a declared local override rather than an undeclared drift, and promote could refuse to
   touch anything covered by one.]
-- [NEEDS CLARIFICATION: does `"examples"` belong in the canonical `include` list? It costs nothing
-  in a repo without one (basedpyright no-ops on a missing entry) and closes the gap for every
-  consumer at once, which is the same argument that produced the current list. Against: it is
-  speculative for consumers that have no `examples/`, and this package's own conventions push back
+- [NEEDS CLARIFICATION: does `"examples"` belong in the canonical `include` list? It closes the gap
+  for every consumer at once, which is the same argument that produced the current list, and it is
+  free only because `pull` filters it out where the directory is absent — a _literal_ entry that
+  does not exist is a hard config error, so this is not the harmless addition it first looks like.
+  Against: speculative for consumers with no `examples/`, and this package's conventions push back
   on adding shared surface for one repo's need. Worth checking what other trees are plausible
-  (`scripts/`, `docs/` snippets) before settling on a list rather than adding one entry reactively.]
+  (`scripts/`, `docs/` snippets) before settling on a list rather than adding one entry reactively.
+  In its favour: a directory include is **recursive**, measured — a literal `examples` entry does
+  reach `examples/sample-service/src/`, so one entry covers every workspace member's nested layout
+  with no glob and no exclude.]
 - [NEEDS CLARIFICATION: separately from what the list contains — should anything _detect_ the gap? A
   check that every tracked `*.py` file is covered by some `include` entry would have caught this the
   moment `examples/` appeared, and would keep catching it. That is close in spirit to the fixed,
