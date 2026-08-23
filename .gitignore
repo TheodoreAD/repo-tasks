@@ -6,5 +6,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# Build output: `dist.build` writes wheels/sdists here and `helm.package` writes chart .tgz
+# archives into dist/helm/. Both are regenerated on demand and `dist.clean` wipes the directory.
+dist/
+
 # Claude Code — personal/runtime state, not shared config.
 .claude/settings.local.json
