@@ -32,6 +32,13 @@ decision. GHCR packages default to the same visibility as their owning repo (pri
 but can be flipped public per-package via GitHub's UI later if wider distribution is ever wanted — a
 one-time manual step, not something `inv`/CI configures.
 
+**Gotcha confirmed by the smoke test (2026-08-23):** GHCR rejects uppercase characters anywhere in
+an image ref. This account's GitHub username is `TheodoreAD` (mixed case), so any image name derived
+from it — CI's `${{ github.repository_owner }}`, or a future `repo-tasks.toml` `[[docker]]`/`[[helm]]`
+entry — must lowercase that segment explicitly (`docker-registry-smoke-test.yml`'s
+`${OWNER,,}` step does this for CI). Flagged in `dogfood-sample-service.md` too, since that's where
+the real `image =` value eventually gets written.
+
 ### 2. `docker.py` itself needs zero changes
 
 Image name/registry/Dockerfile/path already come entirely from `projects.discover_docker_images(c)`
