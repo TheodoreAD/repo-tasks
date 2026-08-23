@@ -182,11 +182,10 @@ def ensure_deps(c):
             # repo_tasks is deliberately never added to this project's own dependencies (see
             # ensure_deps' docstring) — it's only ever resolvable via the globally-installed
             # `repo-tasks` tool, invisible to a type checker that only sees this project's own
-            # venv. The pyright/ruff suppressions below reflect that: unresolvable and "unused" by
-            # static analysis, but genuinely used at runtime via invoke's own getattr(module, "ns").
-            tasks_py.write_text(
-                "from repo_tasks import ns  # noqa: F401  # pyright: ignore[reportMissingImports, reportUnusedImport]\n"
-            )
+            # venv, hence the pyright suppression. Same shape scaffoldapy's own template/tasks.py
+            # uses, for the same reason.
+            tasks_content = 'from repo_tasks import ns  # pyright: ignore[reportMissingImports]\n\n__all__ = ["ns"]\n'
+            tasks_py.write_text(tasks_content)
             print("[configs.ensure-deps] created tasks.py")
         # A repo with no pyproject.toml also has none of the canonical tool configs
         # (ruff.toml/dprint.json/pyrightconfig.json/pytest.ini/.editorconfig) — `inv quality.check`
