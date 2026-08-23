@@ -68,6 +68,16 @@ Discovery lives in `projects.py`. Every task module calls it rather than hardcod
 Ambiguity is an error, not a guess: `--project` naming something undiscovered raises rather than
 silently picking one.
 
+A `--project` flag must actually select. `dist.py`'s took the flag while documenting it as "Phase 1:
+ignored" — harmless while a root project was the only thing that could exist, a silent
+wrong-artifact bug the moment workspace members resolved. If a selection axis isn't implemented yet,
+leave the flag off rather than accepting and discarding it.
+
+[PITFALL: invoke's `pre=[other_task]` passes the caller's arguments to nothing — the pre-task runs
+with its own defaults. A task that both takes `--project` and depends on another `--project`-aware
+task must call it from its own body (`dist.publish` does), or it will act on the default target
+while appearing to honour the flag.]
+
 ## Name flags after what they do, not after who runs them
 
 `venv.sync` takes `no_editable`, `no_dev`, and `no_install_project` — deliberately not one opaque

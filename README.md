@@ -127,9 +127,10 @@ inv venv.sync --no-install-project     # deps-only venv, for a Docker/CI layer c
 ```
 
 A wheel-based prod image builds on top of that deps-only layer: `inv dist.build` to produce
-`dist/*.whl`, then `inv venv.install_wheel` (`uv pip install --no-deps`) to add just the project
+`dist/*.whl`, then `inv venv.install-wheel` (`uv pip install --no-deps`) to add just the project
 package to the same `.venv` — no re-resolution, so the shipped container runs exactly the wheel that
-could also go straight to `inv dist.publish`.
+could also go straight to `inv dist.publish`. `examples/sample-service/Dockerfile` is that recipe
+written out in full, against a real service.
 
 ### dist: build, publish, and query a package index
 
@@ -140,7 +141,8 @@ fresh build. `inv dist.publish` always builds fresh first (`pre=[build]`) and ru
 querying a package index directly — PEP 691 JSON Simple API, falling back to the PEP 503 HTML file
 listing if the index doesn't serve the JSON media type — since `uv` itself has no
 list-remote-versions subcommand. `dist.py` never touches `.venv` or installs anything editable; it's
-orthogonal to `venv.py`/`deps.py` by construction.
+orthogonal to `venv.py`/`deps.py` by construction. All three take `--project` to name a workspace
+member; omitted, they act on the repo's own root project.
 
 ### docker: build, push, and release an image
 
@@ -167,7 +169,29 @@ no-ops cleanly in a repo with no entries. The chart's `version`/`appVersion` are
 releases in lockstep with it (see [`contributing/versioning.md`](contributing/versioning.md)) — and
 the `.tgz` a push targets is named from that group version, so a chart that was never packaged (or
 drifted from its group's version) fails loudly instead of pushing the wrong thing. `--project`
-selects among multiple discovered charts; omit it for the common single-chart case.
+selects among multiple discovered charts; omit it for the common single-chart case. `--plain-http`
+is there for a registry serving no TLS (a local dev registry): helm has no equivalent of docker's
+automatic loopback insecure-registry exemption, so it must be asked for explicitly.
+
+### monorepos: workspace members, version groups, and the sample service
+
+A repo with several projects declares them the way `uv` already does — `[tool.uv.workspace]`'s
+`members`/`exclude` globs in the root `pyproject.toml`, no parallel manifest.
+`projects.discover_python_projects(c)` resolves the root project first, then each member, and that
+ordering is what "the repo's own project" means to every task's no-flag invocation. A single-project
+repo needs no workspace table at all and behaves exactly as before.
+
+Docker images and Helm charts aren't modelled by `uv`, so they live in `repo-tasks.toml` instead
+(`[[docker]]`/`[[helm]]`). An entry's `group` is what ties artifacts into one release unit: a
+service's image, the chart that deploys it, and the python project they're built from share one
+`group`, so `inv version.bump --group <name>` moves all three in one commit and one tag. See
+[`contributing/versioning.md`](contributing/versioning.md) for what may share a group and why.
+
+`examples/sample-service/` is this repo's own worked example of all of it — a stdlib-only HTTP
+service that is simultaneously a workspace member, the `[[docker]]` image built by a multi-stage
+Dockerfile following the venv/deps recipe above, and the `[[helm]]` chart that deploys it, all under
+`group = "sample-service"`. It exists to be exercised, not imitated wholesale: the integration tier
+builds, pushes, and reads it back on every run of `inv quality.test-integration`.
 
 ### repo-tasks: managing the global daily-driver install
 
@@ -201,9 +225,10 @@ own tasks against itself (`tasks.py` is `from repo_tasks import ns` — the same
 uses).
 
 `inv quality.test_integration` runs an opt-in real-service tier (`tests/integration/`) exercising
-`dist.py`/`docker.py` against a real local `devpi-server` and a real local `registry:3` container —
-never part of `check`/`precommit`, and not collected by a plain `inv quality.test` either
-(`pytest.ini`'s `--ignore=tests/integration`). Needs `uv sync --group integration` (adds
+`dist.py`/`docker.py`/`helm.py`/`version.py` — including the whole `examples/sample-service` round
+trip — against a real local `devpi-server` and a real local `registry:3` container — never part of
+`check`/`precommit`, and not collected by a plain `inv quality.test` either (`pytest.ini`'s
+`--ignore=tests/integration`). Needs `uv sync --group integration` (adds
 `devpi-server`/`devpi-client`/`testcontainers`) and a reachable Docker daemon; a missing
 `devpi-server` skips that half of the tier, a missing/unreachable Docker daemon fails it outright
 rather than skipping.

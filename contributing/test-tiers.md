@@ -103,6 +103,38 @@ Both fixed, with unit-level regressions pinning them:
 `test_versions_derives_from_json_filename_when_version_key_absent` and
 `test_versions_html_fallback_strips_sha256_fragment` in `tests/test_dist.py`.
 
+### The dogfood sample: `examples/sample-service`
+
+`tests/integration/test_dogfood_sample_service.py` runs `docker.release` against the real
+multi-stage Dockerfile and `helm.lint`/`package`/`push` against the real chart, both landing in the
+same `registry:3` container, then reads them back through the registry's own API. Its siblings prove
+the tasks work _at all_ (a synthetic `FROM scratch` image); this proves they work on the artifacts a
+consumer would actually write, including that the container really runs the wheel `dist.build`
+produced and that the chart renders the exact tag `docker.release` pushed.
+
+Only the image _ref_ is redirected at the local registry; Dockerfile, build context, chart path, and
+version group all come from the committed `repo-tasks.toml`, so the test cannot pass against a
+configuration nobody ships.
+
+[PITFALL: `helm push` needs `--plain-http` against a TLS-less registry. Unlike docker, helm has no
+automatic `127.0.0.0/8` insecure-registry exemption — it speaks HTTPS to a loopback registry like
+any other and fails with `server gave HTTP response to HTTPS client`.]
+
+### Real group bump: no Docker, no devpi
+
+`tests/integration/test_version_integration.py` runs `bump-my-version` for real against a throwaway
+git repo holding a `pyproject.toml` and a `Chart.yaml` read from the dogfood chart. It needs neither
+of this tier's services — `bump-my-version` is a runtime dependency, so the module never skips — and
+lives here only because it shells out for real (git commits, git tags, a subprocess), which is
+exactly what the unit tier promises not to do.
+
+It closed a standing [UNVERIFIED]: `tests/test_version.py` pins the _generated config_, but whether
+bump-my-version actually finds those search strings in a real `Chart.yaml` had never been executed.
+
+[PITFALL: `tests/integration/conftest.py` imports `testcontainers` at module scope, so the whole
+directory is uncollectable without `uv sync --group integration` — including modules like this one
+that need nothing from it. A "never skips" module still won't run without the group installed.]
+
 ## Clean-OS tier: testing user-wide effects
 
 Several tasks mutate a real `$HOME`, not just the consumer repo — `selfinstall.py`

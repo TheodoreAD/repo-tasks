@@ -24,6 +24,28 @@ Versions are per-_group_, not per-repo and not strictly per-project:
 keeps its own version, untouched by that release. Group membership is resolved from
 `projects.py`/`repo-tasks.toml` at call time.
 
+**A group's version lives in a python project's `pyproject.toml`.** `_resolve_project` matches a
+group name against a discovered python project, so every group needs one — a docker image and chart
+grouped under a name no python project answers to cannot resolve `current_version` at all, and
+`docker.build`/`helm.push`/`version.bump` all fail on it. `examples/sample-service` is the shape
+that works: the workspace member, the `[[docker]]` entry, and the `[[helm]]` entry all carry the
+same name, so the member's `[project].version` is the group's single source of truth. A chart-only
+or image-only group would need a version source this model doesn't have yet.
+
+[PITFALL: `Chart.yaml`'s formatting is load-bearing, and nothing in the repo's own quality gate
+protects it. The generated bump config searches for an unquoted `version:` and a quoted
+`appVersion:` as literal strings, so a YAML formatter (or an editor set to normalize quotes) that
+rewrites either one turns the next group bump into a hard failure. `dprint.json` excludes
+`**/templates/*.yaml` because Go templates aren't parseable YAML at all — `Chart.yaml` itself is
+still formatted, and was checked to come back byte-identical. `tests/integration/`'s dogfood module
+pins both shapes against the real file so a future formatter change fails a test rather than a
+release.]
+
+[PITFALL: `helm package` re-serializes `Chart.yaml` through its own YAML marshaller on the way into
+the `.tgz` — comments are dropped and `appVersion` comes back unquoted. The archive's copy is
+therefore not the file the bump searches; never assert the source formatting against a packaged
+chart.]
+
 Tag names follow from the group:
 
 - `vX.Y.Z` when the group is the repo's sole implicit project.
