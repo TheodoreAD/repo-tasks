@@ -1,72 +1,61 @@
 ---
-status: idea
+status: landed
 updated: 2026-08-23
 ---
 
 ## Context
 
-`docker.py` (landed) and `plans/2026-08-19-helm-chart-tasks.md` both need a real Dockerfile and Helm
-chart to exercise against — unit tests can mock `c.run`, but only a real artifact proves
-`docker build`/`docker push`/`helm lint`/`helm package`/`helm push` actually work end to end.
-`plans/2026-08-19-monorepo-workspace-foundation.md`'s grouped/hybrid versioning model
-([`contributing/versioning.md`](../contributing/versioning.md)'s "Grouping: what bumps together")
-also needs a concrete pair of artifacts that share one `group` to prove a single version bump
-actually updates both together.
+`docker.py` and `helm.py` both needed a real Dockerfile and Helm chart to exercise against — unit
+tests can mock `c.run`, but only a real artifact proves
+`docker build`/`docker push`/`helm
+lint`/`helm package`/`helm push` work end to end. The grouped
+versioning model ([`contributing/versioning.md`](../contributing/versioning.md)'s "Grouping: what
+bumps together") needed a concrete pair of artifacts sharing one `group` to prove a single bump
+updates both.
 
-Decision from review: add exactly this — a minimal sample Dockerfile + matching Helm chart, living
-in this repo, purely to dogfood the docker/helm/version-grouping task modules against something
-real.
+Landed 2026-08-23 as `examples/sample-service/` — a stdlib-only HTTP service that is simultaneously
+a `[tool.uv.workspace]` member, the `[[docker]]` image built by a multi-stage Dockerfile, and the
+`[[helm]]` chart that deploys it, all under `group = "sample-service"`.
 
-`plans/2026-08-22-docker-registry-integration.md` is what eventually pushes this Dockerfile's image
-to a real registry (GHCR) once it exists — that plan's auth/CI wiring can land independently, but
-its actual `docker.release` verification is blocked on this plan.
+## What the open questions resolved to
 
-## Open questions
+- **What the app does:** a stdlib-only `http.server` answering `/` and `/healthz`, zero runtime
+  dependencies. It reports its version from installed distribution metadata rather than a
+  `__version__` constant, which makes "the container runs the wheel that was built for it" an
+  assertable fact rather than an assumption.
+- **Where it lives:** a real workspace member immediately (option (a)), not the docker+helm-only
+  start the plan had been leaning toward. The leaning turned out not to be implementable: a group's
+  version resolves through a _python project_ (`version.py`'s `_resolve_project`), so an image+chart
+  pair grouped under a name no python project answers to cannot resolve `current_version` at all.
+  The settled multi-stage Dockerfile recipe is a python-package recipe too, so a bare `Dockerfile` +
+  `chart/` pair could not have followed it. Recorded permanently in
+  [`contributing/versioning.md`](../contributing/versioning.md)'s "Grouping" section.
+- **Registry target:** the local `registry:3` container the integration tier already runs, for the
+  automated round trip. The real GHCR push stays owned by
+  `plans/2026-08-22-docker-registry-integration.md`; this plan's `image =` value is the real GHCR
+  ref (lowercased owner) so that plan has nothing left to change.
 
-[NEEDS CLARIFICATION: what should the sample app actually do? A trivial stdlib-only HTTP server
-(e.g. Python's `http.server`) is probably enough to prove the Dockerfile/chart round-trip end to
-end. Does it need to demonstrate more — e.g. actually importing `repo_tasks` itself, to prove the
-monorepo's own python package can be a dependency of another project living in the same repo once
-Phase 2 workspace support exists?]
+## Migrated to
 
-[NEEDS CLARIFICATION: where does it live? Two options: (a) become a real `[tool.uv.workspace]`
-member immediately (e.g. `examples/sample-service/` with its own `pyproject.toml`), turning
-`repo-tasks` into an actual (if minimal) monorepo right away; or (b) start as a bare `Dockerfile` +
-`chart/` pair with no python component at all, deferring the workspace-member step until
-`monorepo-workspace-foundation.md`'s Phase 2 is actually being built. Leaning toward (b) — keep it
-docker+helm-only first, added as soon as those two task modules land, and only fold it into a real
-workspace member later when Phase 2 needs a concrete second project to resolve against.]
-
-[NEEDS CLARIFICATION: registry target for the dogfood push — a real registry (GHCR under the same
-GitHub account/org as this repo) so the round trip is fully real, or a local-only/throwaway registry
-(e.g. a `registry:2` container) so nothing is ever actually pushed publicly? Affects whether this
-plan needs any CI credentials at all, or stays entirely local-dev-only.]
-
-[PITFALL: GHCR rejects any uppercase character in an image ref — confirmed 2026-08-23 by
-`plans/2026-08-22-docker-registry-integration.md`'s auth smoke test. This account's GitHub username
-is `TheodoreAD` (mixed case), so whatever `[[docker]]`/`[[helm]]` `image`/`registry` value this plan
-eventually writes into `repo-tasks.toml` must lowercase the owner segment
-(`ghcr.io/theodoread/sample-service`, not `.../TheodoreAD/...`), or the push fails outright.]
-
-## Recommended direction
-
-- Add `examples/sample-service/Dockerfile` (exact path per the open question above) wrapping a
-  minimal stdlib-only HTTP server — no new runtime dependency for the sample itself, trivial to
-  reason about and keep working.
-- Add a matching `examples/sample-service/chart/` Helm chart wrapping that image, with `Chart.yaml`
-  paired via `group = "sample-service"` against the same-named `[[docker]]` entry in
-  `repo-tasks.toml`.
-- Land only after `helm.py` is implemented (`docker.py` already is) — this plan exists to exercise
-  those modules, not to block them.
-- Once built, becomes the running example referenced by both of those plans' Verification sections,
-  and the first real multi-artifact case for `monorepo-workspace-foundation.md`'s grouping model.
-
-[DEFERRED: when this plan's Dockerfile is actually written, it should follow the multi-stage recipe
-this repo already settled on — deps-only builder layer (bind-mount just `uv.lock`+`pyproject.toml`,
-`inv venv.sync --no-install-project`, so the layer cache survives every commit that touches
-neither), then `inv dist.build` + `inv venv.install_wheel` on top, and a final stage that copies
-only `.venv` onto a fresh base as a non-root user with no source tree and no `uv` binary. Adapted
-from Astral's own [`uv-docker-example`](https://github.com/astral-sh/uv-docker-example)
-`multistage.Dockerfile`. README's `venv`/`deps` section is its single home — write the Dockerfile
-against that rather than restating the recipe here, which would be a third copy. Carried over from
-the now-retired `plans/2026-08-20-venv-deps-tasks.md` §6.]
+- **Code, tests, and README** — the sample itself (`examples/sample-service/`), its
+  `repo-tasks.toml` entries, and the integration coverage
+  (`tests/integration/test_dogfood_sample_service.py`,
+  `tests/integration/test_version_integration.py`). README's "monorepos: workspace members, version
+  groups, and the sample service" section is the usage-facing home; its venv/deps section already
+  owns the multi-stage recipe the Dockerfile follows, so the recipe is not restated anywhere.
+- [`contributing/versioning.md`](../contributing/versioning.md) — that a group's version must live
+  in some python project's `pyproject.toml`, plus the two `Chart.yaml` formatting pitfalls (a
+  formatter rewriting the quoting breaks the bump; `helm package` re-serializes the file into the
+  archive).
+- [`contributing/test-tiers.md`](../contributing/test-tiers.md) — what the dogfood round trip
+  covers, `helm push`'s `--plain-http` requirement against a TLS-less registry, and the
+  `testcontainers` import that makes the whole integration directory uncollectable without the
+  group.
+- [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — that a
+  `--project` flag must actually select, and that invoke's `pre=` drops the caller's arguments.
+- **Not migrated:** the GHCR uppercase pitfall this plan carried a copy of. It already lives on
+  `plans/2026-08-22-docker-registry-integration.md`, which owns registry auth, and on the
+  `[[docker]]` entry in `repo-tasks.toml` where it actually bites. A third copy would have to be
+  kept in sync with two others.
+- **Not migrated:** the multi-stage recipe's own contents, deliberately. README's venv/deps section
+  is its single home; `examples/sample-service/Dockerfile` is the worked instance.
