@@ -18,8 +18,6 @@ from pathlib import Path
 from repo_tasks import version
 from repo_tasks.projects import HelmChart, PythonProject
 
-_CHART_YAML = Path(__file__).parent.parent.parent / "examples" / "sample-service" / "chart" / "Chart.yaml"
-
 
 def _init_repo(root: Path) -> None:
     """A git repo bump-my-version can commit and tag into. Identity is set locally rather than
@@ -36,12 +34,12 @@ def _git(root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def test_group_bump_moves_project_and_chart_together(c, tmp_path, monkeypatch):
+def test_group_bump_moves_project_and_chart_together(c, tmp_path, monkeypatch, sample_chart_dir):
     chart_dir = tmp_path / "chart"
     chart_dir.mkdir()
     # The real dogfood Chart.yaml, not a hand-written stand-in: its `helm create` quoting is the
     # exact thing under test, and a paraphrase here could drift from the file that ships.
-    (chart_dir / "Chart.yaml").write_text(_CHART_YAML.read_text())
+    (chart_dir / "Chart.yaml").write_text((sample_chart_dir / "Chart.yaml").read_text())
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample-service"\nversion = "0.1.0"\n')
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -62,10 +60,10 @@ def test_group_bump_moves_project_and_chart_together(c, tmp_path, monkeypatch):
     assert _git(tmp_path, "rev-list", "--count", "HEAD") == "2"
 
 
-def test_group_bump_leaves_an_unrelated_groups_chart_alone(c, tmp_path, monkeypatch):
+def test_group_bump_leaves_an_unrelated_groups_chart_alone(c, tmp_path, monkeypatch, sample_chart_dir):
     chart_dir = tmp_path / "other-chart"
     chart_dir.mkdir()
-    (chart_dir / "Chart.yaml").write_text(_CHART_YAML.read_text())
+    (chart_dir / "Chart.yaml").write_text((sample_chart_dir / "Chart.yaml").read_text())
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample-service"\nversion = "0.1.0"\n')
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)

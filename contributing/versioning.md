@@ -27,10 +27,10 @@ keeps its own version, untouched by that release. Group membership is resolved f
 **A group's version lives in a python project's `pyproject.toml`.** `_resolve_project` matches a
 group name against a discovered python project, so every group needs one — a docker image and chart
 grouped under a name no python project answers to cannot resolve `current_version` at all, and
-`docker.build`/`helm.push`/`version.bump` all fail on it. `examples/sample-service` is the shape
-that works: the workspace member, the `[[docker]]` entry, and the `[[helm]]` entry all carry the
-same name, so the member's `[project].version` is the group's single source of truth. A chart-only
-or image-only group would need a version source this model doesn't have yet.
+`docker.build`/`helm.push`/`version.bump` all fail on it. `tests/fixtures/sample-service` is the
+shape that works: the workspace member, the `[[docker]]` entry, and the `[[helm]]` entry all carry
+the same name, so the member's `[project].version` is the group's single source of truth. A
+chart-only or image-only group would need a version source this model doesn't have yet.
 
 [PITFALL: `Chart.yaml`'s formatting is load-bearing, and nothing in the repo's own quality gate
 protects it. The generated bump config searches for an unquoted `version:` and a quoted

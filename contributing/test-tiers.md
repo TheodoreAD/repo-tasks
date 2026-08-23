@@ -140,7 +140,7 @@ Both fixed, with unit-level regressions pinning them:
 `test_versions_derives_from_json_filename_when_version_key_absent` and
 `test_versions_html_fallback_strips_sha256_fragment` in `tests/unit/test_dist.py`.
 
-### The dogfood sample: `examples/sample-service`
+### The dogfood sample: `tests/fixtures/sample-service`
 
 `tests/integration/test_dogfood_sample_service.py` runs `docker.release` against the real
 multi-stage Dockerfile and `helm.lint`/`package`/`push` against the real chart, both landing in the

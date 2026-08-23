@@ -3,7 +3,7 @@
 # The multi-stage recipe README's venv/deps section describes, applied to a real workspace member.
 # Built from the *repo root* as context, not this directory: a uv workspace member's dependencies
 # resolve from the workspace root's own pyproject.toml and uv.lock, so a context scoped to
-# examples/sample-service/ could not run `uv sync --locked` at all. repo-tasks.toml's [[docker]]
+# this directory could not run `uv sync --locked` at all. repo-tasks.toml's [[docker]]
 # entry is what pairs `path = "."` with this dockerfile.
 #
 # Every build step goes through this repo's own inv tasks rather than hand-written uv commands —
@@ -35,7 +35,7 @@ RUN --mount=type=bind,source=.,target=/src,ro \
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=tasks.py,target=tasks.py \
-    --mount=type=bind,source=examples/sample-service/pyproject.toml,target=examples/sample-service/pyproject.toml \
+    --mount=type=bind,source=tests/fixtures/sample-service/pyproject.toml,target=tests/fixtures/sample-service/pyproject.toml \
     inv venv.sync --project sample-service --no-dev --no-install-project
 
 # The member's own wheel on top of that cached layer. install_wheel is `uv pip install --no-deps`,

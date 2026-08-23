@@ -8,10 +8,10 @@
 
 [[docker]]
 name = "sample-service"
-# The repo root, not examples/sample-service — a uv workspace member's dependencies resolve from
+# The repo root, not the member's own directory — a uv workspace member's dependencies resolve from
 # the workspace root's pyproject.toml and uv.lock, which a narrower context would not contain.
 path = "."
-dockerfile = "examples/sample-service/Dockerfile"
+dockerfile = "tests/fixtures/sample-service/Dockerfile"
 # Lowercase owner segment, deliberately: GHCR rejects any uppercase character in an image ref, and
 # this account's GitHub username is mixed-case (TheodoreAD). Confirmed by the registry smoke test
 # in plans/2026-08-22-docker-registry-integration.md.
@@ -23,6 +23,6 @@ group = "sample-service"
 # one service, and `name` must match Chart.yaml's own `name` because helm derives the packaged
 # .tgz filename from it.
 name = "sample-service"
-path = "examples/sample-service/chart"
+path = "tests/fixtures/sample-service/chart"
 registry = "oci://ghcr.io/theodoread/charts"
 group = "sample-service"

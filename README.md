@@ -130,8 +130,8 @@ inv venv.sync --no-install-project     # deps-only venv, for a Docker/CI layer c
 A wheel-based prod image builds on top of that deps-only layer: `inv dist.build` to produce
 `dist/*.whl`, then `inv venv.install-wheel` (`uv pip install --no-deps`) to add just the project
 package to the same `.venv` — no re-resolution, so the shipped container runs exactly the wheel that
-could also go straight to `inv dist.publish`. `examples/sample-service/Dockerfile` is that recipe
-written out in full, against a real service.
+could also go straight to `inv dist.publish`. `tests/fixtures/sample-service/Dockerfile` is that
+recipe written out in full, against a real service.
 
 ### dist: build, publish, and query a package index
 
@@ -188,7 +188,7 @@ service's image, the chart that deploys it, and the python project they're built
 `group`, so `inv version.bump --group <name>` moves all three in one commit and one tag. See
 [`contributing/versioning.md`](contributing/versioning.md) for what may share a group and why.
 
-`examples/sample-service/` is this repo's own worked example of all of it — a stdlib-only HTTP
+`tests/fixtures/sample-service/` is this repo's own worked example of all of it — a stdlib-only HTTP
 service that is simultaneously a workspace member, the `[[docker]]` image built by a multi-stage
 Dockerfile following the venv/deps recipe above, and the `[[helm]]` chart that deploys it, all under
 `group = "sample-service"`. It exists to be exercised, not imitated wholesale: the integration tier
@@ -233,7 +233,7 @@ a simpler repo with a flat `tests/`, pytest's own testpaths warning falls back t
 working directory, so `test.unit` works there unchanged.
 
 `inv test.integration` exercises `dist.py`/`docker.py`/`helm.py`/`version.py` — including the whole
-`examples/sample-service` round trip — against a real local `devpi-server` and a real local
+`tests/fixtures/sample-service` round trip — against a real local `devpi-server` and a real local
 `registry:3` container. It needs a reachable Docker daemon and is never part of `check`/`precommit`.
 No extra dependency group to install: everything that isn't a main dependency lives in `dev`. A
 missing `devpi-server` skips that half of the tier; a missing or unreachable Docker daemon fails it

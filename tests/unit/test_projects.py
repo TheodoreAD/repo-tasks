@@ -3,7 +3,8 @@ pyproject.toml, plus workspace-member resolution against throwaway trees built i
 test_quality.py's existing MockContext style, though discover_python_projects doesn't touch c.run).
 
 The workspace cases deliberately build their own minimal tree rather than pointing at this repo's
-real examples/ — discovery logic gets a fast, minimal case it fully controls (an excluded member, a
+the real fixture tree — discovery logic gets a fast, minimal case it fully controls (an excluded
+member, a
 member dir with no pyproject.toml, a table-less root), independent of whatever the dogfood sample
 happens to look like."""
 
@@ -34,7 +35,7 @@ def test_discover_python_projects_returns_repo_root_first():
 
 
 def test_discover_python_projects_finds_this_repos_own_dogfood_member():
-    """This repo is its own workspace consumer — examples/sample-service is a real member, and the
+    """This repo is its own workspace consumer — tests/fixtures/sample-service is a real member, and the
     docker image and helm chart in repo-tasks.toml resolve their version group against it."""
     c = MockContext(run=True)
     names = [p.name for p in projects.discover_python_projects(c)]

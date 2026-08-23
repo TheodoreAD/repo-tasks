@@ -1,4 +1,4 @@
-"""The dogfood round trip: this repo's own examples/sample-service, built and pushed through
+"""The dogfood round trip: this repo's own tests/fixtures/sample-service, built and pushed through
 repo_tasks' own docker and helm tasks against a real (local) registry, then read back.
 
 Distinct from test_docker_integration.py, which proves docker.build/push work at all using a
@@ -132,17 +132,17 @@ def test_helm_push_lands_the_chart_at_its_group_version(docker_registry, pushed_
     assert _registry_tags(docker_registry, pushed_chart) == [service_version]
 
 
-def test_the_source_chart_keeps_the_quoting_the_group_bump_searches_for(service_version):
+def test_the_source_chart_keeps_the_quoting_the_group_bump_searches_for(service_version, sample_chart_dir):
     """version.py's generated bump-my-version config searches for a quoted `appVersion:` and an
     unquoted `version:` literally, and bump-my-version fails on a search string it cannot find.
     Anything that reformats this file — a YAML formatter, an editor's "normalize quotes" — breaks
     the group bump, so pin the exact shapes here rather than only in the generated-config test."""
-    chart_yaml = (_REPO_ROOT / "examples" / "sample-service" / "chart" / "Chart.yaml").read_text()
+    chart_yaml = (sample_chart_dir / "Chart.yaml").read_text()
     assert f"version: {service_version}\n" in chart_yaml
     assert f'appVersion: "{service_version}"' in chart_yaml
 
 
-def test_the_packaged_chart_deploys_the_tag_docker_release_pushed(pushed_chart, service_version):
+def test_the_packaged_chart_deploys_the_tag_docker_release_pushed(pushed_chart, service_version, sample_chart_dir):
     """The pairing's actual payload: appVersion is what the chart renders as the image tag, and
     the shared version group is what keeps it equal to the tag docker.release pushed."""
     archive = _REPO_ROOT / "dist" / "helm" / f"{_SERVICE}-{service_version}.tgz"
@@ -156,7 +156,7 @@ def test_the_packaged_chart_deploys_the_tag_docker_release_pushed(pushed_chart, 
     assert f"appVersion: {service_version}\n" in packaged
 
     rendered = subprocess.run(
-        ["helm", "template", "probe", str(_REPO_ROOT / "examples" / "sample-service" / "chart")],
+        ["helm", "template", "probe", str(sample_chart_dir)],
         check=True,
         capture_output=True,
         text=True,
