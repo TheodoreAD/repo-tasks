@@ -92,8 +92,8 @@ with the dependency group that caused it. Root and package are now byte-identica
 and differ for `pyrightconfig.json` only by the `"tasks"` entry that `configs.pull` filters out of
 the root copy — i.e. only by defect 1a, which is the mechanism problem rather than a divergence.
 
-So defect 1 has almost nothing left to clobber. It is still worth fixing, because 1a means a
-promote of `pyrightconfig.json` would still narrow the canonical include list.
+So defect 1 has almost nothing left to clobber. It is still worth fixing, because 1a means a promote
+of `pyrightconfig.json` would still narrow the canonical include list.
 
 ### The reasoning that got there
 
