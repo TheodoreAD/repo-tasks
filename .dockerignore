@@ -1,0 +1,12 @@
+# examples/sample-service/Dockerfile builds from the repo root (a uv workspace member's deps
+# resolve from the root's pyproject.toml + uv.lock), so the whole repo is the build context.
+# Everything here is either huge, host-specific, or regenerated inside the image anyway.
+
+.git
+.venv
+dist
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+.direnv
