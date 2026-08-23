@@ -1,0 +1,11 @@
+apiVersion: v2
+name: sample-service
+description: Deploys the sample-service image built by ../Dockerfile — this repo's dogfood chart for the helm and version-grouping tasks.
+type: application
+
+# Both fields are written by `inv version.bump --group sample-service`, never by hand
+# (contributing/versioning.md's single-writer rule). Their quoting is load-bearing: version.py's
+# generated bump-my-version config searches for an unquoted `version:` and a quoted `appVersion:`,
+# exactly as `helm create` scaffolds them, and fails loudly if either strays.
+version: 0.1.0
+appVersion: "0.1.0"

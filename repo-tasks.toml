@@ -17,3 +17,12 @@ dockerfile = "examples/sample-service/Dockerfile"
 # in plans/2026-08-22-docker-registry-integration.md.
 image = "ghcr.io/theodoread/sample-service"
 group = "sample-service"
+
+[[helm]]
+# Same name as the [[docker]] entry above and as the workspace member — they are three faces of
+# one service, and `name` must match Chart.yaml's own `name` because helm derives the packaged
+# .tgz filename from it.
+name = "sample-service"
+path = "examples/sample-service/chart"
+registry = "oci://ghcr.io/theodoread/charts"
+group = "sample-service"
