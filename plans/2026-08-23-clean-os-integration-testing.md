@@ -41,19 +41,31 @@ it with the only thing that uses it.
 ### 2. `clean_os_container` fixture (`tests/integration/conftest.py`)
 
 Mirrors the existing `docker_registry` fixture's `testcontainers` pattern (module-scoped, a `with`
-block managing teardown), extended with an image build step the existing fixtures don't need:
+block managing teardown), extended with an image build/publish step the existing fixtures don't
+need:
 
-- The image is built via a plain `docker build -f clean-os.Dockerfile -t ... .` **subprocess**, not
-  testcontainers' `DockerImage` (which shells out to docker-py's `images.build()`). Found live
-  (2026-08-23): docker-py's `build()` eagerly resolves credentials for **every** registry listed in
-  `~/.docker/config.json` before building anything — on this machine that includes a stale `gcr.io`
-  → `docker-credential-gcloud` entry tied to a deleted GCP account, which fails the whole build even
-  though the build never touches `gcr.io`. Plain `docker build` doesn't do that eager resolution and
-  built the same image in ~4s. Also matches this repo's own `docker.py` `build` task, which already
-  shells out to `docker build` rather than using the SDK — one less inconsistency, not just a
-  workaround for one machine's broken credential helper.
-- `DockerContainer(tag).with_command("sleep infinity")` keeps the container alive for `exec()` calls
-  — no long-running server process to wait on, unlike `devpi_index`/`docker_registry`.
+- **The image is built and pushed via `repo_tasks.docker`'s own real `build`/`push`/`release` tasks
+  — not hand-rolled build code.** Dogfooding these tasks against a real Dockerfile is the actual
+  point of this whole exercise (`docker.py`/`docker-registry-integration.md` were until now only
+  ever exercised against a synthetic `FROM scratch` image in `test_docker_integration.py`, or mocked
+  `c.run` in unit tests). Same monkeypatched-`discover_docker_images` pattern that test already
+  uses, pointed at `clean-os.Dockerfile` and this module's `docker_registry` fixture instead of a
+  throwaway scratch image: `docker_tasks.release.body(ctx)` runs the full `build` → tag `:latest` →
+  push `:test` → push `:latest` sequence for real, against a real (if local) registry. A fresh
+  `Context`/`pytest.MonkeyPatch()` stand in for the `c`/`monkeypatch` fixtures, which are
+  function-scoped and can't be depended on by this module-scoped fixture.
+- **Corollary, not a separate workaround:** `docker.py`'s tasks always shell out to the plain
+  `docker` CLI (`c.run(...)`), never the Python `docker` SDK. Found live (2026-08-23) while this
+  fixture still used testcontainers' `DockerImage` directly: docker-py's `images.build()` eagerly
+  resolves credentials for **every** registry listed in `~/.docker/config.json` before building
+  anything, so a stale `gcr.io` → `docker-credential-gcloud` entry (tied to a deleted GCP account,
+  since fixed on this machine) failed the whole build even though the build never touched `gcr.io`.
+  Switching to dogfooding `docker.py`'s real tasks sidesteps that whole class of problem for free —
+  it was never a deliberate design choice made to avoid the SDK, just a fixture design that no
+  longer has any code path calling into it.
+- `DockerContainer(f"{image.image}:latest").with_command("sleep infinity")` keeps the container
+  alive for `exec()` calls afterward — no long-running server process to wait on, unlike
+  `devpi_index`/`docker_registry`.
 - The repo source is bind-mounted read-only at a scratch path, then `cp -r`'d (via `.exec()`) into
   `/home/tester/repo-tasks` inside the container — a real, writable, isolated copy, so a test
   running e.g. `uv sync` or `git` operations against it can't mutate the host checkout and doesn't
@@ -81,7 +93,11 @@ because every test there uploads/pushes a distinctly-named artifact. Revisit fix
 
 ## Verification
 
-- `clean_os_container` builds and starts; `id -u` inside it is non-zero (non-root).
+- **Confirmed (2026-08-23):** `docker_tasks.release.body(ctx)` builds `clean-os.Dockerfile`, tags
+  `:latest`, and pushes both `:test`/`:latest` to the local `docker_registry` fixture for real —
+  `repo-tasks`' own `docker.build`/`push`/`release` tasks, dogfooded end to end, not a synthetic
+  scratch image.
+- `clean_os_container` starts from that pushed image; `id -u` inside it is non-zero (non-root).
 - `$HOME` starts clean — no `.claude`, no repo-tasks-specific state, before anything runs.
 - The bind-mounted repo source lands at `/home/tester/repo-tasks` and is readable (`pyproject.toml`
   present).

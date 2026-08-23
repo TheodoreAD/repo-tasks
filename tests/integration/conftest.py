@@ -26,8 +26,10 @@ import pytest
 from invoke import Config, Context
 from testcontainers.core.container import DockerContainer
 
+from repo_tasks import docker as docker_tasks
+from repo_tasks.projects import DockerImage
+
 _REPO_ROOT = Path(__file__).parent.parent.parent
-_CLEAN_OS_IMAGE_TAG = "repo-tasks-clean-os-test:latest"
 
 
 @pytest.fixture
@@ -115,26 +117,45 @@ def docker_registry():
 
 
 @pytest.fixture(scope="module")
-def clean_os_container():
+def clean_os_container(docker_registry):
     """A running, non-root container with a fresh $HOME and a writable copy of this repo's source
     at /home/tester/repo-tasks — for testing repo-tasks' own user-wide effects (selfinstall.py,
     agents.py, direnv.py, configs.py) without touching the real dev machine's $HOME. See
     plans/2026-08-23-clean-os-integration-testing.md.
 
-    Built via a plain `docker build` subprocess, not testcontainers' DockerImage (which shells out
-    to docker-py's images.build()) — docker-py's build() eagerly resolves credentials for every
-    registry listed in ~/.docker/config.json before building anything, so a stale/broken credential
-    helper for a registry this build never even touches (e.g. a dead `docker-credential-gcloud`)
-    fails the whole build. Plain `docker build` doesn't do that eager resolution. Matches this
-    repo's own docker.py build task, which shells out the same way rather than using the SDK.
+    Built and published via repo_tasks.docker's own real build/push/release tasks (dogfooding —
+    the whole point of this fixture, per that plan) — same monkeypatched-discover_docker_images
+    pattern test_docker_integration.py already uses, pointed at clean-os.Dockerfile instead of a
+    synthetic `FROM scratch` image, and pushed to this module's real (if local) docker_registry
+    instead of the test's own throwaway image. NOT testcontainers' DockerImage, which shells out to
+    docker-py's images.build() — docker-py eagerly resolves credentials for every registry listed
+    in ~/.docker/config.json before building anything, so a stale/broken credential helper for a
+    registry the build never even touches (e.g. a dead `docker-credential-gcloud`) fails the whole
+    build. docker.py's own build/push tasks just shell out to the plain `docker` CLI, which doesn't
+    do that eager resolution.
+
+    Uses a fresh Context, not the `c` fixture — `c` is function-scoped and a module-scoped fixture
+    can't depend on it (pytest scope mismatch); `pytest.MonkeyPatch()` similarly stands in for the
+    function-scoped `monkeypatch` fixture for the same reason.
     """
     integration_dir = Path(__file__).parent
-    subprocess.run(
-        ["docker", "build", "-f", "clean-os.Dockerfile", "-t", _CLEAN_OS_IMAGE_TAG, "."],
-        cwd=integration_dir,
-        check=True,
+    image = DockerImage(
+        name="clean-os-test",
+        path=integration_dir,
+        dockerfile=integration_dir / "clean-os.Dockerfile",
+        image=f"{docker_registry}/clean-os-test",
+        group="clean-os-test",
     )
-    container = DockerContainer(_CLEAN_OS_IMAGE_TAG).with_command("sleep infinity")
+    ctx = Context(config=Config(overrides={"run": {"in_stream": False}}))
+    mp = pytest.MonkeyPatch()
+    mp.setattr(docker_tasks, "discover_docker_images", lambda c: [image])
+    mp.setattr(docker_tasks, "current_version", lambda c, group=None: "test")
+    try:
+        docker_tasks.release.body(ctx)  # build -> tag :latest -> push :test -> push :latest
+    finally:
+        mp.undo()
+
+    container = DockerContainer(f"{image.image}:latest").with_command("sleep infinity")
     container.with_volume_mapping(str(_REPO_ROOT), "/repo-src", mode="ro")
     with container:
         copy = container.exec(["cp", "-r", "/repo-src", "/home/tester/repo-tasks"])
