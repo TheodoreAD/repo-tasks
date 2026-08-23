@@ -249,8 +249,11 @@ Phase 3 — write destinations (own commit, before any deletion):
   `contributing/task-module-conventions.md` (all new).
 - `plans/2026-08-23-contributing-docs-completion.md` (new, `status: idea`) — the known gaps in the
   four files above, per §4.
-- `AGENTS.md` — pointers into `contributing/` from the existing Conventions section.
-- `README.md` — line 53 currently describes `plans/`; add `contributing/`.
+- `AGENTS.md` — a new "Where things are written down" section pointing at `contributing/` and at the
+  tag greps, plus a trim of the Conventions section now that its rationale lives in
+  `contributing/task-module-conventions.md`.
+- `README.md` — no change needed after all. It has no directory-structure section to extend; its
+  only `plans/` mentions are inside a URL to another repo.
 
 Phase 4 — add `## Migrated to` to all six retiring plans (own commit — **must land before the
 deletion commit**, or the section never appears in git history at all).
