@@ -1,9 +1,10 @@
-"""Fixtures for the opt-in integration tier (see contributing/test-tiers.md and, for
-clean_os_container, plans/2026-08-23-clean-os-integration-testing.md). All fixtures are
+"""Fixtures for the opt-in integration tier (see contributing/test-tiers.md). All fixtures are
 module-scoped — the "expensive setup" this repo's python-conventions skill describes.
 devpi_index/docker_registry need no per-test isolation since every test uploads/pushes its own
-distinctly-named artifact; clean_os_container is currently exercised by one smoke-test module only
-(see that module's docstring for the isolation caveat once a real mutating test is added).
+distinctly-named artifact; clean_os_container relies on module scope meaning one container *per
+module* — the smoke-test module and the mutating test_clean_os_user_effects.py module each get
+their own fresh container, and the isolation rules within the mutating module live in that
+module's own docstring.
 
 devpi_index skips (pytest.skip) when the `devpi-server` binary isn't on PATH, since it's an
 opt-in dependency group (`uv sync --group integration`) a contributor may not have installed.
@@ -121,7 +122,7 @@ def clean_os_container(docker_registry):
     """A running, non-root container with a fresh $HOME and a writable copy of this repo's source
     at /home/tester/repo-tasks — for testing repo-tasks' own user-wide effects (selfinstall.py,
     agents.py, direnv.py, configs.py) without touching the real dev machine's $HOME. See
-    plans/2026-08-23-clean-os-integration-testing.md.
+    contributing/test-tiers.md's clean-OS section.
 
     Built and published via repo_tasks.docker's own real build/push/release tasks (dogfooding —
     the whole point of this fixture, per that plan) — same monkeypatched-discover_docker_images
@@ -158,6 +159,17 @@ def clean_os_container(docker_registry):
     container = DockerContainer(f"{image.image}:latest").with_command("sleep infinity")
     container.with_volume_mapping(str(_REPO_ROOT), "/repo-src", mode="ro")
     with container:
-        copy = container.exec(["cp", "-r", "/repo-src", "/home/tester/repo-tasks"])
+        # tar with excludes, not plain `cp -r` — the host checkout drags a multi-hundred-MB .venv
+        # (useless inside the container: host paths, host interpreter) plus tool caches into every
+        # container otherwise.
+        copy = container.exec(
+            [
+                "bash",
+                "-c",
+                "mkdir /home/tester/repo-tasks && tar -C /repo-src"
+                " --exclude=.venv --exclude=.pytest_cache --exclude=.ruff_cache --exclude=__pycache__"
+                " -cf - . | tar -C /home/tester/repo-tasks -xf -",
+            ]
+        )
         assert copy.exit_code == 0, copy.output.decode()
         yield container

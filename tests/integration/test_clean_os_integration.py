@@ -1,10 +1,10 @@
-"""Smoke test for the clean_os_container fixture itself (plans/2026-08-23-clean-os-integration-
-testing.md) -- proves the image builds, runs non-root, starts with a clean $HOME, and has the repo
-source copied in, before any real selfinstall.py/agents.py/direnv.py test is written against it.
+"""Smoke test for the clean_os_container fixture itself -- proves the image builds, runs non-root,
+starts with a clean $HOME, and has the repo source copied in. The real mutating tests live in
+test_clean_os_user_effects.py, in their own module deliberately: module scope gives each module its
+own fresh container, so this module's clean-$HOME assertions can never observe that one's
+mutations.
 
-All three tests share one module-scoped container; fine here since none of them mutates $HOME.
-Revisit fixture scope once a real mutating test lands (see conftest.py's clean_os_container
-docstring)."""
+All three tests here share one module-scoped container; fine since none of them mutates $HOME."""
 
 
 def test_runs_as_non_root(clean_os_container):
