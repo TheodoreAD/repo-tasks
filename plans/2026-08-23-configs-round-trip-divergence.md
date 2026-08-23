@@ -35,6 +35,34 @@ been told not to worry about.]
 
 Confirmed still true after the revert: `ruff.toml`, `dprint.json` and `.editorconfig` match the
 package copy byte for byte; `pyrightconfig.json` and `pytest.ini` are the two standing divergences.
+Nothing was committed, so no consumer ever received the clobbered baseline — `git log` on both
+shipped files shows only the commit that created them.
+
+### 1a. `pull` narrows, `promote` makes the narrowing canonical — a ratchet
+
+The same promote would also have shrunk the shared `include` list, which is a worse failure than the
+two excludes above and was missed on the first pass:
+
+```
+root    pyrightconfig.json  "include": ["src", "tests",          "tasks.py"]
+package pyrightconfig.json  "include": ["src", "tests", "tasks", "tasks.py"]
+```
+
+`"tasks"` is absent from the root copy, and that is not a deliberate divergence at all —
+`configs.pull`'s `_resolve_content` filters the canonical list to paths that **exist** and writes
+the filtered result into root. This repo has no `tasks/` directory, so root legitimately lost the
+entry on its last pull. `configs_promote` then copies root → package verbatim, which would have made
+the filtered list canonical for everyone.
+
+Consequence, had it been committed: `power-user-linux-setup` — the flat-layout `tasks/` consumer
+this entry exists for, named as such in the config's own comment — would silently stop type-checking
+that directory on its next `configs.pull`. Silently, because basedpyright no-ops on include entries
+that aren't present.
+
+[PITFALL: `pull`'s filtering is deliberate and correct on its own (it keeps a consumer's config free
+of entries that don't apply to it). It only becomes destructive when composed with `promote`, whose
+input is the _filtered_ file rather than the canonical one. Neither task is wrong in isolation;
+their composition is.]
 
 ### 2. `pyrightconfig.json`'s `include` allowlist silently leaves new source trees unchecked
 
@@ -86,6 +114,11 @@ only a change to the shipped baseline is.]
 Defect 1 first — it is small, self-contained, and the one that can ship a wrong baseline to every
 consumer. Make `configs_promote` unable to write a file the caller didn't name, whichever of the
 three shapes above wins.
+
+1a needs its own fix and does not go away by naming one file: promoting `pyrightconfig.json`
+deliberately would still narrow the list. Promote has to reconcile against the canonical copy rather
+than overwrite it — at minimum, never dropping an `include` entry that only failed `pull`'s
+existence filter. Until that exists, `pyrightconfig.json` should not be promoted at all.
 
 Defect 2's _mechanism_ question (a real local-override representation) is the larger design and
 should not gate the _coverage_ question: whether `examples/` is type-checked at all is answerable on
