@@ -1,8 +1,14 @@
 """Shared, reproducible quality-tooling invoke tasks. Every command is echoed
 (echo=True) so both a human and an agent see exactly what ran — the only
-exception is a step that would involve a secret, and none here do."""
+exception is a step that would involve a secret, and none here do.
 
-from invoke import Exit, task
+Running tests is not this module's job — that lives in testing.py, under its own `test` namespace
+with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
+with no prerequisites beyond the dev dependency group."""
+
+from invoke import task
+
+from .testing import unit
 
 
 def _sh_files(c):
@@ -72,34 +78,12 @@ def shell_format_apply(c):
         c.run(f"shfmt -w {' '.join(files)}", echo=True)
 
 
-@task
-def test(c):
-    """Run the pytest suite. No-ops cleanly when there are no tests to collect at all (pytest's
-    own exit code 5) — same "safe to run unconditionally" contract as shell_check/
-    shell_format_check, needed for a quality-gates-only repo with no Python tests (e.g. one
-    bootstrapped via configs.ensure-deps with nothing but shell scripts) to pass `quality.check`
-    cleanly."""
-    result = c.run("pytest", echo=True, warn=True)
-    if not result.ok and result.exited != 5:
-        raise Exit(code=result.exited)
-
-
-@task
-def test_integration(c):
-    """Run the opt-in integration tier (tests/integration/) against real local services — a
-    devpi-server and a docker registry:3 container. Not part of check/precommit's default gate
-    (pytest.ini's --ignore=tests/integration already excludes it from plain `pytest`/`test`), so
-    nobody's everyday `inv quality.precommit` starts silently requiring Docker or devpi-server.
-    Overrides addopts to drop that --ignore for this one invocation."""
-    c.run('pytest tests/integration -o addopts="-ra --strict-markers --strict-config"', echo=True)
-
-
 @task(pre=[lint_apply, format_apply, shell_format_apply])
 def fix(c):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(pre=[lint_check, format_check, type_check, shell_check, test])
+@task(pre=[lint_check, format_check, type_check, shell_check, unit])
 def check(c):
     """CI-style gate: every check, no changes written."""
 

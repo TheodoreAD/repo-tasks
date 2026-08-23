@@ -19,6 +19,7 @@ from . import (
     helm,
     quality,
     selfinstall,
+    testing,
     version,
 )
 from . import deps as deps_module
@@ -32,6 +33,7 @@ from . import venv as venv_module
 # the constructor's `*args: Any` tolerates that, `add_task`'s `task: Task` parameter doesn't.
 ns = Collection(configure.configure)
 ns.add_collection(Collection.from_module(quality), name="quality")
+ns.add_collection(Collection.from_module(testing), name="test")
 ns.add_collection(Collection.from_module(version), name="version")
 ns.add_collection(Collection.from_module(gitflow), name="gitflow")
 ns.add_collection(Collection.from_module(dev_env), name="dev_env")
