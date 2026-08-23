@@ -61,14 +61,16 @@ which is what made folding it into `dev` look safe. Folding it would have starte
 Follow-on this implies: `_quality_deps()` reads the key by name and must change with it, and its
 tests pin the current name.]
 
-[NEEDS CLARIFICATION: "everything else in `dev`" puts devpi's 43 packages into the default
-environment — a plain `uv sync` for a repo-tasks contributor goes from 39 packages to roughly 82.
-That is the direct, chosen cost of "just main and dev", worth naming rather than discovering. The
-alternative that keeps both the rule and the size: drop the devpi-backed tests and cover `dist.py`'s
-PEP 691/503 parsing against a stub HTTP server, which is all those two tests actually need.
-`contributing/test-tiers.md` records devpi being chosen deliberately over `pypiserver` because it
-exercises both the JSON and HTML branches — a stub can exercise both too, and more cheaply. Worth
-deciding before the group change lands: it is the difference between `dev` at 46 packages and 82.]
+[DECISION: every group folds into `dev`. Only `main` and `dev` are addressed by install/sync scripts
+and tasks; a genuinely special-needs group (test matrices, ML/torch stacks) is something other
+projects may need and advanced users can handle, and is explicitly not a case this repo designs for.
+Resolved 2026-08-24. `repo-tasks-quality` survives as a group only because it is an exported
+manifest rather than a tier, and it is included in `dev`.
+
+Consequence, accepted rather than discovered: devpi's 43 packages land in the default environment,
+taking a plain `uv sync` from 39 packages to roughly 82. Not urgent — it works, disk is not a
+constraint, and `uv` is fast. Tidying it is deferred to
+`plans/2026-08-24-devpi-dependency-weight.md`.]
 
 [NEEDS CLARIFICATION: does `tests/unit/` get its own `conftest.py` immediately, or stay bare until
 something needs it? The split's stated value is that the two tiers can have genuinely different
@@ -88,48 +90,93 @@ rule of thumb applied in `plans/2026-08-19-gitignore-tool-alignment.md`.]
 
 Consequences worth stating before doing it:
 
-- `quality.test_integration`'s `-o addopts=...` override exists purely to strip the `--ignore`. With
-  `testpaths` it becomes a plain path argument (`pytest tests/integration`), since an explicit path
-  overrides `testpaths` anyway.
+- `quality.test_integration`'s `-o addopts=...` override exists purely to strip the `--ignore`, and
+  disappears with it — the new `test.integration` names its path directly, guarded by the existence
+  check in §2a.
 - Two `conftest.py` files, which is the real motivation: the integration one already carries
   container/index fixtures that no unit test should be able to reach by accident.
 - `pyrightconfig.json`'s `include` currently names `tests`; that keeps covering both subdirectories,
   so nothing changes there.
 
-### 2. One `quality.*` target per tier
+### 2. A `test` namespace of its own
 
-The task surface follows the directory split rather than lagging behind it: a target per tier, and
-the composites deliberately not running all of them.
+The test tasks leave the `quality` namespace entirely:
 
-| target                            | runs                                    | in `check`/`precommit`?                |
-| --------------------------------- | --------------------------------------- | -------------------------------------- |
-| `quality.test-unit`               | `tests/unit`                            | **yes** — the only test target that is |
-| `quality.test-integration`        | `tests/integration`                     | no                                     |
-| `quality.test-smoke` (later)      | fast integration tests, happy path only | **maybe**, deliberately undecided      |
-| `quality.test-regression` (later) | everything that isn't smoke             | no                                     |
+| task                          | runs                               | in `check`/`precommit`?           |
+| ----------------------------- | ---------------------------------- | --------------------------------- |
+| `inv test.unit`               | the unit tier                      | **yes** — the only one that is    |
+| `inv test.integration`        | `tests/integration`                | no                                |
+| `inv test.smoke` (later)      | `tests/integration -m smoke`       | **maybe**, deliberately undecided |
+| `inv test.regression` (later) | `tests/integration -m "not smoke"` | no                                |
+| `inv test.all`                | everything                         | no                                |
 
-[DECISION: `precommit` runs the unit tier only. Smoke is the one candidate for joining it later, and
-that stays an open call rather than something the split presumes — a `precommit` that needs a Docker
-daemon is exactly what `contributing/test-tiers.md`'s "the default one must stay runnable anywhere"
-rule exists to prevent, and smoke tests are still integration tests.]
+[DECISION: `precommit` runs the unit tier only. Smoke is the one candidate for joining it later and
+stays an open call — a `precommit` that needs a Docker daemon is exactly what
+`contributing/test-tiers.md`'s "the default one must stay runnable anywhere" rule exists to prevent,
+and smoke tests are still integration tests.]
 
-Definitions worth pinning now so the marks land consistently later: **smoke** is a small set of fast
-integration tests that give happy-path confidence — the thing you run to know the system is wired up
-at all. **Regression** is everything else in the integration tier. The distinction is speed and
-breadth, not subject matter.
+**Smoke** is a small set of fast integration tests giving happy-path confidence — enough to know the
+system is wired up at all. **Regression** is everything else in the tier. Speed and breadth, not
+subject matter.
 
-Naming/compatibility notes:
+[NEEDS CLARIFICATION: the module behind the namespace. Repo convention is one module per facility
+named after what it owns, which argues for `src/repo_tasks/test.py` — but `test` is a real stdlib
+package name (CPython's own test suite), so `testing.py` with an explicit
+`add_collection(..., name="test")` may be the safer spelling. The namespace is `test` either way;
+only the filename is in question.]
 
-- `quality.test` is the current name and is wired into `check`'s `pre=[...]`. Renaming it to
-  `test-unit` is a breaking change for any consumer naming it directly, and this package has no
-  deprecation convention yet. [NEEDS CLARIFICATION: rename `test` → `test-unit`, or keep `test` as
-  the unit target's name and add the others alongside it? The second is non-breaking but leaves the
-  least specific name on the most specific tier, which reads badly once four targets exist.]
-- Whatever `check` ends up calling must keep `quality.test`'s existing exit-code-5 contract — pytest
-  returns 5 when it collects nothing, and that is treated as success so a repo with no python tests
-  still passes the gate. That behaviour belongs to the unit target specifically.
-- `test_integration`'s `-o addopts=...` override disappears with `testpaths`; each target just names
-  its own directory.
+[NEEDS CLARIFICATION: `inv quality.test` disappears, which breaks any consumer naming it directly,
+and this package still has no deprecation convention. Same question as the old `test` → `test-unit`
+rename, now unavoidable rather than optional.]
+
+### 2a. `testpaths` already implements the fallback — measured
+
+The requirement was: `test.unit` should use `tests/unit` if it exists, and otherwise warn and fall
+back to `tests/`, since a simple project has no split. **pytest does this itself**, so the task
+needs no fallback logic at all.
+
+With `testpaths = tests/unit` and only `tests/` present, a bare `pytest` run exits 0, runs the
+tests, and emits:
+
+```
+PytestConfigWarning: No files were found in testpaths; consider removing or adjusting your
+testpaths configuration. Searching recursively from the current directory instead.
+```
+
+A warning plus a fallback search — exactly the requested behaviour, from the tool rather than
+hand-rolled. Measured 2026-08-24, along with the cases that constrain the design:
+
+| case                                                  | result                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| `testpaths = tests/unit`, only `tests/` exists        | exit 0, warns, finds the tests                               |
+| `testpaths = tests/unit`, both dirs exist             | exit 0, runs unit only, **zero** integration tests collected |
+| `testpaths = tests/unit tests`, both exist            | wrong — collects the integration tier too                    |
+| explicit `pytest tests/integration`, directory absent | **exit 4**, usage error                                      |
+
+[DECISION: `testpaths = tests/unit` alone in the shared `pytest.ini`, and `test.unit` runs a bare
+`pytest` rather than naming a path. Listing both `tests/unit tests` looks like a tidier fallback but
+is wrong — with both directories present it collects the integration tier into the default run,
+which is the exact thing this split exists to prevent. Naming an explicit path in the task would
+also defeat the fallback, since an explicit missing path is a hard exit-4 usage error rather than a
+warning.]
+
+[DECISION: `test.integration`/`smoke`/`regression` do name their paths explicitly, so each must
+check the directory exists first and print-and-return when it does not — exit 4 otherwise. Same
+"No-op cleanly when an artifact kind is absent" contract as `quality.shell_check` and `helm.py`.
+`test.unit` keeps the existing exit-code-5 handling on top, so a repo with no python tests at all
+still passes the gate.]
+
+### 2b. `tests/unit/conftest.py`
+
+Worth having, and worth having early: the `MockContext`/`Result` pattern is repeated across every
+`tests/test_*.py` module today, and the two tiers want genuinely different fixtures — which is the
+main argument for splitting the directories at all.
+
+[PITFALL: it is exemplary by being read, not by being distributed. This repo ships tool _config_
+(`configs.pull`'s five files) and the quality dependency manifest (`configs.ensure_deps`) — it does
+not ship project structure, `conftest.py`, or tests. That is `scaffoldapy`'s half of the split. A
+consumer gets this pattern by looking at it, so it has to be worth reading; nothing propagates it
+automatically.]
 
 ### 3. Where the dogfood sample lives
 
@@ -177,9 +224,13 @@ the directory split above must not get built around a distinction it shouldn't c
 
 ### 5. Dependency groups
 
-Move `testcontainers` into `dev` regardless of how the devpi question above lands: +7 packages buys
-back a collectable integration directory, a `test_version_integration.py` that runs with no group at
-all, and the removal of the one `exclude` this repo's shared config carries.
+`integration` is dissolved into `dev` along with everything else, per the decision above.
+`testcontainers` moving is what buys back a collectable integration directory and a
+`test_version_integration.py` that runs with no group at all; devpi comes along for the ride and its
+weight is deferred to `plans/2026-08-24-devpi-dependency-weight.md`.
 
-Sequence matters — do the group change first, then the `pyrightconfig.json` exclude can be deleted
+`repo-tasks-quality` is the sole survivor as a distinct group, because it is an exported manifest
+rather than a tier — see the decision under Open questions.
+
+Sequence matters — do the group change first, then `pyrightconfig.json`'s exclude can be deleted
 rather than migrated, and `configs-round-trip-divergence.md`'s defect 1 loses most of its bite.
