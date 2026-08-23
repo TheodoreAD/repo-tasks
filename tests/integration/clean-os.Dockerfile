@@ -2,7 +2,7 @@
 # agents.py, direnv.py, configs.py) against a genuinely clean $HOME -- see
 # contributing/test-tiers.md's clean-OS section. Deliberately NOT at the repo root:
 # projects.discover_docker_images(c) treats a root Dockerfile as this repo's own implicit
-# shippable image (plans/2026-08-19-monorepo-workspace-foundation.md Design section 2), which this isn't.
+# shippable image (see discover_docker_images' own docstring), which this isn't.
 FROM debian:bookworm-slim
 
 RUN apt-get update \

@@ -10,9 +10,9 @@ Extracted from the now-retired `plans/2026-08-19-docker-image-tasks.md`'s
 was explicitly written down there "so it isn't silently forgotten" — inside a file marked `landed`
 whose retirement ends in `rm`, which is precisely how it would have been.
 
-`plans/2026-08-19-helm-chart-tasks.md` (still `planned`) §4 depends on the same idea for `helm push`
-and names the same shared `src/repo_tasks/_registry_auth.py` helper, so this plan owns the behavior
-for both rather than either one implementing it privately.
+The now-retired `plans/2026-08-19-helm-chart-tasks.md` §4 deferred the same idea for `helm push` to
+this plan and named the same shared `src/repo_tasks/_registry_auth.py` helper, so this plan owns the
+behavior for both rather than either one implementing it privately.
 
 Current state, confirmed 2026-08-23: `src/repo_tasks/docker.py` has no auth handling of any kind
 (`build`/`push`/`release`/`_resolve_image` only), and `_registry_auth.py` does not exist.
@@ -76,6 +76,5 @@ landed since removed its main justification, and the original design deferred it
 "the release flow doesn't quietly become more manual than it needs to be" — a concern that
 `docker/login-action` has now answered for the automated path.
 
-Sequencing: nothing here is worth building before `plans/2026-08-19-helm-chart-tasks.md` lands,
-since half the stated motivation is sharing with a module that doesn't exist. Until then this stays
-`idea`.
+Sequencing: this was waiting on `helm.py` existing at all, since half the stated motivation is
+sharing with a module that didn't exist. It landed 2026-08-23, so nothing blocks this plan now.

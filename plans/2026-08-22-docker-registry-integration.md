@@ -5,12 +5,10 @@ updated: 2026-08-23
 
 ## Context
 
-`docker.py` (`build`/`push`/`release`) has landed but has never been exercised against a real
-registry — only unit-tested with mocked `c.run`, and this repo has no Dockerfile of its own yet
-(`plans/2026-08-19-dogfood-sample-service.md` is still `idea` status). Depends on that sibling plan
-for an actual image to push for real; until it lands, this plan's auth/CI wiring can still be
-written and even smoke-tested with a throwaway scratch image, but full end-to-end dogfooding waits
-on it.
+`docker.py` (`build`/`push`/`release`) has landed and, since 2026-08-23, is exercised against a real
+(local) registry by `examples/sample-service` — the dogfood sample whose plan has now retired. What
+remains here is the _external_ GHCR half: auth, the CI workflow, and confirming a real push lands
+where it should. The image to push for real now exists, so nothing blocks that.
 
 Depends on the routine, every-commit-safe registry testing tier (`registry:3` via `testcontainers`),
 per [`contributing/test-tiers.md`](../contributing/test-tiers.md) — that covers what gets exercised
@@ -25,28 +23,27 @@ GHCR (`ghcr.io`) is clearly easier for a GitHub-hosted repo: CI auth is just the
 `GITHUB_TOKEN` (`permissions: packages: write` on the workflow) — no separate account, no PAT to
 create/rotate/store as a repo secret. Docker Hub would need its own account plus an access token
 managed entirely outside GitHub's existing trust boundary, for no offsetting benefit here.
-`repo-tasks.toml`'s own sample `[[docker]]` config
-(`plans/2026-08-19-monorepo-workspace-foundation.md` Design §2) already uses a `ghcr.io/...` image
-name, so this is also just confirming the design's existing default rather than introducing a new
-decision. GHCR packages default to the same visibility as their owning repo (private stays private)
-but can be flipped public per-package via GitHub's UI later if wider distribution is ever wanted — a
-one-time manual step, not something `inv`/CI configures.
+`repo-tasks.toml`'s own `[[docker]]` entry already uses a `ghcr.io/...` image name, so this is also
+just confirming the design's existing default rather than introducing a new decision. GHCR packages
+default to the same visibility as their owning repo (private stays private) but can be flipped
+public per-package via GitHub's UI later if wider distribution is ever wanted — a one-time manual
+step, not something `inv`/CI configures.
 
 [PITFALL: GHCR rejects uppercase characters anywhere in an image ref — confirmed by the smoke test
 (2026-08-23). This account's GitHub username is `TheodoreAD` (mixed case), so any image name derived
 from it — CI's `${{ github.repository_owner }}`, or a future `repo-tasks.toml`
 `[[docker]]`/`[[helm]]` entry — must lowercase that segment explicitly
-(`docker-registry-smoke-test.yml`'s `${OWNER,,}` step does this for CI). Flagged in
-`plans/2026-08-19-dogfood-sample-service.md` too, since that's where the real `image =` value
-eventually gets written.]
+(`docker-registry-smoke-test.yml`'s `${OWNER,,}` step does this for CI). `repo-tasks.toml`'s own
+`[[docker]]` entry carries the same note where it actually bites, since that is where the real
+`image =` value lives.]
 
 ### 2. `docker.py` itself needs zero changes
 
 Image name/registry/Dockerfile/path already come entirely from `projects.discover_docker_images(c)`
 (landed) — either an explicit `repo-tasks.toml` `[[docker]]` entry or the zero-config
 root-`Dockerfile` default. This plan is purely about the auth/CI/account wiring around whatever
-entry eventually exists, e.g. `image = "ghcr.io/TheodoreAD/sample-service"` once
-`dogfood-sample-service.md` lands — not a `docker.py` design change.
+entry exists — `image = "ghcr.io/theodoread/sample-service"`, as `repo-tasks.toml` now has it — not
+a `docker.py` design change.
 
 ### 3. CI auth: `docker/login-action`, zero new secrets
 
@@ -77,10 +74,8 @@ manual step for a human publishing from their own machine, never stored in this 
 `.github/workflows/docker-release.yml` (new — or merged into
 `plans/2026-08-22-pypi-publish-integration.md`'s `publish.yml` as a second job, whichever reads more
 coherently once both are actually being written), triggered on the same `vX.Y.Z` tag push as the
-PyPI publish workflow, running `inv docker.release` — but this has nothing to build until
-`dogfood-sample-service.md` lands a real Dockerfile. The auth/login step itself is harmless to merge
-early with no image to push yet (just inert); the actual `docker.release` step is explicitly blocked
-on that sibling plan.
+PyPI publish workflow, running `inv docker.release`. `examples/sample-service/Dockerfile` gives it
+something real to build, so this can now be written for real rather than merged inert.
 
 ### 6. Verification order
 
@@ -90,19 +85,19 @@ on that sibling plan.
    `ghcr.io` and pushes `ghcr.io/theodoread/repo-tasks-scratch:smoke-test`
    (`sha256:c766679d161d4ffe3dc4503b4c9f90b978f0d363fcedb02d1ae0cd271e645c0a`) — run
    https://github.com/TheodoreAD/repo-tasks/actions/runs/32631113222.
-2. Once `dogfood-sample-service.md` lands, real `inv docker.release` exercised end-to-end in CI.
+2. Real `inv docker.release` exercised end-to-end in CI against GHCR. Unblocked since 2026-08-23:
+   the sample service's image and chart exist and already round-trip against a local registry.
 3. Confirm the pushed package appears under the GitHub org/user's Packages tab with the expected
    name and visibility.
 
 ## Files touched
 
 - `.github/workflows/docker-release.yml` (new, or a job added to `publish.yml`).
-- `repo-tasks.toml` — the real `[[docker]]` entry, added once `dogfood-sample-service.md`'s
-  Dockerfile exists (not this plan's own file change).
-- (Done) `plans/2026-08-19-dogfood-sample-service.md` — cross-reference noting this plan is what
-  eventually pushes its image for real, once it lands. The equivalent cross-reference from
-  `plans/2026-08-19-docker-image-tasks.md` went away with that plan's retirement; `docker.py`'s
-  design rationale now lives in
+- (Done) `repo-tasks.toml` — the real `[[docker]]` entry, landed with the dogfood sample rather than
+  by this plan. Its `image` is already the GHCR ref this plan pushes to.
+- The cross-references from the now-retired `plans/2026-08-19-dogfood-sample-service.md` and
+  `plans/2026-08-19-docker-image-tasks.md` went away with those plans; `docker.py`'s design
+  rationale now lives in
   [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md).
 
 ## Verification
@@ -110,6 +105,7 @@ on that sibling plan.
 - Auth-only smoke test (login + push a throwaway scratch image) — done 2026-08-23, see §6.1.
 
 [UNVERIFIED: the full `docker.release` round trip against GHCR has never run — only the auth-only
-smoke test has. Blocked on `plans/2026-08-19-dogfood-sample-service.md` landing a real Dockerfile,
-and on confirming afterwards that the pushed package appears under the account's Packages tab with
-the expected name and visibility. This plan cannot reach `landed` until then.]
+smoke test has, and the sample service's round trip runs against a _local_ registry. What is left is
+running it against GHCR and confirming the pushed package appears under the account's Packages tab
+with the expected name and visibility. No longer blocked on anything external. This plan cannot
+reach `landed` until then.]

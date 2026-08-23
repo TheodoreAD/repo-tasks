@@ -67,10 +67,10 @@ from `version.py` honors that single-writer rule; shelling out to `uv lock` dire
 `version.py` would quietly break it. Cross-module task calls exist already (`dev_env.py` composes
 siblings via `pre=[...]`), but that is composition at the task level, not a mid-task call.]
 
-[NEEDS CLARIFICATION: a group bump can span a python project _and_ a Helm chart
-(`plans/2026-08-19-helm-chart-tasks.md`). Only the python half has a lock file. Does the re-lock
-step run once per group, once per python project in the group, or is it skipped entirely for a group
-with no python member?]
+[NEEDS CLARIFICATION: a group bump can span a python project _and_ a Helm chart — `helm.py` and the
+chart fields in the group bump landed 2026-08-23. Only the python half has a lock file. Does the
+re-lock step run once per group, once per python project in the group, or is it skipped entirely for
+a group with no python member?]
 
 ## Recommended direction
 

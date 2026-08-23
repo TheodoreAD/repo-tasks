@@ -22,8 +22,8 @@ inside a file the skill says to delete.**
 - `plans/2026-08-19-docker-image-tasks.md:71` — `### 4. Auth — deferred, not dropped`: the Phase 2
   re-auth-on-401 cycle and the shared `src/repo_tasks/_registry_auth.py` helper.
 - `plans/2026-08-20-venv-deps-tasks.md:185` — the §6 multi-stage Docker recipe should get a pointer
-  from `dogfood-sample-service.md` once that Dockerfile is written, rather than being written out a
-  third time.
+  from `dogfood-sample-service.md` (since retired) once that Dockerfile is written, rather than
+  being written out a third time.
 
 The skill already forbids stashing future work in `README.md`/`AGENTS.md`/`docs/` prose, on the
 grounds that prose has no status field so nothing ever prompts a return visit. It never applies that
@@ -137,8 +137,8 @@ to a plan that stays.
 
 [DECISION: prefer appending a `[DEFERRED:` item to an **existing** open plan that already owns the
 concern, over spawning a new plan file. Three extractions here produce two new files, not three —
-`venv-deps-tasks.md:185`'s recipe-pointer note belongs on `dogfood-sample-service.md`, which already
-owns that Dockerfile.]
+`venv-deps-tasks.md:185`'s recipe-pointer note belongs on `dogfood-sample-service.md` (since
+retired), which already owns that Dockerfile.]
 
 ### 3. Tags are required at transitions, not while drafting
 
@@ -239,9 +239,9 @@ Phase 1 — extract live work (own commit, before any deletion):
 - `plans/2026-08-23-uv-lock-on-version-bump.md` (new, `status: idea`) — from
   `release-management.md:331`.
 - `plans/2026-08-23-registry-auth-retry.md` (new, `status: idea`) — from `docker-image-tasks.md` §4,
-  also referenced by `helm-chart-tasks.md:46`.
-- `plans/2026-08-19-dogfood-sample-service.md` — gains the multi-stage-recipe pointer from
-  `venv-deps-tasks.md:185`.
+  also referenced by `helm-chart-tasks.md:46` (since retired).
+- `plans/2026-08-19-dogfood-sample-service.md` (since retired) — gains the multi-stage-recipe
+  pointer from `venv-deps-tasks.md:185`.
 
 Phase 2 — retrofit tags on the eight surviving plans (own commit).
 
