@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-08-22
+status: in-progress
+updated: 2026-08-23
 ---
 
 ## Context
@@ -76,10 +76,12 @@ on that sibling plan.
 
 ### 6. Verification order
 
-1. Auth-only smoke test, doable _now_, independent of `dogfood-sample-service.md`: confirm
-   `docker/login-action` + `GITHUB_TOKEN` actually authenticates against `ghcr.io` from a throwaway
-   workflow run, pushing a trivial scratch image (e.g. re-tagging `hello-world` and pushing it to
-   this repo's own GHCR namespace) to prove the wiring alone, before any real Dockerfile exists.
+1. **Done (2026-08-23):** auth-only smoke test, via `.github/workflows/docker-registry-smoke-test.yml`
+   (`workflow_dispatch`-triggered, not wired into the regular CI trigger). Confirmed
+   `docker/login-action` + `GITHUB_TOKEN` authenticates against `ghcr.io` and pushes
+   `ghcr.io/theodoread/repo-tasks-scratch:smoke-test`
+   (`sha256:c766679d161d4ffe3dc4503b4c9f90b978f0d363fcedb02d1ae0cd271e645c0a`) — run
+   https://github.com/TheodoreAD/repo-tasks/actions/runs/32631113222.
 2. Once `dogfood-sample-service.md` lands, real `inv docker.release` exercised end-to-end in CI.
 3. Confirm the pushed package appears under the GitHub org/user's Packages tab with the expected
    name and visibility.
