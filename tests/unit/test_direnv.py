@@ -5,11 +5,10 @@ from invoke import MockContext, Result
 from repo_tasks import direnv
 
 
-def test_allow_runs_direnv_allow_when_present(monkeypatch):
+def test_allow_runs_direnv_allow_when_present(c, monkeypatch):
     monkeypatch.setattr(direnv, "_command_exists", lambda name: True)
-    c = MockContext(run=True)
     direnv.allow.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("direnv allow", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("direnv allow", echo=True)
 
 
 def test_allow_skips_when_direnv_missing(monkeypatch, capsys):

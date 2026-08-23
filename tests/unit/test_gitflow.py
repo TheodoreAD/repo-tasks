@@ -38,10 +38,9 @@ def _ok(*commands):
 # ---------------------------------------------------------------------------
 
 
-def test_feature_start():
-    c = MockContext(run=True)
+def test_feature_start(c):
     gitflow.feature_start.body(c, name="foo")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    assert c.run.call_args_list[0] == (("git checkout -b feature/foo develop",), {"echo": True})  # pyright: ignore[reportAttributeAccessIssue]
+    assert c.run.call_args_list[0] == (("git checkout -b feature/foo develop",), {"echo": True})
 
 
 def test_feature_finish_pr_mode_opens_a_pr_against_develop(capsys):
@@ -64,10 +63,9 @@ def test_feature_finish_pr_mode_opens_a_pr_against_develop(capsys):
     assert "Next steps" in out
 
 
-def test_feature_finish_local_merges_directly():
-    c = MockContext(run=True)
+def test_feature_finish_local_merges_directly(c):
     gitflow.feature_finish.body(c, name="foo", local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    assert c.run.call_args_list == [  # pyright: ignore[reportAttributeAccessIssue]
+    assert c.run.call_args_list == [
         (("git checkout develop",), {"echo": True}),
         (("git merge --no-ff feature/foo",), {"echo": True}),
         (("git branch -d feature/foo",), {"echo": True}),
@@ -79,19 +77,17 @@ def test_feature_finish_local_merges_directly():
 # ---------------------------------------------------------------------------
 
 
-def test_release_start_branches_off_develop_before_bumping():
-    c = MockContext(run=True)
+def test_release_start_branches_off_develop_before_bumping(c):
     gitflow.release_start.body(c, bump="minor")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout develop"
     assert call_strings[1] == "git checkout -b release/0.2.0"
     assert "--config-file" in call_strings[2]
 
 
-def test_hotfix_start_branches_off_main_before_bumping():
-    c = MockContext(run=True)
+def test_hotfix_start_branches_off_main_before_bumping(c):
     gitflow.hotfix_start.body(c, bump="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout main"
     assert call_strings[1] == "git checkout -b hotfix/0.1.1"
     assert "--config-file" in call_strings[2]
@@ -315,10 +311,9 @@ def test_finalize_raises_when_not_on_expected_branch_kind():
 # ---------------------------------------------------------------------------
 
 
-def test_support_start_branches_off_the_given_base(capsys):
-    c = MockContext(run=True)
+def test_support_start_branches_off_the_given_base(c, capsys):
     gitflow.support_start.body(c, version="1.4.x", base="v1.4.0")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("git checkout -b support/1.4.x v1.4.0", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("git checkout -b support/1.4.x v1.4.0", echo=True)
     out = capsys.readouterr().out
     assert "support/1.4.x" in out
     assert "never merges back" in out
@@ -333,10 +328,9 @@ def test_support_start_branches_off_the_given_base(capsys):
 # ---------------------------------------------------------------------------
 
 
-def test_support_hotfix_start_branches_off_the_support_branch_before_bumping():
-    c = MockContext(run=True)
+def test_support_hotfix_start_branches_off_the_support_branch_before_bumping(c):
     gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout support/1.4.x"
     assert call_strings[1] == "git checkout -b support-hotfix/1.4.x/0.1.1"
     assert "--config-file" in call_strings[2]

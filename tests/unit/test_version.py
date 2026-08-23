@@ -5,7 +5,6 @@ following test_quality.py's existing MockContext style."""
 from pathlib import Path
 
 import pytest
-from invoke import MockContext
 
 from repo_tasks import projects, version
 
@@ -35,7 +34,7 @@ def test_bumpversion_config_bumps_chart_version_and_quoted_app_version():
     assert "search = 'appVersion: \"{current_version}\"'" in config
 
 
-def test_bump_includes_only_charts_sharing_the_bumped_group(monkeypatch):
+def test_bump_includes_only_charts_sharing_the_bumped_group(c, monkeypatch):
     charts = [
         projects.HelmChart(name="repo-tasks-chart", path=Path("chart"), registry=None, group="repo-tasks"),
         projects.HelmChart(name="other-chart", path=Path("other"), registry=None, group="other"),
@@ -49,16 +48,14 @@ def test_bump_includes_only_charts_sharing_the_bumped_group(monkeypatch):
 
     original_config = version._bumpversion_config  # pyright: ignore[reportPrivateUsage]
     monkeypatch.setattr(version, "_bumpversion_config", _capture)
-    c = MockContext(run=True)
     version.bump.body(c, part="minor")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert [chart.name for chart in seen["charts"]] == ["repo-tasks-chart"]
 
 
-def test_bump_invokes_bumpversion_with_a_generated_config_file_and_returns_new_version():
-    c = MockContext(run=True)
+def test_bump_invokes_bumpversion_with_a_generated_config_file_and_returns_new_version(c):
     result = version.bump.body(c, part="minor")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
-    call_args = c.run.call_args_list[0]  # pyright: ignore[reportAttributeAccessIssue]
+    call_args = c.run.call_args_list[0]
     command = call_args[0][0]
     assert command.startswith("bump-my-version bump minor --config-file ")
     assert call_args[1] == {"echo": True}
@@ -69,19 +66,16 @@ def test_bump_invokes_bumpversion_with_a_generated_config_file_and_returns_new_v
     assert result == "0.1.0"  # MockContext never really runs bump-my-version, so the file is unchanged
 
 
-def test_bump_raises_for_an_unknown_group():
-    c = MockContext(run=True)
+def test_bump_raises_for_an_unknown_group(c):
     with pytest.raises(ValueError, match="no-such-project"):
         version.bump.body(c, part="minor", group="no-such-project")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
 
-def test_current_version_reads_the_resolved_projects_version():
-    c = MockContext(run=True)
+def test_current_version_reads_the_resolved_projects_version(c):
     assert version.current_version(c) == "0.1.0"
 
 
-def test_current_version_raises_for_an_unknown_group():
-    c = MockContext(run=True)
+def test_current_version_raises_for_an_unknown_group(c):
     with pytest.raises(ValueError, match="no-such-project"):
         version.current_version(c, group="no-such-project")
 

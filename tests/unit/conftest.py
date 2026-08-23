@@ -6,6 +6,8 @@ result (a particular `Result`, or a dict of command → result) builds its own `
 instead; that is the intended split, not an oversight. See contributing/test-tiers.md.
 """
 
+from pathlib import Path
+
 import pytest
 from invoke import MockContext
 
@@ -15,3 +17,16 @@ def c() -> MockContext:
     """A MockContext whose `run` accepts any command and reports success, so a task under test
     executes end to end and `c.run.assert_called_once_with(...)` can pin what it built."""
     return MockContext(run=True)
+
+
+@pytest.fixture
+def tmp_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty directory that is also the working directory, yielded as a Path.
+
+    Most task modules resolve their inputs relative to cwd — `projects.py` reads `pyproject.toml`
+    and `repo-tasks.toml`, `dist.clean` removes `dist/`, `selfinstall` reads its stamp file — so a
+    test that forgets to chdir reads (or writes) this repo's own files instead of a scratch tree.
+    Taking this fixture makes that impossible to forget, where `monkeypatch.chdir(tmp_path)` as a
+    first line is something you have to remember every time."""
+    monkeypatch.chdir(tmp_path)
+    return tmp_path

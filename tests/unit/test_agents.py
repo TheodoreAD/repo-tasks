@@ -5,21 +5,17 @@ covering directly."""
 import json
 from typing import cast
 
-from invoke import MockContext
-
 from repo_tasks import agents
 
 
-def test_claude_hook_noop_without_envrc(tmp_path, capsys):
-    c = MockContext()
+def test_claude_hook_noop_without_envrc(c, tmp_path, capsys):
     agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert not (tmp_path / ".claude").exists()
     assert "nothing to hook" in capsys.readouterr().out
 
 
-def test_claude_hook_writes_new_settings(tmp_path):
+def test_claude_hook_writes_new_settings(c, tmp_path):
     (tmp_path / ".envrc").write_text("use flake\n")
-    c = MockContext()
     agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
     settings_path = tmp_path / ".claude" / "settings.json"
@@ -34,14 +30,13 @@ def test_claude_hook_writes_new_settings(tmp_path):
     assert env_file.exists()
 
 
-def test_claude_hook_merges_into_existing_settings(tmp_path):
+def test_claude_hook_merges_into_existing_settings(c, tmp_path):
     (tmp_path / ".envrc").write_text("use flake\n")
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     existing = {"hooks": {"PreToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "echo hi"}]}]}}
     (claude_dir / "settings.json").write_text(json.dumps(existing))
 
-    c = MockContext()
     agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
     settings = cast(
@@ -52,9 +47,8 @@ def test_claude_hook_merges_into_existing_settings(tmp_path):
     assert matchers == {"Write", "Bash"}
 
 
-def test_claude_hook_already_configured_is_idempotent(tmp_path, capsys):
+def test_claude_hook_already_configured_is_idempotent(c, tmp_path, capsys):
     (tmp_path / ".envrc").write_text("use flake\n")
-    c = MockContext()
     agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     settings_path = tmp_path / ".claude" / "settings.json"
     before = settings_path.read_text()

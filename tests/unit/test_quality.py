@@ -8,44 +8,35 @@ from invoke import MockContext, Result
 from repo_tasks import quality
 
 
-def test_lint_check():
-    c = MockContext(run=True)
+def test_lint_check(c):
     quality.lint_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess] — invoke's untyped Task.body
-    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue] — MockContext wraps run in a Mock
-        "ruff check .", echo=True
-    )
+    c.run.assert_called_once_with("ruff check .", echo=True)
 
 
-def test_lint_apply():
-    c = MockContext(run=True)
+def test_lint_apply(c):
     quality.lint_apply.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
-        "ruff check --fix .", echo=True
-    )
+    c.run.assert_called_once_with("ruff check --fix .", echo=True)
 
 
-def test_format_check():
-    c = MockContext(run=True)
+def test_format_check(c):
     quality.format_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    assert c.run.call_args_list == [  # pyright: ignore[reportAttributeAccessIssue]
+    assert c.run.call_args_list == [
         (("ruff format --check .",), {"echo": True}),
         (("dprint check --config-discovery=ignore-descendants",), {"echo": True}),
     ]
 
 
-def test_format_apply():
-    c = MockContext(run=True)
+def test_format_apply(c):
     quality.format_apply.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    assert c.run.call_args_list == [  # pyright: ignore[reportAttributeAccessIssue]
+    assert c.run.call_args_list == [
         (("ruff format .",), {"echo": True}),
         (("dprint fmt --config-discovery=ignore-descendants",), {"echo": True}),
     ]
 
 
-def test_type_check():
-    c = MockContext(run=True)
+def test_type_check(c):
     quality.type_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("basedpyright", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("basedpyright", echo=True)
 
 
 def test_sh_files_empty():

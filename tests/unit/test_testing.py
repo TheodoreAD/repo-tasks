@@ -14,12 +14,11 @@ from repo_tasks import testing
 
 
 @pytest.fixture
-def integration_dir(tmp_path, monkeypatch):
+def integration_dir(tmp_cwd: Path) -> Path:
     """A repo whose tests/integration directory exists, since the integration targets check for it
-    before naming it on a command line."""
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "tests" / "integration").mkdir(parents=True)
-    return tmp_path
+    before naming it on a command line. Builds on tmp_cwd so the chdir is not repeated here."""
+    (tmp_cwd / "tests" / "integration").mkdir(parents=True)
+    return tmp_cwd
 
 
 def test_unit_runs_a_bare_pytest_and_names_no_path():
@@ -60,14 +59,12 @@ def test_regression_is_the_inverse_of_smoke(c, integration_dir):
 
 
 @pytest.mark.parametrize("task_name", ["integration", "smoke", "regression"])
-def test_integration_targets_noop_without_a_tier(task_name, tmp_path, monkeypatch, capsys):
+def test_integration_targets_noop_without_a_tier(c, task_name, tmp_cwd, capsys):
     """Not decoration: unlike `unit`, these name a path, and pytest exits 4 on one that isn't
     there. Same contract as quality.shell_check and helm.py in a repo lacking the artifact."""
-    monkeypatch.chdir(tmp_path)
-    c = MockContext(run=True)
     getattr(testing, task_name).body(c)  # pyright: ignore[reportAny]
     assert "nothing to do" in capsys.readouterr().out
-    c.run.assert_not_called()  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_not_called()
 
 
 def test_integration_dir_constant_matches_the_repos_own_layout():

@@ -42,10 +42,19 @@ prints-and-returns when it does not.
 
 Three files, which is most of the reason the directories are split at all:
 
-- `tests/conftest.py` — what both tiers share. Deliberately thin.
-- `tests/unit/conftest.py` — the `c` `MockContext` fixture nearly every unit test wants. A test
-  needing a specific exit code still builds its own `MockContext(run=Result(exited=...))`; that is
-  the intended split, not an oversight.
+- `tests/conftest.py` — what both tiers share: `repo_root`, and `sample_chart_dir`, which resolves
+  the dogfood chart's location out of `repo-tasks.toml` rather than as a literal path. Both tiers
+  read that chart, and a literal in either is a trap — moving the fixture tree leaves it pointing at
+  nothing, surfacing as a confusing mid-test read error rather than at collection.
+- `tests/unit/conftest.py` — `c` (the `MockContext` nearly every unit test wants) and `tmp_cwd` (an
+  empty directory that is also the working directory). A test needing a _specific_ run result still
+  builds its own `MockContext(run=Result(exited=...))`; that is the intended split, not an
+  oversight, and about 30 tests legitimately do it.
+
+  [PITFALL: `tmp_cwd` exists because most task modules resolve inputs relative to the working
+  directory — `projects.py` reads `pyproject.toml` and `repo-tasks.toml`, `dist.clean` _removes_
+  `dist/`, `selfinstall` reads its stamp file. A test that forgets `monkeypatch.chdir` reads, or
+  deletes, this repo's own files. Taking the fixture makes that impossible to forget.]
 - `tests/integration/conftest.py` — the container and index fixtures, which no unit test should be
   able to reach by accident.
 
