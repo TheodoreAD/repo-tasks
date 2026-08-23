@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-22
+updated: 2026-08-23
 ---
 
 ## Context
@@ -59,3 +59,13 @@ not `.../TheodoreAD/...`), or the push fails outright.
   this plan exists to exercise them, not to block them.
 - Once built, becomes the running example referenced by both of those plans' Verification sections,
   and the first real multi-artifact case for `monorepo-workspace-foundation.md`'s grouping model.
+
+[DEFERRED: when this plan's Dockerfile is actually written, it should follow the multi-stage recipe
+this repo already settled on — deps-only builder layer (bind-mount just `uv.lock`+`pyproject.toml`,
+`inv venv.sync --no-install-project`, so the layer cache survives every commit that touches
+neither), then `inv dist.build` + `inv venv.install_wheel` on top, and a final stage that copies
+only `.venv` onto a fresh base as a non-root user with no source tree and no `uv` binary. Adapted
+from Astral's own [`uv-docker-example`](https://github.com/astral-sh/uv-docker-example)
+`multistage.Dockerfile`. README's `venv`/`deps` section is its single home — write the Dockerfile
+against that rather than restating the recipe here, which would be a third copy. Carried over from
+`plans/2026-08-20-venv-deps-tasks.md` §6 when that plan was retired.]
