@@ -32,6 +32,12 @@ def test_sync_no_install_project():
     )
 
 
+def test_sync_project_narrows_to_one_workspace_member():
+    c = MockContext(run=True)
+    venv.sync.body(c, project="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with("uv sync --locked --package sample-service", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
 def test_sync_all_flags_combined():
     c = MockContext(run=True)
     venv.sync.body(  # pyright: ignore[reportAny, reportFunctionMemberAccess]

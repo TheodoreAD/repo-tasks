@@ -26,15 +26,22 @@ def _register_github_path(bin_dir: Path) -> None:
 
 @task(
     help={
+        "project": "Workspace member to sync (default: the whole workspace root)",
         "no_editable": "Install the project (and workspace members) non-editable — CI/docker mode",
         "no_dev": "Skip the dev dependency group — slim runtime-only install",
         "no_install_project": "Sync only third-party dependencies, skipping the local project entirely",
     }
 )
-def sync(c, no_editable=False, no_dev=False, no_install_project=False):
+def sync(c, project=None, no_editable=False, no_dev=False, no_install_project=False):
     """Sync .venv from uv.lock (uv sync --locked). Fails loudly on a stale or missing lock
-    instead of silently rewriting it — run `inv deps.lock` first if that happens."""
+    instead of silently rewriting it — run `inv deps.lock` first if that happens.
+
+    `--project` narrows the sync to one workspace member's own dependencies (uv's `--package`),
+    which is what a runtime image for that member wants: the root project's dependency tree has
+    no business in it. Omitted, the behaviour is unchanged — the workspace root, as before."""
     cmd = "uv sync --locked"
+    if project:
+        cmd += f" --package {project}"
     if no_editable:
         cmd += " --no-editable"
     if no_dev:
