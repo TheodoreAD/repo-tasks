@@ -101,8 +101,11 @@ that same name as a local-only placeholder. See
 [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)'s "Smart
 defaults, so zero config is a real option" for `docker.py`'s side of this.
 
-[DEFERRED: `[[helm]]` reading — the helm half of this section's schema — doesn't exist in
-`projects.py` yet, and lands with `plans/2026-08-19-helm-chart-tasks.md`.]
+**2026-08-23 (landed, helm half):** `[[helm]]` reading landed as
+`projects.discover_helm_charts(c) -> list[HelmChart]` with `plans/2026-08-19-helm-chart-tasks.md`.
+Two schema refinements against the sketch above: `registry` is optional (only `helm.push` insists on
+one) and there is deliberately no zero-config fallback, unlike docker's Dockerfile-at-root — that
+plan records why.
 
 ### 3. Grouping for shared version/tag tracks
 
