@@ -34,10 +34,11 @@ one-time manual step, not something `inv`/CI configures.
 
 **Gotcha confirmed by the smoke test (2026-08-23):** GHCR rejects uppercase characters anywhere in
 an image ref. This account's GitHub username is `TheodoreAD` (mixed case), so any image name derived
-from it — CI's `${{ github.repository_owner }}`, or a future `repo-tasks.toml` `[[docker]]`/`[[helm]]`
-entry — must lowercase that segment explicitly (`docker-registry-smoke-test.yml`'s
-`${OWNER,,}` step does this for CI). Flagged in `dogfood-sample-service.md` too, since that's where
-the real `image =` value eventually gets written.
+from it — CI's `${{ github.repository_owner }}`, or a future `repo-tasks.toml`
+`[[docker]]`/`[[helm]]` entry — must lowercase that segment explicitly
+(`docker-registry-smoke-test.yml`'s `${OWNER,,}` step does this for CI). Flagged in
+`dogfood-sample-service.md` too, since that's where the real `image =` value eventually gets
+written.
 
 ### 2. `docker.py` itself needs zero changes
 
@@ -83,10 +84,10 @@ on that sibling plan.
 
 ### 6. Verification order
 
-1. **Done (2026-08-23):** auth-only smoke test, via `.github/workflows/docker-registry-smoke-test.yml`
-   (`workflow_dispatch`-triggered, not wired into the regular CI trigger). Confirmed
-   `docker/login-action` + `GITHUB_TOKEN` authenticates against `ghcr.io` and pushes
-   `ghcr.io/theodoread/repo-tasks-scratch:smoke-test`
+1. **Done (2026-08-23):** auth-only smoke test, via
+   `.github/workflows/docker-registry-smoke-test.yml` (`workflow_dispatch`-triggered, not wired into
+   the regular CI trigger). Confirmed `docker/login-action` + `GITHUB_TOKEN` authenticates against
+   `ghcr.io` and pushes `ghcr.io/theodoread/repo-tasks-scratch:smoke-test`
    (`sha256:c766679d161d4ffe3dc4503b4c9f90b978f0d363fcedb02d1ae0cd271e645c0a`) — run
    https://github.com/TheodoreAD/repo-tasks/actions/runs/32631113222.
 2. Once `dogfood-sample-service.md` lands, real `inv docker.release` exercised end-to-end in CI.

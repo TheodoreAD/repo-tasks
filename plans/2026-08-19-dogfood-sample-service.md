@@ -44,8 +44,8 @@ plan needs any CI credentials at all, or stays entirely local-dev-only.]
 **Gotcha confirmed 2026-08-23** (via `docker-registry-integration.md`'s auth smoke test): GHCR
 rejects any uppercase character in an image ref. This account's GitHub username is `TheodoreAD`
 (mixed case) — whatever `[[docker]]`/`[[helm]]` `image`/`registry` value this plan eventually writes
-into `repo-tasks.toml` must lowercase the owner segment (e.g.
-`ghcr.io/theodoread/sample-service`, not `.../TheodoreAD/...`), or the push fails outright.
+into `repo-tasks.toml` must lowercase the owner segment (e.g. `ghcr.io/theodoread/sample-service`,
+not `.../TheodoreAD/...`), or the push fails outright.
 
 ## Recommended direction
 
