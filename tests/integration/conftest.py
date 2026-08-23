@@ -6,8 +6,9 @@ module* — the smoke-test module and the mutating test_clean_os_user_effects.py
 their own fresh container, and the isolation rules within the mutating module live in that
 module's own docstring.
 
-devpi_index skips (pytest.skip) when the `devpi-server` binary isn't on PATH, since it's an
-opt-in dependency group (`uv sync --group integration`) a contributor may not have installed.
+devpi_index still skips (pytest.skip) when the `devpi-server` binary isn't on PATH. That is now a
+belt-and-braces guard rather than the main path — devpi lives in `dev` like everything else, so a
+plain `inv venv.sync` installs it — but it keeps the tier honest on a half-synced environment.
 docker_registry and clean_os_container have no such guard: a Docker daemon is assumed present, and
 testcontainers' own connection error is left to fail the fixture (and therefore the tests) loudly
 rather than skip — deliberate, see contributing/test-tiers.md.
@@ -74,7 +75,7 @@ def _wait_until_up(url: str, timeout: float = 30.0) -> None:
 @pytest.fixture(scope="module")
 def devpi_index(tmp_path_factory):
     if shutil.which("devpi-server") is None:
-        pytest.skip("devpi-server not installed — run `uv sync --group integration` to enable this tier")
+        pytest.skip("devpi-server not installed — run `inv venv.sync` to restore the dev environment")
 
     serverdir = tmp_path_factory.mktemp("devpi-server")
     password = "test"
@@ -152,7 +153,8 @@ def clean_os_container(docker_registry):
     mp.setattr(docker_tasks, "discover_docker_images", lambda c: [image])
     mp.setattr(docker_tasks, "current_version", lambda c, group=None: "test")
     try:
-        docker_tasks.release.body(ctx)  # build -> tag :latest -> push :test -> push :latest
+        # build -> tag :latest -> push :test -> push :latest
+        docker_tasks.release.body(ctx)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     finally:
         mp.undo()
 

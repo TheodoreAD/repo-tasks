@@ -8,7 +8,11 @@ dependencies = ["invoke", "python-dotenv", "bump-my-version"]
 repo-tasks = "repo_tasks.cli:program.run"
 
 [dependency-groups]
-quality = [
+# Not a tier — an exported manifest. configs.ensure_deps splices these exact entries into a
+# consumer's own dependency-groups.dev, sourced from the copy of this file packaged into the wheel,
+# so its contents are public API in a way no other group's are. Named for its owner so it doesn't
+# read as "the quality tier" and get folded into dev like everything else was.
+repo-tasks-quality = [
   "basedpyright>=1.39.10",
   "pytest",
   "ruff",
@@ -16,10 +20,11 @@ quality = [
   "shfmt-py",
   "dprint-py",
 ]
+# The only group install/sync tasks address, alongside the main dependencies. Everything this repo
+# needs to develop and test itself lives here; there is deliberately no third group to remember,
+# and no task takes a --group flag.
 dev = [
-  { include-group = "quality" },
-]
-integration = [
+  { include-group = "repo-tasks-quality" },
   "devpi-client>=7.3.0",
   "devpi-server>=6.20.3",
   "testcontainers>=4.15.0",

@@ -1102,18 +1102,16 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "basedpyright" },
+    { name = "devpi-client" },
+    { name = "devpi-server" },
     { name = "dprint-py" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },
     { name = "shfmt-py" },
-]
-integration = [
-    { name = "devpi-client" },
-    { name = "devpi-server" },
     { name = "testcontainers" },
 ]
-quality = [
+repo-tasks-quality = [
     { name = "basedpyright" },
     { name = "dprint-py" },
     { name = "pytest" },
@@ -1132,18 +1130,16 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "basedpyright", specifier = ">=1.39.10" },
+    { name = "devpi-client", specifier = ">=7.3.0" },
+    { name = "devpi-server", specifier = ">=6.20.3" },
     { name = "dprint-py" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },
     { name = "shfmt-py" },
-]
-integration = [
-    { name = "devpi-client", specifier = ">=7.3.0" },
-    { name = "devpi-server", specifier = ">=6.20.3" },
     { name = "testcontainers", specifier = ">=4.15.0" },
 ]
-quality = [
+repo-tasks-quality = [
     { name = "basedpyright", specifier = ">=1.39.10" },
     { name = "dprint-py" },
     { name = "pytest" },

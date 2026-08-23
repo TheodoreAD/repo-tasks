@@ -29,7 +29,10 @@ _HOME = "/home/tester"
 _REPO = f"{_HOME}/repo-tasks"
 
 
-def _run(container: DockerContainer, script: str) -> tuple[int, str]:
+def _run(container: DockerContainer, script: str) -> tuple[int | None, str]:
+    """exit_code is `int | None` in testcontainers' own return type, not `int` — surfaced the
+    first time this tier was type-checked. Left as-is rather than coerced: a None exit code is a
+    real state (the command never produced one) and callers assert `== 0`, which None fails."""
     result = container.exec(["bash", "-c", script])
     return result.exit_code, result.output.decode()
 

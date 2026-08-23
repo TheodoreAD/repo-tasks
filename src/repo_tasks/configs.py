@@ -134,7 +134,7 @@ def _quality_deps() -> list[str]:
     """The exact version-constrained dependency strings repo-tasks itself uses and tests its
     quality tooling against (dependency-groups.quality) — the single source of truth `ensure_deps`
     injects into a consumer, never a second hand-maintained list."""
-    return _own_pyproject_data()["dependency-groups"]["quality"]
+    return _own_pyproject_data()["dependency-groups"]["repo-tasks-quality"]
 
 
 def _bare_name(spec: str) -> str:
