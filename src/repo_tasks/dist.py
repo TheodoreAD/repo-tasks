@@ -87,6 +87,19 @@ def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
     return sorted({v for fn in filenames if (v := _version_from_filename(fn, normalized_name)) is not None})
 
 
+def _resolve_project(c, project):
+    """The python project to act on: the named one, or the repo's own (root-first ordering in
+    projects.py) when no --project narrows it down. An explicit --project naming nothing is an
+    error, never a silent fallback to the root."""
+    python_projects = discover_python_projects(c)
+    if project is None:
+        return python_projects[0]
+    matches = [p for p in python_projects if p.name == project]
+    if not matches:
+        raise ValueError(f"no python project found for {project!r}")
+    return matches[0]
+
+
 @task
 def clean(c):
     """Remove the built dist/ directory."""
@@ -100,27 +113,38 @@ def clean(c):
 @task(
     pre=[clean],
     help={
-        "project": "Project to build (Phase 1: ignored, single implicit project)",
+        "project": "Project to build (default: the repo's own root project)",
         "sdist": "Build sdist+wheel instead of wheel-only",
     },
 )
 def build(c, project=None, sdist=False):
     """Build a wheel (default) or sdist+wheel pair (uv build), always into a freshly-cleaned
-    dist/ — a stale wheel from a previous version can never survive into a fresh build."""
-    c.run("uv build" if sdist else "uv build --wheel", echo=True)
+    dist/ — a stale wheel from a previous version can never survive into a fresh build.
+
+    Always names the target with `--package`, workspace or not: a single-project repo is its own
+    workspace of one to uv, so the flag is a no-op there and the command stays identical across
+    both shapes."""
+    target = _resolve_project(c, project)
+    cmd = "uv build" if sdist else "uv build --wheel"
+    c.run(f"{cmd} --package {target.name}", echo=True)
 
 
 @task(
-    pre=[build],
     help={
-        "project": "Project to publish (Phase 1: ignored, single implicit project)",
+        "project": "Project to publish (default: the repo's own root project)",
         "index": "Package index to publish to (default: uv's own config/PyPI default)",
         "dry_run": "Pass --dry-run through to uv publish — safe to run against a real index",
     },
 )
 def publish(c, project=None, index=None, dry_run=False):
-    """Publish dist/* to a package index (uv publish). Always builds fresh first (pre=[build],
-    which itself implies clean) — publish never ships stale state."""
+    """Publish dist/* to a package index (uv publish). Always cleans and builds fresh first —
+    publish never ships stale state.
+
+    Those two run from this body rather than as `pre=[build]`: invoke's pre-tasks take no
+    arguments from the caller, so a pre-built `build` would always build the *root* project and
+    silently publish the wrong wheel for `--project=<member>`."""
+    clean(c)
+    build(c, project=project)
     cmd = "uv publish"
     if index:
         cmd += f" --index {index}"
@@ -131,7 +155,7 @@ def publish(c, project=None, index=None, dry_run=False):
 
 @task(
     help={
-        "project": "Project to query (Phase 1: ignored, single implicit project)",
+        "project": "Project to query (default: the repo's own root project)",
         "index": "Package index base URL to query (default: PyPI)",
     }
 )
@@ -139,7 +163,7 @@ def versions(c, project=None, index=None):
     """List a project's published versions from a package index — PEP 691 JSON Simple API,
     falling back to the PEP 503 HTML file listing if the index doesn't serve the JSON media
     type. Works unmodified against PyPI, TestPyPI, or any private PEP 503/691-compliant index."""
-    name = discover_python_projects(c)[0].name  # Phase 1: single implicit project
+    name = _resolve_project(c, project).name
     normalized = _normalize(name)
     base = (index or _DEFAULT_INDEX).rstrip("/")
     url = f"{base}/{normalized}/"

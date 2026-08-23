@@ -6,6 +6,7 @@ import json
 import urllib.error
 from types import SimpleNamespace
 
+import pytest
 from invoke import MockContext
 
 from repo_tasks import dist
@@ -13,6 +14,11 @@ from repo_tasks import dist
 
 def _stub_project(name="repo-tasks"):
     return lambda c: [SimpleNamespace(name=name)]
+
+
+def _stub_workspace():
+    """A root project plus one workspace member, root first — projects.py's own ordering."""
+    return lambda c: [SimpleNamespace(name="repo-tasks"), SimpleNamespace(name="sample-service")]
 
 
 def test_clean_noop_when_dist_absent(tmp_path, monkeypatch, capsys):
@@ -30,30 +36,66 @@ def test_clean_removes_dist_dir(tmp_path, monkeypatch):
     assert not (tmp_path / "dist").exists()
 
 
-def test_build_default_is_wheel_only():
+def test_build_default_is_wheel_only(monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     c = MockContext(run=True)
     dist.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv build --wheel", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("uv build --wheel --package repo-tasks", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_build_sdist():
+def test_build_sdist(monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     c = MockContext(run=True)
     dist.build.body(c, sdist=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv build", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    c.run.assert_called_once_with("uv build --package repo-tasks", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_publish_default():
+def test_build_project_selects_a_workspace_member(monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
+    c = MockContext(run=True)
+    dist.build.body(c, project="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with("uv build --wheel --package sample-service", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_build_unknown_project_raises(monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
+    c = MockContext(run=True)
+    with pytest.raises(ValueError, match="no python project found for 'nope'"):
+        dist.build.body(c, project="nope")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
+def test_publish_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # publish cleans dist/ from its own body — keep it off the repo
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     c = MockContext(run=True)
     dist.publish.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv publish", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    assert [call.args[0] for call in c.run.call_args_list] == [  # pyright: ignore[reportAttributeAccessIssue]
+        "uv build --wheel --package repo-tasks",
+        "uv publish",
+    ]
 
 
-def test_publish_with_index_and_dry_run():
+def test_publish_with_index_and_dry_run(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     c = MockContext(run=True)
     dist.publish.body(c, index="https://test.pypi.org/legacy/", dry_run=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
-        "uv publish --index https://test.pypi.org/legacy/ --dry-run", echo=True
+    assert c.run.call_args_list[-1].args[0] == (  # pyright: ignore[reportAttributeAccessIssue]
+        "uv publish --index https://test.pypi.org/legacy/ --dry-run"
     )
+
+
+def test_publish_builds_the_named_member_not_the_root(tmp_path, monkeypatch):
+    """The reason publish builds from its own body instead of pre=[build]: invoke's pre-tasks take
+    no caller arguments, so --project would have silently published the root project's wheel."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
+    c = MockContext(run=True)
+    dist.publish.body(c, project="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert [call.args[0] for call in c.run.call_args_list] == [  # pyright: ignore[reportAttributeAccessIssue]
+        "uv build --wheel --package sample-service",
+        "uv publish",
+    ]
 
 
 def test_versions_prints_from_json_versions_key(monkeypatch, capsys):
