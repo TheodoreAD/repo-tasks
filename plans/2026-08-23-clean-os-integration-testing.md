@@ -1,0 +1,89 @@
+---
+status: in-progress
+updated: 2026-08-23
+---
+
+## Context
+
+`repo-tasks`' own tasks mutate a real `$HOME`, not just the consumer repo they're invoked from:
+`selfinstall.py` (`uv tool install` — the global daily-driver install), `agents.py` (wires Claude
+Code's Bash-tool hook into `~/.claude/settings.json`, writes `~/.cache/claude-code/*`), `direnv.py`
+(`direnv allow`), and `configs.py`/`configure.py`'s config-distribution machinery. None of this is
+exercised by the existing test suite: unit tests mock `c.run` (never touching a real filesystem),
+and `tests/integration/` (`plans/2026-08-22-local-index-and-registry-testing.md`) only covers
+`dist.py`/`docker.py` against real network services (a local `devpi-server`, `registry:3`) — nothing
+there stands up an isolated `$HOME` to test the user-wide-effects tasks against.
+
+Testing these against the actual dev machine's real `$HOME` is both risky (a bug could clobber a
+real `~/.claude/settings.json` or shell rc file) and not reproducible in CI, where there is no
+pre-existing `$HOME` state to begin with. Needs a genuinely clean OS + `$HOME` — and specifically
+**non-root**, since every one of these tasks is meant to stay user-scoped and never require root;
+running the container as root would silently let a task get away with writing somewhere a real
+non-root user never could, defeating the point of the test.
+
+## Design
+
+### 1. `tests/integration/clean-os.Dockerfile`
+
+Deliberately minimal: `debian:bookworm-slim` + `ca-certificates`/`curl`/`git`/`direnv`, one non-root
+`tester` user (`useradd --create-home`), `uv` installed via the official install script under that
+user's own `~/.local/bin`. No Python pinned beyond what `uv` itself bootstraps on demand — matches
+this repo's own dev-loop (`uv` manages its own Python versions), and keeps the image generic enough
+to reuse for any future user-wide-effects test, not just one specific task.
+
+Deliberately **not** at the repo root. `projects.discover_docker_images(c)`
+(`plans/2026-08-19-monorepo-workspace-foundation.md` Design §2) treats a root-level `Dockerfile` as
+this repo's own implicit shippable `[[docker]]` image — this Dockerfile is test infra only, and has
+nothing to do with `plans/2026-08-19-dogfood-sample-service.md`'s eventual real sample-service
+image. Living under `tests/integration/` keeps it out of that discovery path entirely and colocates
+it with the only thing that uses it.
+
+### 2. `clean_os_container` fixture (`tests/integration/conftest.py`)
+
+Mirrors the existing `docker_registry` fixture's `testcontainers` pattern (module-scoped, a `with`
+block managing teardown), extended with an image build step the existing fixtures don't need:
+
+- The image is built via a plain `docker build -f clean-os.Dockerfile -t ... .` **subprocess**, not
+  testcontainers' `DockerImage` (which shells out to docker-py's `images.build()`). Found live
+  (2026-08-23): docker-py's `build()` eagerly resolves credentials for **every** registry listed in
+  `~/.docker/config.json` before building anything — on this machine that includes a stale `gcr.io`
+  → `docker-credential-gcloud` entry tied to a deleted GCP account, which fails the whole build even
+  though the build never touches `gcr.io`. Plain `docker build` doesn't do that eager resolution and
+  built the same image in ~4s. Also matches this repo's own `docker.py` `build` task, which already
+  shells out to `docker build` rather than using the SDK — one less inconsistency, not just a
+  workaround for one machine's broken credential helper.
+- `DockerContainer(tag).with_command("sleep infinity")` keeps the container alive for `exec()` calls
+  — no long-running server process to wait on, unlike `devpi_index`/`docker_registry`.
+- The repo source is bind-mounted read-only at a scratch path, then `cp -r`'d (via `.exec()`) into
+  `/home/tester/repo-tasks` inside the container — a real, writable, isolated copy, so a test
+  running e.g. `uv sync` or `git` operations against it can't mutate the host checkout and doesn't
+  fight the read-only mount.
+
+### 3. Scope for this plan: the fixture itself, not yet the real mutating tests
+
+This plan lands the Dockerfile + fixture + one smoke test proving the fixture works (non-root, clean
+`$HOME`, repo source present and readable) — not a real `selfinstall.py`/`agents.py`/ `direnv.py`
+test yet. Those are real, separate pieces of follow-up work once this infra exists; scoping them in
+now would be speculative given no such test has been written or reviewed yet.
+
+**Forward note, not yet a decision:** the smoke test's module scope is fine because it's the only
+test in its module. Once a real mutating test lands (e.g. one that runs `agents.claude-hook` and
+asserts on `~/.claude/settings.json`), multiple tests sharing one container's `$HOME` may see
+cross-test state leakage the way `devpi_index`/`docker_registry`'s shared-fixture model avoids only
+because every test there uploads/pushes a distinctly-named artifact. Revisit fixture scope
+(module-shared vs. a fresh container/copy per test) when that first real test is written, not now.
+
+## Files touched
+
+- `tests/integration/clean-os.Dockerfile` (new)
+- `tests/integration/conftest.py` — add `clean_os_container` fixture
+- `tests/integration/test_clean_os_integration.py` (new) — smoke test only, per Design §3
+
+## Verification
+
+- `clean_os_container` builds and starts; `id -u` inside it is non-zero (non-root).
+- `$HOME` starts clean — no `.claude`, no repo-tasks-specific state, before anything runs.
+- The bind-mounted repo source lands at `/home/tester/repo-tasks` and is readable (`pyproject.toml`
+  present).
+- Real `selfinstall.py`/`agents.py`/`direnv.py` tests against this fixture are explicitly out of
+  scope here — separate follow-up, not tracked by this plan.
