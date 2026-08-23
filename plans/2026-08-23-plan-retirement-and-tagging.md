@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-23
+depends_on: [power-user-linux-setup]
 ---
 
 ## Context
@@ -265,8 +266,14 @@ Phase 5 — rewire the 25 inbound references, then delete (own commit):
   to `contributing/test-tiers.md`.
 - Delete the six retiring plan files.
 
-Phase 6 — `~/.claude/skills/plan-docs/SKILL.md` + `references/design-rationale.md` (own commit, in
-that repo, not this one).
+Phase 6 — the skill itself (own commit, in a different repo). The skill is **authored in
+`power-user-linux-setup/skills/plan-docs/`** and installed to `~/.agents/skills/` by `inv ai.skills`
+— `~/.claude/skills` is a symlink to that install directory, not the source. Edit the source repo.
+
+[PITFALL: `inv ai.skills` never overwrites a file that is already there, so editing the source does
+**not** update an already-installed copy. After a skill edit, `~/.agents/skills/plan-docs/SKILL.md`
+is stale until it is explicitly refreshed. Anything reading the installed copy — including a Claude
+Code session loading the skill — keeps seeing the old version.]
 
 ## Verification
 
