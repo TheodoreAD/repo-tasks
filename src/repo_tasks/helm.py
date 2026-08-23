@@ -55,13 +55,20 @@ def package(c, project=None):
     help={
         "project": "Chart to push (default: the sole/first discovered chart)",
         "registry": "OCI registry override, oci://-prefixed (default: the [[helm]] entry's own registry)",
+        "plain_http": "Talk plain HTTP to the registry — for a local/dev registry serving no TLS",
     }
 )
-def push(c, project=None, registry=None):
+def push(c, project=None, registry=None, plain_http=False):
     """Push a packaged chart to an OCI registry (helm push). Pushes
     dist/helm/<name>-<group version>.tgz — run package first; a missing .tgz (not packaged, or
     Chart.yaml's version disagreeing with the group's) fails loudly rather than pushing the
-    wrong thing."""
+    wrong thing.
+
+    `--plain-http` has no equivalent of docker's automatic 127.0.0.0/8 insecure-registry
+    exemption: helm speaks HTTPS to a loopback registry like any other and fails with "server
+    gave HTTP response to HTTPS client", so a local registry needs the flag stated explicitly.
+    Off by default — a real registry always serves TLS, and silently downgrading to plain HTTP
+    is not something a push task should decide on its own."""
     chart = _resolve_chart(c, project)
     if chart is None:
         print(f"[helm.push] {_NO_CHARTS}")
@@ -70,4 +77,7 @@ def push(c, project=None, registry=None):
     if resolved_registry is None:
         raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
     version = current_version(c, group=chart.group)
-    c.run(f"helm push {_CHART_DIST_DIR / f'{chart.name}-{version}.tgz'} {resolved_registry}", echo=True)
+    cmd = f"helm push {_CHART_DIST_DIR / f'{chart.name}-{version}.tgz'} {resolved_registry}"
+    if plain_http:
+        cmd += " --plain-http"
+    c.run(cmd, echo=True)

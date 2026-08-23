@@ -63,6 +63,15 @@ def test_push_registry_flag_overrides_the_entry_registry(monkeypatch):
     )
 
 
+def test_push_plain_http_appends_the_flag(monkeypatch):
+    _stub(monkeypatch)
+    c = MockContext(run=True)
+    helm.push.body(c, plain_http=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
+        "helm push dist/helm/sample-service-chart-1.2.3.tgz oci://ghcr.io/org/charts --plain-http", echo=True
+    )
+
+
 def test_push_raises_when_no_registry_configured_or_passed(monkeypatch):
     _stub(monkeypatch, chart=_stub_chart(registry=None))
     c = MockContext(run=True)
