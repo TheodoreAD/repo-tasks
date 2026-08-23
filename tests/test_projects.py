@@ -79,3 +79,37 @@ def test_discover_docker_images_explicit_entry_group_defaults_to_name(tmp_path, 
     c = MockContext(run=True)
     result = projects.discover_docker_images(c)
     assert result[0].group == "solo"
+
+
+def test_discover_helm_charts_empty_with_no_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    c = MockContext(run=True)
+    assert projects.discover_helm_charts(c) == []
+
+
+def test_discover_helm_charts_reads_explicit_repo_tasks_toml(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "repo-tasks.toml").write_text(
+        "[[helm]]\n"
+        'name = "sample-service-chart"\n'
+        'path = "examples/sample-service/chart"\n'
+        'registry = "oci://ghcr.io/org/charts"\n'
+        'group = "sample-service"\n'
+    )
+    c = MockContext(run=True)
+    assert projects.discover_helm_charts(c) == [
+        projects.HelmChart(
+            name="sample-service-chart",
+            path=Path("examples/sample-service/chart"),
+            registry="oci://ghcr.io/org/charts",
+            group="sample-service",
+        )
+    ]
+
+
+def test_discover_helm_charts_registry_optional_and_group_defaults_to_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "repo-tasks.toml").write_text('[[helm]]\nname = "solo-chart"\npath = "chart"\n')
+    c = MockContext(run=True)
+    result = projects.discover_helm_charts(c)
+    assert result == [projects.HelmChart(name="solo-chart", path=Path("chart"), registry=None, group="solo-chart")]
