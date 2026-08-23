@@ -7,12 +7,14 @@ venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` 
 that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a wheel, publish
 it, and query a package index for a project's released versions), `docker` (`build`/`push`/`release`
 — image name/Dockerfile resolved from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged
-from the version-grouping model), `direnv` (`allow` — idempotent shell auto-activation), `agents`
-(`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv environment),
-`dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above), and `docs`
-(`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs` (`pull`/`diff` —
-materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this
-package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
+from the version-grouping model), `helm` (`lint`/`package`/`push` — charts resolved from
+`repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
+idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
+execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap
+composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
+[zensical](https://zensical.org/)), `configs` (`pull`/`diff` — materializes
+`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this package's own
+canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
 `update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
 decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
@@ -152,6 +154,20 @@ group's current version, plus `latest`. Image name/Dockerfile/path always come f
 zero-config default: a `Dockerfile` at the repo root becomes one implicit image, named after the
 repo's python project (so its version group resolves for free) or the repo directory if there isn't
 one. `--project` selects among multiple discovered images; omit it for the common single-image case.
+
+### helm: lint, package, and push a chart
+
+`inv helm.lint` runs `helm lint` against a chart; `inv helm.package` packages it into `dist/helm/`;
+`inv helm.push` pushes the packaged `.tgz` to an OCI registry (`helm push`). Chart path, registry,
+and version group always come from `projects.discover_helm_charts(c)` — `repo-tasks.toml`'s
+`[[helm]]` entries, with no zero-config fallback (unlike docker, a chart has no single canonical
+root location, and a pushable chart needs a registry only explicit config can supply); every task
+no-ops cleanly in a repo with no entries. The chart's `version`/`appVersion` are written by
+`version.py` as part of its group's bump — a chart sharing a `group` with the docker image it wraps
+releases in lockstep with it (see [`contributing/versioning.md`](contributing/versioning.md)) — and
+the `.tgz` a push targets is named from that group version, so a chart that was never packaged (or
+drifted from its group's version) fails loudly instead of pushing the wrong thing. `--project`
+selects among multiple discovered charts; omit it for the common single-chart case.
 
 ### repo-tasks: managing the global daily-driver install
 

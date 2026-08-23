@@ -53,9 +53,9 @@ three formats agree.** Tracked in `plans/2026-08-23-contributing-docs-completion
 
 `version.py` is the only module that writes a version field anywhere. `dist.py` reads whatever is
 already in `pyproject.toml` and never writes it; `docker.py` reads it via
-`current_version(c, group=image.group)` to resolve a tag, and `helm.py` will do the same once it
-exists. Two modules racing to touch the same value is the failure this avoids — the same
-single-writer posture `deps.lock` has over `uv.lock`
+`current_version(c, group=image.group)` to resolve a tag, and `helm.py` does the same to name the
+packaged `.tgz` it pushes. Two modules racing to touch the same value is the failure this avoids —
+the same single-writer posture `deps.lock` has over `uv.lock`
 ([`task-module-conventions.md`](task-module-conventions.md#single-writer-rules)).
 
 ## Tool choice: bump-my-version
