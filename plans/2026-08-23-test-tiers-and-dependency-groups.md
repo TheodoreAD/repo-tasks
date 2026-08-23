@@ -47,21 +47,28 @@ All three hit live while landing the dogfood sample:
 
 ## Open questions
 
-[NEEDS CLARIFICATION: `dependency-groups.quality` cannot simply be folded into `dev` — it is
-machine-read, not a convenience tier. `configs.py`'s `_quality_deps()` returns
-`["dependency-groups"]["quality"]` verbatim, and `configs.ensure_deps` injects exactly that list
-into a consumer's own `pyproject.toml` as the canonical set of quality tools. Collapsing it would
-start injecting `pytest`-plus-`testcontainers`-plus-devpi into every scaffolded repo. Does `quality`
-stay as a declared manifest that `dev` includes (the status quo, and arguably not a "group" in the
-tiering sense at all), or does the manifest move somewhere that isn't a dependency group — a plain
-list in the package, say — leaving `dev` as the only group?]
+[DECISION: `quality` is renamed `repo-tasks-quality` and stays included in `dev`; everything that is
+only repo-tasks' own test infrastructure goes straight into `dev`. Resolved 2026-08-24.
 
-[NEEDS CLARIFICATION: with `testcontainers` in `dev`, does `devpi` stay a separate opt-in group
-(contradicting "just main and dev" for one 43-package outlier), or does it move to `dev` too and
-everyone pays for the pyramid/zope stack? A third option: drop the devpi-backed tests entirely and
-cover `dist.py`'s index parsing against a stub HTTP server, which is what those two tests actually
-need — the 43 packages buy one real PEP 691/503 index, and `contributing/test-tiers.md` records that
-choice being made deliberately over `pypiserver`.]
+The rename is the point. That group is not a tier — it is an **exported manifest**. `configs.py`'s
+`_quality_deps()` reads it verbatim from the packaged copy of repo-tasks' own `pyproject.toml`
+(force-included into the wheel as `repo_tasks/pyproject.toml`), and `configs.ensure_deps` splices
+those exact entries into a _consumer's_ `dependency-groups.dev`. Its contents are public API in a
+way no other group's are, and a name saying whose it is stops it reading as "the quality tier" —
+which is what made folding it into `dev` look safe. Folding it would have started injecting
+`testcontainers` and devpi into every scaffolded repo.
+
+Follow-on this implies: `_quality_deps()` reads the key by name and must change with it, and its
+tests pin the current name.]
+
+[NEEDS CLARIFICATION: "everything else in `dev`" puts devpi's 43 packages into the default
+environment — a plain `uv sync` for a repo-tasks contributor goes from 39 packages to roughly 82.
+That is the direct, chosen cost of "just main and dev", worth naming rather than discovering. The
+alternative that keeps both the rule and the size: drop the devpi-backed tests and cover `dist.py`'s
+PEP 691/503 parsing against a stub HTTP server, which is all those two tests actually need.
+`contributing/test-tiers.md` records devpi being chosen deliberately over `pypiserver` because it
+exercises both the JSON and HTML branches — a stub can exercise both too, and more cheaply. Worth
+deciding before the group change lands: it is the difference between `dev` at 46 packages and 82.]
 
 [NEEDS CLARIFICATION: does `tests/unit/` get its own `conftest.py` immediately, or stay bare until
 something needs it? The split's stated value is that the two tiers can have genuinely different
@@ -124,14 +131,51 @@ Naming/compatibility notes:
 - `test_integration`'s `-o addopts=...` override disappears with `testpaths`; each target just names
   its own directory.
 
-### 3. Finer granularity via marks, not directories
+### 3. Where the dogfood sample lives
+
+Currently `examples/sample-service`, inherited from the retired monorepo plan's schema sketch rather
+than chosen. Three candidates, judged on what the thing actually is:
+
+- **`examples/`** — reads as "here is a pattern to copy", which is not what it is. README already
+  has to say it "exists to be exercised, not imitated wholesale". A name that needs that disclaimer
+  is the wrong name.
+- **`projects/`** — right for a monorepo that genuinely ships several services, wrong here.
+  repo-tasks ships one library; a `projects/` directory at its root claims a shape it doesn't have.
+  It would also set a bad precedent for scaffolded repos: nobody should create `projects/` for a
+  single-project repo, least of all to hold test data.
+- **`tests/fixtures/sample-service`** — what it honestly is. It exists to be built, pushed, linted,
+  packaged and bumped by the integration tier, and by nothing else.
+
+[DECISION: `tests/fixtures/sample-service`, recommended. It is a fixture — a real artifact that
+exists for tests to act on — and naming it as one avoids claiming either of the two shapes above.
+The retired monorepo plan independently proposed `tests/fixtures/` for exactly this kind of
+workspace fixture.]
+
+It also pays for itself twice over:
+
+- The canonical basedpyright include list already names `tests`, and a directory include is
+  recursive (measured), so the member's `src/` gets type-checked with **no change to the shared
+  baseline at all**. That is `configs-round-trip-divergence.md`'s defect 2 closed for free — no new
+  `examples` entry, no per-repo config, nothing pushed to consumers who have no such directory.
+- It keeps `[tool.uv.workspace] members` pointed somewhere that cannot be mistaken for shipped code.
+
+The tension worth stating: README cites this Dockerfile as the worked instance of the multi-stage
+recipe, and a reference implementation living under `tests/fixtures/` reads slightly oddly. That is
+acceptable — a fixture can still be the canonical worked example, and the alternative is naming the
+directory after how it reads rather than what it is. If a genuinely user-facing example is ever
+wanted, that is a separate artifact, most likely in `docs/`.
+
+Move cost: `repo-tasks.toml`'s two entries, the Dockerfile's bind-mount paths, the integration
+tests' path constants, and the README pointer. No code changes.
+
+### 4. Finer granularity via marks, not directories
 
 Smoke versus regression lives on `pytest.mark`, inside `tests/integration/` — not as two more
 directories, and never as two more dependency groups. `quality.test-smoke` becomes
 `pytest tests/integration -m smoke`, regression its inverse. Deliberately not designed further here;
 the directory split above must not get built around a distinction it shouldn't carry.
 
-### 4. Dependency groups
+### 5. Dependency groups
 
 Move `testcontainers` into `dev` regardless of how the devpi question above lands: +7 packages buys
 back a collectable integration directory, a `test_version_integration.py` that runs with no group at

@@ -97,6 +97,23 @@ Measured per tool, against probe trees, not read off documentation. This is the 
   this one tool an explicit list genuinely is the only lever — which is precisely why its include
   list should be doing the work instead.
 
+### Why "no excludes" is safe for basedpyright — the anchoring finding
+
+The obvious worry is that a venv contains directories named `src`, so an include naming `src` would
+walk straight into it. Measured, it does not: **a bare `src` include names the top-level `./src`,
+not "any directory called src"**. A probe with `include: ["src"]` and a plain nested `sub/src/d.py`
+(no dot, no `pyvenv.cfg`, no exclude of any kind in the config) analysed only `src/a.py`.
+
+The same probe with `include: ["src", "tests", "tasks", "tasks.py"]` and **no `exclude` key at all**
+analysed exactly one file, with both a dotted `.venv/lib/pkg/src/` and a dotless `venv/lib/pkg/src/`
+sitting there untouched. So the canonical list needs no excludes, and that is robust rather than
+lucky — it does not depend on the `**/.*` default catching a leading dot, which would miss a venv
+named `venv/`.
+
+The one thing that breaks it is a recursive glob: `**/src` genuinely does reach into a venv, which
+is why it forces excludes back in and why it should not be used. Named directories are recursive
+_below themselves_ (see the `examples` measurement above) without being ambient.
+
 ### Two basedpyright findings that contradict its own documentation
 
 [PITFALL: setting `exclude` **replaces** basedpyright's documented defaults (`**/node_modules`,
@@ -114,6 +131,12 @@ line. An `include` entry that is a **glob** matching nothing is fine. Measured b
 the entire reason `configs.py`'s `_resolve_content` filters the include list per consumer, and the
 reason that filtering causes the ratchet described in
 `plans/2026-08-23-configs-round-trip-divergence.md`.]
+
+[PITFALL: `--outputjson` **swallows the exit-3 config error**. The identical config that exits 3
+with a `File or directory "..." does not exist` line on stdout exits **1** under `--outputjson`,
+with nothing in the JSON to indicate a config problem. Anything that consumes basedpyright's JSON —
+a CI wrapper, a coverage check over the include list — cannot see config errors at all. A second
+layer of the same "clean output, wrong exit code" trap this repo already documents.]
 
 Note the live contradiction this leaves in the repo: `pyrightconfig.json`'s own comment claims
 "basedpyright silently no-ops on whichever entries don't exist in a given repo, so one shared list
