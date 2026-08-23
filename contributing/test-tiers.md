@@ -132,6 +132,36 @@ touches that registry. Found live: a stale `gcr.io` → `docker-credential-gclou
 deleted account failed the whole build. `docker.py`'s tasks always shell out to the plain `docker`
 CLI, never the Python SDK, so they are immune — a corollary of dogfooding them, not a workaround.]
 
+### What the tier covers
+
+`tests/integration/test_clean_os_integration.py` smoke-tests the fixture itself (non-root, clean
+`$HOME`, source copied in). `tests/integration/test_clean_os_user_effects.py` holds the real
+mutating tests — what only this tier can cover, since the unit tests already exercise the pure
+filesystem/JSON logic against `tmp_path`:
+
+- `selfinstall.py`'s real install command produces a working global `inv` under the non-root user's
+  own `~/.local/bin` on a machine with no Python at all — the `--with-executables-from invoke` claim
+  its module docstring calls load-bearing — pointed at the container's local source copy instead of
+  the GitHub URL, so no dependency on the real remote's tags or network.
+- That installed `inv` resolves a consumer repo's `from repo_tasks import ns` tasks.py with no
+  project venv existing yet — the daily-driver model, end to end.
+- `direnv.allow` flips a really-blocked `.envrc` to allowed, proven behaviorally via `direnv export`
+  failing before and succeeding after.
+- `agents.claude-hook` wires a fresh project on a fresh `$HOME`, including the env cache file
+  materializing under the real `~/.cache/claude-code`.
+
+### Fixture scope: one container per module, disjoint mutations within one
+
+`clean_os_container` is module-scoped, which means one fresh container _per test module_ — the
+smoke-test module can never observe the mutating module's writes. Within the mutating module, tests
+deliberately share the container under one rule: every mutation lands on a disjoint path (the tool
+install under `~/.local`, direnv's allow database, a scratch project dir plus
+`~/.cache/claude-code`), and shared prerequisites (the tool install) are fixtures, never test
+file-order. A future test that can't keep the disjoint-paths property gets a function-scoped
+container of its own instead of joining that module — the isolation cost is paid only when a test
+actually needs it, since a per-test container would repeat the `uv tool install` (a real Python +
+dependency download) for every test.
+
 ## Adding a tier or a fixture
 
 The bar this repo applies, following the `db-defaults` skill's philosophy: permissively licensed,
