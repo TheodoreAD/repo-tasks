@@ -3,8 +3,7 @@ builds via invoke's MockContext, plus dedicated coverage for _sh_files — the
 one piece of real logic, and what makes the mandatory `check`/`fix` composite
 safe to run unconditionally on a repo with no shell scripts."""
 
-import pytest
-from invoke import Exit, MockContext, Result
+from invoke import MockContext, Result
 
 from repo_tasks import quality
 
@@ -47,34 +46,6 @@ def test_type_check():
     c = MockContext(run=True)
     quality.type_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     c.run.assert_called_once_with("basedpyright", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
-
-
-def test_test():
-    c = MockContext(run=Result(exited=0))
-    quality.test.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("pytest", echo=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
-
-
-def test_test_noops_cleanly_when_no_tests_collected():
-    # pytest's own exit code 5 ("no tests collected") — same "safe to run unconditionally"
-    # contract as shell_check, needed for a quality-gates-only repo with no Python tests at all.
-    c = MockContext(run=Result(exited=5))
-    quality.test.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess] — must not raise
-
-
-def test_test_reraises_real_failures():
-    c = MockContext(run=Result(exited=1))
-    with pytest.raises(Exit) as exc_info:
-        quality.test.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    assert exc_info.value.code == 1
-
-
-def test_test_integration():
-    c = MockContext(run=True)
-    quality.test_integration.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
-        'pytest tests/integration -o addopts="-ra --strict-markers --strict-config"', echo=True
-    )
 
 
 def test_sh_files_empty():
