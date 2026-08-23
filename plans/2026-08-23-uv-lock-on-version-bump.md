@@ -5,10 +5,12 @@ updated: 2026-08-23
 
 ## Context
 
-Extracted from `plans/2026-08-19-release-management.md`'s `## Known follow-up (2026-08-20)` section
-while retiring that plan (`plans/2026-08-23-plan-retirement-and-tagging.md`) — it was live
-unfinished work sitting inside a file marked `landed`, so it needed a home with a status field of
-its own before that file could be deleted.
+Extracted from the now-retired `plans/2026-08-19-release-management.md`'s
+`## Known follow-up (2026-08-20)` section during `plans/2026-08-23-plan-retirement-and-tagging.md` —
+it was live unfinished work sitting inside a file marked `landed`, so it needed a home with a status
+field of its own before that file could be deleted. That plan's landed design now lives in
+[`contributing/release-flow.md`](../contributing/release-flow.md) and
+[`contributing/versioning.md`](../contributing/versioning.md).
 
 [astral-sh/uv#15643](https://github.com/astral-sh/uv/issues/15643): `uv sync --locked` (and
 `--no-install-project`) fails when _only_ the project's own version changed in `pyproject.toml` with
@@ -21,7 +23,8 @@ src/repo_tasks/gitflow.py` returns nothing.
 
 Nothing surfaces this at bump time. It surfaces later, as a `venv.sync` failure on a tree that looks
 clean — and `venv.py` deliberately passes `--locked` everywhere precisely so staleness fails loudly
-(`plans/2026-08-20-venv-deps-tasks.md` §5), so the very discipline that makes the repo safe is what
+([`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)'s "Never
+silently mutate state for convenience"), so the very discipline that makes the repo safe is what
 turns this into a confusing failure for whoever pulls next.
 
 Not urgent in the sense that nothing is broken today — this repo hasn't cut a real release through
@@ -57,12 +60,12 @@ release with no gitflow ceremony) _and_ from `gitflow.py`'s `release_start`/`hot
 path stays broken. The original note hedged between "`_bump` (or `bump`'s caller in `gitflow.py`)" —
 that ambiguity should be resolved, and `_bump` looks right for exactly this reason.]
 
-[NEEDS CLARIFICATION: does this belong to `version.py` at all, given
-`plans/2026-08-20-venv-deps-tasks.md` §2 established `deps.lock` as **the only task in the whole
-package that ever runs `uv lock`**? Calling `deps.lock` from `version.py` honors that single-writer
-rule; shelling out to `uv lock` directly from `version.py` would quietly break it. Cross-module task
-calls exist already (`dev_env.py` composes siblings via `pre=[...]`), but that is composition at the
-task level, not a mid-task call.]
+[NEEDS CLARIFICATION: does this belong to `version.py` at all, given the single-writer rule
+([`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)) makes
+`deps.lock` **the only task in the whole package that ever runs `uv lock`**? Calling `deps.lock`
+from `version.py` honors that single-writer rule; shelling out to `uv lock` directly from
+`version.py` would quietly break it. Cross-module task calls exist already (`dev_env.py` composes
+siblings via `pre=[...]`), but that is composition at the task level, not a mid-task call.]
 
 [NEEDS CLARIFICATION: a group bump can span a python project _and_ a Helm chart
 (`plans/2026-08-19-helm-chart-tasks.md`). Only the python half has a lock file. Does the re-lock
@@ -77,7 +80,6 @@ question in favor of whichever of (a)/(b) survives the safety check on `uv.lock`
 with a real preference for (a) if a sufficiently anchored pattern exists, since it keeps commit
 construction inside bump-my-version where the current design put it.
 
-Whatever lands needs a regression test that reproduces the actual failure, not just the fix:
-`plans/2026-08-20-venv-deps-tasks.md`'s Verification section already describes reproducing uv#15643
-against this repo's own lock (version-only edit, no relock, then `venv.sync`), so the shape of that
-test is known.
+Whatever lands needs a regression test that reproduces the actual failure, not just the fix. The
+shape is already known and was exercised by hand once: bump `pyproject.toml`'s version with no
+dependency change and no relock, then run `venv.sync` and watch `--locked` correctly reject it.

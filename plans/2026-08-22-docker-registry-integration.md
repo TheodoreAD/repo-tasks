@@ -5,16 +5,16 @@ updated: 2026-08-23
 
 ## Context
 
-`docker.py` (`build`/`push`/`release`) landed in `plans/2026-08-19-docker-image-tasks.md` but has
-never been exercised against a real registry — only unit-tested with mocked `c.run`, and this repo
-has no Dockerfile of its own yet (`plans/2026-08-19-dogfood-sample-service.md` is still `idea`
-status). Depends on that sibling plan for an actual image to push for real; until it lands, this
-plan's auth/CI wiring can still be written and even smoke-tested with a throwaway scratch image, but
-full end-to-end dogfooding waits on it.
+`docker.py` (`build`/`push`/`release`) has landed but has never been exercised against a real
+registry — only unit-tested with mocked `c.run`, and this repo has no Dockerfile of its own yet
+(`plans/2026-08-19-dogfood-sample-service.md` is still `idea` status). Depends on that sibling plan
+for an actual image to push for real; until it lands, this plan's auth/CI wiring can still be
+written and even smoke-tested with a throwaway scratch image, but full end-to-end dogfooding waits
+on it.
 
-Depends on `plans/2026-08-22-local-index-and-registry-testing.md` for the routine, every-commit-
-safe registry testing tier (`registry:3` via `testcontainers`) — that plan covers what gets
-exercised on every `inv quality.test`. This plan covers the real, external GHCR instead: deliberate,
+Depends on the routine, every-commit-safe registry testing tier (`registry:3` via `testcontainers`),
+per [`contributing/test-tiers.md`](../contributing/test-tiers.md) — that covers what gets exercised
+on every `inv quality.test`. This plan covers the real, external GHCR instead: deliberate,
 occasional, manual/CI-triggered, not run automatically.
 
 ## Design
@@ -99,10 +99,11 @@ on that sibling plan.
 - `.github/workflows/docker-release.yml` (new, or a job added to `publish.yml`).
 - `repo-tasks.toml` — the real `[[docker]]` entry, added once `dogfood-sample-service.md`'s
   Dockerfile exists (not this plan's own file change).
-- `plans/2026-08-19-docker-image-tasks.md` — cross-reference addition pointing at this plan for the
-  real-registry piece its own Design deliberately deferred.
-- `plans/2026-08-19-dogfood-sample-service.md` — cross-reference addition noting this plan is what
-  eventually pushes its image for real, once it lands.
+- (Done) `plans/2026-08-19-dogfood-sample-service.md` — cross-reference noting this plan is what
+  eventually pushes its image for real, once it lands. The equivalent cross-reference from
+  `plans/2026-08-19-docker-image-tasks.md` went away with that plan's retirement; `docker.py`'s
+  design rationale now lives in
+  [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md).
 
 ## Verification
 

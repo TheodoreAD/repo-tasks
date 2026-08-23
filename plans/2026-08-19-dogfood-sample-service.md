@@ -5,12 +5,13 @@ updated: 2026-08-23
 
 ## Context
 
-`plans/2026-08-19-docker-image-tasks.md` and `plans/2026-08-19-helm-chart-tasks.md` both need a real
-Dockerfile and Helm chart to exercise against — unit tests can mock `c.run`, but only a real
-artifact proves `docker build`/`docker push`/`helm lint`/`helm package`/`helm push` actually work
-end to end. `plans/2026-08-19-monorepo-workspace-foundation.md`'s grouped/hybrid versioning model
-(`plans/2026-08-19-release-management.md` Design §1) also needs a concrete pair of artifacts that
-share one `group` to prove a single version bump actually updates both together.
+`docker.py` (landed) and `plans/2026-08-19-helm-chart-tasks.md` both need a real Dockerfile and Helm
+chart to exercise against — unit tests can mock `c.run`, but only a real artifact proves
+`docker build`/`docker push`/`helm lint`/`helm package`/`helm push` actually work end to end.
+`plans/2026-08-19-monorepo-workspace-foundation.md`'s grouped/hybrid versioning model
+([`contributing/versioning.md`](../contributing/versioning.md)'s "Grouping: what bumps together")
+also needs a concrete pair of artifacts that share one `group` to prove a single version bump
+actually updates both together.
 
 Decision from review: add exactly this — a minimal sample Dockerfile + matching Helm chart, living
 in this repo, purely to dogfood the docker/helm/version-grouping task modules against something
@@ -55,8 +56,8 @@ eventually writes into `repo-tasks.toml` must lowercase the owner segment
 - Add a matching `examples/sample-service/chart/` Helm chart wrapping that image, with `Chart.yaml`
   paired via `group = "sample-service"` against the same-named `[[docker]]` entry in
   `repo-tasks.toml`.
-- Land only after `docker-image-tasks.md` and `helm-chart-tasks.md` are themselves implemented —
-  this plan exists to exercise them, not to block them.
+- Land only after `helm.py` is implemented (`docker.py` already is) — this plan exists to exercise
+  those modules, not to block them.
 - Once built, becomes the running example referenced by both of those plans' Verification sections,
   and the first real multi-artifact case for `monorepo-workspace-foundation.md`'s grouping model.
 
@@ -68,4 +69,4 @@ only `.venv` onto a fresh base as a non-root user with no source tree and no `uv
 from Astral's own [`uv-docker-example`](https://github.com/astral-sh/uv-docker-example)
 `multistage.Dockerfile`. README's `venv`/`deps` section is its single home — write the Dockerfile
 against that rather than restating the recipe here, which would be a third copy. Carried over from
-`plans/2026-08-20-venv-deps-tasks.md` §6 when that plan was retired.]
+the now-retired `plans/2026-08-20-venv-deps-tasks.md` §6.]

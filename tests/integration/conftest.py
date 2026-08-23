@@ -1,5 +1,5 @@
-"""Fixtures for the opt-in integration tier (see plans/2026-08-22-local-index-and-registry-testing.md
-and, for clean_os_container, plans/2026-08-23-clean-os-integration-testing.md). All fixtures are
+"""Fixtures for the opt-in integration tier (see contributing/test-tiers.md and, for
+clean_os_container, plans/2026-08-23-clean-os-integration-testing.md). All fixtures are
 module-scoped — the "expensive setup" this repo's python-conventions skill describes.
 devpi_index/docker_registry need no per-test isolation since every test uploads/pushes its own
 distinctly-named artifact; clean_os_container is currently exercised by one smoke-test module only
@@ -9,7 +9,7 @@ devpi_index skips (pytest.skip) when the `devpi-server` binary isn't on PATH, si
 opt-in dependency group (`uv sync --group integration`) a contributor may not have installed.
 docker_registry and clean_os_container have no such guard: a Docker daemon is assumed present, and
 testcontainers' own connection error is left to fail the fixture (and therefore the tests) loudly
-rather than skip — deliberate, see plans/2026-08-22-local-index-and-registry-testing.md.
+rather than skip — deliberate, see contributing/test-tiers.md.
 """
 
 import shutil

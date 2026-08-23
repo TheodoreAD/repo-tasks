@@ -7,9 +7,10 @@ updated: 2026-08-23
 
 Monorepo goal includes Helm charts alongside python/docker projects — one chart per deployable
 service. Depends on `plans/2026-08-19-monorepo-workspace-foundation.md` for the `[[helm]]` config
-entries and grouping model, and on `plans/2026-08-19-release-management.md` for the version a chart
-gets bumped to. Exercised for real by `plans/2026-08-19-dogfood-sample-service.md`'s sample chart,
-paired with that plan's sample docker image under one shared `group`.
+entries and grouping model, and on [`contributing/versioning.md`](../contributing/versioning.md) for
+the version a chart gets bumped to. Exercised for real by
+`plans/2026-08-19-dogfood-sample-service.md`'s sample chart, paired with that plan's sample docker
+image under one shared `group`.
 
 Helm's own OCI support is straightforward and current: `helm push <chart>.tgz oci://<registry>/path`
 uploads a chart packaged with `helm package`; auth follows the same `helm registry login` flow as
@@ -32,7 +33,9 @@ near-term exerciser, same as the docker plan.
 Chart entries come from the same `repo-tasks.toml` file `monorepo-workspace-foundation.md`
 introduces for docker images — a `[[helm]]` array-of-tables with `name`, `path`, `registry`,
 optional `group`. No-op cleanly with zero `[[helm]]` entries, matching `quality.shell_check`'s
-existing pattern and `docker-image-tasks.md`'s equivalent no-op behavior.
+existing pattern and `docker.py`'s equivalent no-op behavior — see
+[`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)'s "No-op
+cleanly when an artifact kind is absent".
 
 ### 3. Grouped version bump
 
@@ -41,7 +44,8 @@ Chart version is written by `version.py` as part of its group's bump (`Chart.yam
 and its paired docker image share `group = "sample-service"`, so a single
 `inv version.bump
 --group=sample-service --part=minor` updates both together in one commit+tag, per
-`monorepo-workspace-foundation.md` Design §3 and `release-management.md` Design §1.
+`monorepo-workspace-foundation.md` Design §3 and
+[`contributing/versioning.md`](../contributing/versioning.md)'s "Grouping: what bumps together".
 
 ### 4. Auth — deferred, shared with docker
 

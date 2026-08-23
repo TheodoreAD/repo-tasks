@@ -272,9 +272,17 @@ that repo, not this one).
 
 - The §2 deletion gate returns empty for each of the six, immediately before its deletion — the gate
   applied to its own pilot.
-- `rg 'plans/2026-08-19-release-management|plans/2026-08-19-docker-image-tasks|plans/2026-08-19-python-package-tasks|plans/2026-08-20-venv-deps-tasks|plans/2026-08-22-local-index-and-registry-testing|plans/2026-08-19-gitflow-protected-branches'`
-  returns zero hits repo-wide after Phase 5 — not just in `plans/`, per the skill's whole-repo grep
-  rule.
+- A whole-repo grep for the six filenames (not just `plans/`, per the skill's rule) returns **no
+  live pointers**. It does not return zero hits, and demanding zero would be wrong: two kinds of
+  mention legitimately survive a deletion, and conflating them with dangling links causes real
+  damage.
+  - **Provenance**, which must stay but must be marked: "extracted from the now-retired
+    `plans/X.md`". A reader needs to know where something came from; they also need to know not to
+    go looking for it. Every one of these carries "now-retired" or equivalent.
+  - **This plan's own record** of what it retired, including the line numbers it cited as evidence.
+    Rewriting those would destroy the record of why the work was necessary.
+  - Anything else — a bare path presented as somewhere to go read more — is a dangling link and must
+    be repointed or dropped.
 - Every reference that cited a _specific section title_ (e.g. `release-management.md` Design §2)
   points at a heading that actually exists in the new destination, not merely a valid file path.
 - `inv quality.precommit` passes after each phase — dprint reflows markdown at `lineWidth: 100`, and

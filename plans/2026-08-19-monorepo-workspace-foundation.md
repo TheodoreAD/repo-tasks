@@ -11,25 +11,23 @@ repo's root (this repo's own `src/repo_tasks` is the only exerciser so far, via 
 dogfooding itself).
 
 The broader goal is to add docker image build/push, python package build/push, gitflow branch flows,
-and semver bumping — see the sibling plans this one underlies:
+and semver bumping. Most of that has since landed — `version.py`/`gitflow.py`
+([`contributing/release-flow.md`](../contributing/release-flow.md),
+[`contributing/versioning.md`](../contributing/versioning.md)), `docker.py`, `dist.py`, `venv.py`,
+and `deps.py`
+([`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)). The
+siblings still open:
 
-- `plans/2026-08-19-release-management.md` (gitflow + semver)
-- `plans/2026-08-19-docker-image-tasks.md`
-- `plans/2026-08-19-python-package-tasks.md`
 - `plans/2026-08-19-helm-chart-tasks.md`
 - `plans/2026-08-19-dogfood-sample-service.md` (the concrete Dockerfile+chart pair that exercises
   this plan's grouping model and the docker/helm task modules for real)
-- `plans/2026-08-20-venv-deps-tasks.md` (venv lifecycle + lock-file task modules; Phase 2 iterates
-  this plan's `projects.discover_python_projects(c)` the same way `python-package-tasks.md` does)
-- `plans/2026-08-22-local-index-and-registry-testing.md` (local devpi-server/registry:3 stand-ins
-  for testing `dist.py`/`docker.py`'s real network logic in pytest, without touching anything real)
 - `plans/2026-08-22-pypi-publish-integration.md` / `plans/2026-08-22-docker-registry-integration.md`
   (the real test.pypi.org/pypi.org and GHCR wiring `dist.py`/`docker.py` eventually publish to)
 
-All five need the same thing this plan provides: a way for a task module to answer "what project(s)
-exist in this consumer repo, where, what kind (python package / docker image / helm chart), and
-which of them release together as one unit?" — for a single-project repo today, and for a monorepo
-with several `src`-layout projects plus Helm charts later.
+All of them need the same thing this plan provides: a way for a task module to answer "what
+project(s) exist in this consumer repo, where, what kind (python package / docker image / helm
+chart), and which of them release together as one unit?" — for a single-project repo today, and for
+a monorepo with several `src`-layout projects plus Helm charts later.
 
 Versioning-model decision that shapes this plan's schema: independent per-project versions/tags,
 _except_ a docker image and its own Helm chart (the chart that wraps that specific image) bump
@@ -37,11 +35,11 @@ together as one group, since a chart's `appVersion` is meaningless independent o
 deploys. Full comparison against fixed/lockstep and fully-independent alternatives lives in this
 plan's design history; the grouping mechanism it requires is specified in Design §3 below.
 
-Build order: land this plan's Phase 1 (single-project fallback, zero new config) alongside
-`release-management`'s Phase 1, since version bumping needs _some_ project to bump immediately.
-Docker/python-package/helm tasks can each land independently after that, in any order, since they
-only read from whatever discovery this plan provides. Multi-project (Phase 2) generalization comes
-once `dogfood-sample-service.md` gives it a real second project to resolve.
+Build order: land this plan's Phase 1 (single-project fallback, zero new config) alongside the first
+version-bumping work, since bumping needs _some_ project to bump immediately. (Both have since
+landed.) Docker/python-package/helm tasks can each land independently after that, in any order,
+since they only read from whatever discovery this plan provides. Multi-project (Phase 2)
+generalization comes once `dogfood-sample-service.md` gives it a real second project to resolve.
 
 ## Design
 
@@ -99,8 +97,9 @@ root is treated as one implicit image — same zero-config ergonomics as Design 
 python-project fallback (per review: "make sure there is also some smart default for the most basic
 cases"). It's named after the repo's python project (so `group` naturally matches for version
 resolution), or the repo directory's own name if there's no `pyproject.toml`; `image` defaults to
-that same name as a local-only placeholder. See `plans/2026-08-19-docker-image-tasks.md` (now
-landed) for `docker.py` itself.
+that same name as a local-only placeholder. See
+[`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)'s "Smart
+defaults, so zero config is a real option" for `docker.py`'s side of this.
 
 [DEFERRED: `[[helm]]` reading — the helm half of this section's schema — doesn't exist in
 `projects.py` yet, and lands with `plans/2026-08-19-helm-chart-tasks.md`.]
@@ -109,10 +108,11 @@ landed) for `docker.py` itself.
 
 Optional `group` key on `[[docker]]` and `[[helm]]` entries (python projects get an implicit group
 equal to their own `name` unless a future need arises to override it). Entries sharing a `group`
-value are bumped and tagged together by `version.py` (`plans/2026-08-19-release-management.md`) as
-one unit — e.g. a service's docker image and its Helm chart share `group = "sample-service"` and
-release in lockstep, while an unrelated shared python library elsewhere in the repo keeps its own
-independent version, untouched by that release.
+value are bumped and tagged together by `version.py`
+([`contributing/versioning.md`](../contributing/versioning.md)) as one unit — e.g. a service's
+docker image and its Helm chart share `group = "sample-service"` and release in lockstep, while an
+unrelated shared python library elsewhere in the repo keeps its own independent version, untouched
+by that release.
 
 An entry with no `group` key defaults to being its own independent group (`group == name`) — this is
 the ordinary case for a standalone project with no paired image/chart.

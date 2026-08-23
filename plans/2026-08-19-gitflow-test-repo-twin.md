@@ -5,11 +5,11 @@ updated: 2026-08-23
 
 ## Context
 
-`gitflow.py`'s PR mode (`plans/2026-08-19-release-management.md` Design §2) has only ever been
-verified two ways: unit tests mocking `c.run`, and a manual dry run against a **local bare repo**
-standing in for `origin` — which proved every git-only step (push, fetch, ff-only merge, tag,
-sync-branch push) but stopped right at the actual `gh pr create` call, since that needs a real
-GitHub-linked repo
+`gitflow.py`'s PR mode ([`contributing/release-flow.md`](../contributing/release-flow.md), "PR mode
+(default) vs. local mode") has only ever been verified two ways: unit tests mocking `c.run`, and a
+manual dry run against a **local bare repo** standing in for `origin` — which proved every git-only
+step (push, fetch, ff-only merge, tag, sync-branch push) but stopped right at the actual
+`gh pr create` call, since that needs a real GitHub-linked repo
 (`none of the git remotes configured for this repository point to a known
 GitHub host`).
 

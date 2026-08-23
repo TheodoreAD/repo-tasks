@@ -5,10 +5,10 @@ updated: 2026-08-23
 
 ## Context
 
-Extracted from `plans/2026-08-19-docker-image-tasks.md`'s `### 4. Auth — deferred, not dropped`
-while retiring that plan (`plans/2026-08-23-plan-retirement-and-tagging.md`). It was explicitly
-written down there "so it isn't silently forgotten" — inside a file marked `landed` whose retirement
-ends in `rm`, which is precisely how it would have been.
+Extracted from the now-retired `plans/2026-08-19-docker-image-tasks.md`'s
+`### 4. Auth — deferred, not dropped` during `plans/2026-08-23-plan-retirement-and-tagging.md`. It
+was explicitly written down there "so it isn't silently forgotten" — inside a file marked `landed`
+whose retirement ends in `rm`, which is precisely how it would have been.
 
 `plans/2026-08-19-helm-chart-tasks.md` (still `planned`) §4 depends on the same idea for `helm push`
 and names the same shared `src/repo_tasks/_registry_auth.py` helper, so this plan owns the behavior
@@ -72,9 +72,9 @@ detect-and-instruct, most of this plan evaporates into a few lines inside `docke
 no shared abstraction to design.
 
 Do not build the full re-auth cycle just because it was written down first — the CI wiring that
-landed since removed its main justification, and `plans/2026-08-19-docker-image-tasks.md` deferred
-it on the grounds that "the release flow doesn't quietly become more manual than it needs to be," a
-concern that `docker/login-action` has now answered for the automated path.
+landed since removed its main justification, and the original design deferred it on the grounds that
+"the release flow doesn't quietly become more manual than it needs to be" — a concern that
+`docker/login-action` has now answered for the automated path.
 
 Sequencing: nothing here is worth building before `plans/2026-08-19-helm-chart-tasks.md` lands,
 since half the stated motivation is sharing with a module that doesn't exist. Until then this stays

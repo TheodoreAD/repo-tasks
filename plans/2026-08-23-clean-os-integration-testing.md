@@ -10,7 +10,7 @@ updated: 2026-08-23
 Code's Bash-tool hook into `~/.claude/settings.json`, writes `~/.cache/claude-code/*`), `direnv.py`
 (`direnv allow`), and `configs.py`/`configure.py`'s config-distribution machinery. None of this is
 exercised by the existing test suite: unit tests mock `c.run` (never touching a real filesystem),
-and `tests/integration/` (`plans/2026-08-22-local-index-and-registry-testing.md`) only covers
+and `tests/integration/` ([`contributing/test-tiers.md`](../contributing/test-tiers.md)) only covers
 `dist.py`/`docker.py` against real network services (a local `devpi-server`, `registry:3`) — nothing
 there stands up an isolated `$HOME` to test the user-wide-effects tasks against.
 

@@ -5,17 +5,16 @@ updated: 2026-08-23
 
 ## Context
 
-`dist.py` (`build`/`publish`/`versions`) landed in `plans/2026-08-19-python-package-tasks.md` and
-has already been hand-exercised against the real public index in a prior session: `versions()`
-correctly parsed all 420 real releases of `ruff` from `pypi.org` via the PEP 691 JSON path, and
-`publish --dry-run` reached the real `https://upload.pypi.org/legacy/` endpoint (failing only on
-missing credentials, as expected — no accidental upload). That plan's Design §4 ("Dogfood publish
-plan") already sketches the eventual goal in one loose paragraph; this plan is the concrete
-follow-through on it.
+`dist.py` (`build`/`publish`/`versions`) has landed, and has already been hand-exercised against the
+real public index in a prior session: `versions()` correctly parsed all 420 real releases of `ruff`
+from `pypi.org` via the PEP 691 JSON path, and `publish --dry-run` reached the real
+`https://upload.pypi.org/legacy/` endpoint (failing only on missing credentials, as expected — no
+accidental upload). The now-retired `plans/2026-08-19-python-package-tasks.md` sketched this as a
+"dogfood publish plan" in one loose paragraph; this plan is the concrete follow-through on it.
 
-Depends on `plans/2026-08-22-local-index-and-registry-testing.md` for the routine, every-commit-
-safe testing tier (a local `devpi-server`) — that plan is what gets exercised on every
-`inv quality.test`. This plan covers the real, external `test.pypi.org`/`pypi.org` instead:
+Depends on the routine, every-commit-safe testing tier — a local `devpi-server`, per
+[`contributing/test-tiers.md`](../contributing/test-tiers.md) — which is what gets exercised on
+every `inv quality.test`. This plan covers the real, external `test.pypi.org`/`pypi.org` instead:
 deliberate, occasional, manual/CI-triggered, never run automatically on a schedule or on every
 commit — rate limits, real long-lived-if-mismanaged credentials, and genuinely irreversible side
 effects.
@@ -74,12 +73,12 @@ exists yet) — the token lives in the human's own secret manager, never committ
 ### 4. CI workflow (new — this repo has no GitHub Actions workflows at all yet)
 
 `.github/workflows/publish.yml`, triggered on a `vX.Y.Z` tag push (matches `version.py`'s existing
-tag scheme from `plans/2026-08-19-release-management.md`), with `permissions: id-token: write`
-(required for OIDC trusted publishing). Steps: `inv dist.publish --index testpypi` first
-(unconditional), then `inv dist.publish` against real PyPI gated behind a GitHub Environment
-protection rule requiring manual approval — _that_ protection rule is the actual safety gate
-ensuring a human confirms before the irreversible real-PyPI step, not `--dry-run` (which stays a
-local-iteration tool, not a CI gate).
+tag scheme, per [`contributing/versioning.md`](../contributing/versioning.md)), with
+`permissions: id-token: write` (required for OIDC trusted publishing). Steps:
+`inv dist.publish --index testpypi` first (unconditional), then `inv dist.publish` against real PyPI
+gated behind a GitHub Environment protection rule requiring manual approval — _that_ protection rule
+is the actual safety gate ensuring a human confirms before the irreversible real-PyPI step, not
+`--dry-run` (which stays a local-iteration tool, not a CI gate).
 
 ### 5. Rollout order
 
@@ -100,8 +99,8 @@ local-iteration tool, not a CI gate).
 - `.github/workflows/publish.yml` (new).
 - `README.md` — document the eventual `uv add repo-tasks` PyPI install path as an alternative to the
   git-dependency one, once real.
-- `plans/2026-08-19-python-package-tasks.md` — Design §4 gets a one-line cross-reference to this
-  plan instead of carrying the loose paragraph as the only record.
+- (Done) the loose "dogfood publish plan" paragraph that used to be the only record of this lived in
+  `plans/2026-08-19-python-package-tasks.md`, now retired — this plan is that record.
 
 ## Verification
 
