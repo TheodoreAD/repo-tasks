@@ -1,6 +1,6 @@
 ---
 status: planned
-updated: 2026-08-19
+updated: 2026-08-23
 ---
 
 ## Context
@@ -43,19 +43,21 @@ and its paired docker image share `group = "sample-service"`, so a single
 --group=sample-service --part=minor` updates both together in one commit+tag, per
 `monorepo-workspace-foundation.md` Design §3 and `release-management.md` Design §1.
 
-### 4. Auth — deferred, shared with docker-image-tasks.md
+### 4. Auth — deferred, shared with docker
 
-Same Phase 2 design as `docker-image-tasks.md` Design §4: on a clear `helm push` auth failure,
-attempt one automatic re-auth cycle via `keyring`-resolved credentials or the platform's already
--configured SSO/credential-helper flow, using the shared `src/repo_tasks/_registry_auth.py` helper
-rather than a second, duplicated implementation.
+[DEFERRED: `helm push` auth-failure handling is not part of this plan's first landing. It is owned
+by `plans/2026-08-23-registry-auth-retry.md`, which covers `docker push` and `helm push` together —
+including the open question of whether the originally-designed automatic re-auth cycle is worth
+building at all, or should reduce to detecting the failure and printing the exact
+`helm registry login` command via `gitflow.py`'s `_next_steps()` convention. That plan is explicitly
+sequenced behind this one: half its motivation is sharing behavior with `helm.py`, which does not
+exist yet.]
 
 ## Files touched
 
 - `src/repo_tasks/helm.py` (new)
 - `repo-tasks.toml` `[[helm]]` entry (added when `dogfood-sample-service.md`'s sample chart lands)
-- Shares `src/repo_tasks/_registry_auth.py` with `docker-image-tasks.md` (Phase 2, not this plan's
-  first landing)
+- Auth handling: none in this plan's first landing — see `plans/2026-08-23-registry-auth-retry.md`
 
 ## Verification
 

@@ -1,6 +1,7 @@
 ---
 status: idea
-updated: 2026-08-19
+updated: 2026-08-23
+depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
 ## Context
@@ -16,9 +17,10 @@ result was not what documentation-only reasoning would have predicted:
   `power-user-linux-setup`: `ruff check .` surfaces 0 hits from the (gitignored) `reference/` tree;
   explicitly targeting `ruff check reference/` (bypassing normal file discovery) surfaces 143.
   `ruff.toml` carries no manual exclude for it.
-- **`basedpyright` does NOT respect `.gitignore`.** Confirmed live: stripping
-  `power-user-linux-setup`'s `reference`/`skills/*/references/snippets` exclude entries (down to
-  just basedpyright's own default exclude list) took the same codebase from
+- [PITFALL: `basedpyright` does NOT respect `.gitignore`, unlike `ruff` right above it — so a
+  gitignored tree is silently type-checked unless an explicit exclude names it.] Confirmed live:
+  stripping `power-user-linux-setup`'s `reference`/`skills/*/references/snippets` exclude entries
+  (down to just basedpyright's own default exclude list) took the same codebase from
   `0 errors, 2811 warnings` to `132 errors, 3509 warnings` — entirely from the gitignored
   `reference/` tree and standalone example snippets getting type-checked. Needs permanent, explicit
   excludes.
@@ -82,8 +84,8 @@ mainstream, widely-used IDE tool already delegates to instead of maintaining its
   needing to be added somewhere. The likely real fix in most cases is "never let a config replace a
   tool's already-sensible default list" rather than "add more excludes" — confirm per tool before
   assuming new rules are needed anywhere.]
-- **Resolved 2026-08-19 — ownership, in full: `scaffoldapy` owns `.gitignore`, source of truth and
-  updates both, not split.** Content: `github/gitignore`'s `Python.gitignore` (and possibly
+- [DECISION: `scaffoldapy` owns `.gitignore` outright — source of truth and updates both, not split
+  (resolved 2026-08-19).] Content: `github/gitignore`'s `Python.gitignore` (and possibly
   `Global/JetBrains.gitignore`), same upstream PyCharm's own bundled `.ignore` plugin generates from
   — seeded into `scaffoldapy`'s template, not authored by hand. Direct instruction, and the
   reasoning holds up: a split "one repo seeds it, another keeps it current" ownership is exactly the
@@ -95,14 +97,14 @@ mainstream, widely-used IDE tool already delegates to instead of maintaining its
   `.gitignore` content genuinely doesn't churn: essentially all the work is the one-time "build it
   out right the first time" pass, not an ongoing sync problem. `repo_tasks` does **not** distribute
   or own `.gitignore` in any form — no `configs.pull` involvement for this file.
-- **`repo_tasks`'s role narrowed to warning, not owning or writing.** Since `repo_tasks`'s own tool
-  configs (`ruff.toml` today, whatever the dprint/pytest/shellcheck audit above adds) silently
-  assume certain paths are gitignored — that's the entire basis of "ruff needs zero manual excludes
-  because `.venv`/`reference/` are gitignored" — a repo whose `.gitignore` is missing one of those
-  paths breaks that assumption invisibly (ruff would start linting the entire `.venv`, e.g.) with no
-  connection back to the actual cause. `repo_tasks` should be able to flag that interference — but
-  it doesn't own `.gitignore`, so it can only warn, never write to or "fix" it itself. Two different
-  shapes of check, deliberately not conflated:
+- [DECISION: `repo_tasks` warns about `.gitignore` interference, never owns or writes the file.]
+  Since `repo_tasks`'s own tool configs (`ruff.toml` today, whatever the dprint/pytest/shellcheck
+  audit above adds) silently assume certain paths are gitignored — that's the entire basis of "ruff
+  needs zero manual excludes because `.venv`/`reference/` are gitignored" — a repo whose
+  `.gitignore` is missing one of those paths breaks that assumption invisibly (ruff would start
+  linting the entire `.venv`, e.g.) with no connection back to the actual cause. `repo_tasks` should
+  be able to flag that interference — but it doesn't own `.gitignore`, so it can only warn, never
+  write to or "fix" it itself. Two different shapes of check, deliberately not conflated:
   - **A small, fixed, always-run, hard-coded check** — worth coding directly, not left to agent
     judgment, because it's cheap, deterministic, and the failure mode it catches is severe and
     non-obvious to debug from the symptom alone: verify (`git check-ignore <path>`, or equivalent)

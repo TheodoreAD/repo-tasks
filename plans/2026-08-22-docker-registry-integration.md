@@ -32,13 +32,13 @@ decision. GHCR packages default to the same visibility as their owning repo (pri
 but can be flipped public per-package via GitHub's UI later if wider distribution is ever wanted — a
 one-time manual step, not something `inv`/CI configures.
 
-**Gotcha confirmed by the smoke test (2026-08-23):** GHCR rejects uppercase characters anywhere in
-an image ref. This account's GitHub username is `TheodoreAD` (mixed case), so any image name derived
+[PITFALL: GHCR rejects uppercase characters anywhere in an image ref — confirmed by the smoke test
+(2026-08-23). This account's GitHub username is `TheodoreAD` (mixed case), so any image name derived
 from it — CI's `${{ github.repository_owner }}`, or a future `repo-tasks.toml`
 `[[docker]]`/`[[helm]]` entry — must lowercase that segment explicitly
 (`docker-registry-smoke-test.yml`'s `${OWNER,,}` step does this for CI). Flagged in
-`dogfood-sample-service.md` too, since that's where the real `image =` value eventually gets
-written.
+`plans/2026-08-19-dogfood-sample-service.md` too, since that's where the real `image =` value
+eventually gets written.]
 
 ### 2. `docker.py` itself needs zero changes
 
@@ -106,7 +106,9 @@ on that sibling plan.
 
 ## Verification
 
-- Auth-only smoke test (login + push a throwaway scratch image) — confirmable now, independent of
-  `dogfood-sample-service.md`.
-- Full `docker.release` round trip against GHCR — blocked on that sibling plan landing a real
-  Dockerfile; not run before then.
+- Auth-only smoke test (login + push a throwaway scratch image) — done 2026-08-23, see §6.1.
+
+[UNVERIFIED: the full `docker.release` round trip against GHCR has never run — only the auth-only
+smoke test has. Blocked on `plans/2026-08-19-dogfood-sample-service.md` landing a real Dockerfile,
+and on confirming afterwards that the pushed package appears under the account's Packages tab with
+the expected name and visibility. This plan cannot reach `landed` until then.]

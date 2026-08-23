@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-22
+updated: 2026-08-23
 ---
 
 ## Context
@@ -57,8 +57,10 @@ inventing a parallel manifest for something `uv` already models well.
   returns a single entry. This must keep working with zero new config — it's the common case, and
   the current zero-config ergonomics (README: "That's the entire file — no local override") must not
   regress.
-- **Phase 2 (once a real multi-member consumer exists — see `dogfood-sample-service.md`):** resolve
-  each `[tool.uv.workspace].members` glob's own `pyproject.toml` into its own `PythonProject`.
+- [DEFERRED: Phase 2 — resolve each `[tool.uv.workspace].members` glob's own `pyproject.toml` into
+  its own `PythonProject`. Blocked on a real multi-member consumer existing at all, i.e. on
+  `plans/2026-08-19-dogfood-sample-service.md`. This is the single item keeping this plan
+  `in-progress`; Phase 1 landed.]
 - Every later task module (`docker.py`, `python_pkg.py`, `helm.py`, `version.py`) calls this instead
   of hardcoding "the repo root."
 
@@ -98,8 +100,10 @@ python-project fallback (per review: "make sure there is also some smart default
 cases"). It's named after the repo's python project (so `group` naturally matches for version
 resolution), or the repo directory's own name if there's no `pyproject.toml`; `image` defaults to
 that same name as a local-only placeholder. See `plans/2026-08-19-docker-image-tasks.md` (now
-landed) for `docker.py` itself. `[[helm]]` reading doesn't exist yet — `helm-chart-tasks.md` is
-still unimplemented.
+landed) for `docker.py` itself.
+
+[DEFERRED: `[[helm]]` reading — the helm half of this section's schema — doesn't exist in
+`projects.py` yet, and lands with `plans/2026-08-19-helm-chart-tasks.md`.]
 
 ### 3. Grouping for shared version/tag tracks
 

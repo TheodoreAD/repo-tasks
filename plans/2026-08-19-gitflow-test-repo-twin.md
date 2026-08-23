@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-19
+updated: 2026-08-23
 ---
 
 ## Context
@@ -13,13 +13,16 @@ GitHub-linked repo
 (`none of the git remotes configured for this repository point to a known
 GitHub host`).
 
-The obvious next step — spin up a throwaway GitHub repo, run the flow for real, delete it — was
-explicitly rejected: repeated create/delete cycles risk GitHub's own soft-deletion/rename-cooldown
-quirks turning into their own source of mess, and there's no benefit to it being disposable in the
-first place. Decision from review: a **permanent** test-repo twin instead. Leftover state from a run
-(stray branches, an unmerged PR, a weird conflict) is treated as a feature, not something to clean
-up — inspecting and fixing a real messy repo is itself useful for improving `gitflow.py` and its
-guidance messages.
+[UNVERIFIED: `gh pr create` itself has never run against a real GitHub-linked repo — in either the
+`*_finish` or the `*_finalize` path, nor the hotfix-redirect variant of the second PR. Everything
+around it is confirmed; this one call is the gap, and closing it is this plan's entire purpose.]
+
+[DECISION: a **permanent** test-repo twin, not a throwaway repo created and deleted per run.
+Repeated create/delete cycles risk GitHub's own soft-deletion and rename-cooldown quirks becoming
+their own source of mess, and disposability buys nothing here. Leftover state from a run — stray
+branches, an unmerged PR, a weird conflict — is a feature rather than something to clean up:
+inspecting and fixing a real messy repo is itself how `gitflow.py`'s recovery paths and guidance
+messages get improved.]
 
 **Not to be started now** — this is purely a placeholder for when that verification work resumes.
 

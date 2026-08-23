@@ -54,15 +54,13 @@ need:
   push `:test` → push `:latest` sequence for real, against a real (if local) registry. A fresh
   `Context`/`pytest.MonkeyPatch()` stand in for the `c`/`monkeypatch` fixtures, which are
   function-scoped and can't be depended on by this module-scoped fixture.
-- **Corollary, not a separate workaround:** `docker.py`'s tasks always shell out to the plain
-  `docker` CLI (`c.run(...)`), never the Python `docker` SDK. Found live (2026-08-23) while this
-  fixture still used testcontainers' `DockerImage` directly: docker-py's `images.build()` eagerly
-  resolves credentials for **every** registry listed in `~/.docker/config.json` before building
-  anything, so a stale `gcr.io` → `docker-credential-gcloud` entry (tied to a deleted GCP account,
-  since fixed on this machine) failed the whole build even though the build never touched `gcr.io`.
-  Switching to dogfooding `docker.py`'s real tasks sidesteps that whole class of problem for free —
-  it was never a deliberate design choice made to avoid the SDK, just a fixture design that no
-  longer has any code path calling into it.
+- [PITFALL: docker-py's `images.build()` eagerly resolves credentials for **every** registry listed
+  in `~/.docker/config.json` before building anything, so a single stale entry fails a build that
+  never touches that registry. Found live 2026-08-23, while this fixture still used testcontainers'
+  `DockerImage` directly: a stale `gcr.io` → `docker-credential-gcloud` entry (tied to a deleted GCP
+  account, since fixed on this machine) failed the whole build. `docker.py`'s tasks always shell out
+  to the plain `docker` CLI (`c.run(...)`), never the Python SDK, so they are immune — which makes
+  this a corollary of dogfooding them, not a workaround adopted to avoid the SDK.]
 - `DockerContainer(f"{image.image}:latest").with_command("sleep infinity")` keeps the container
   alive for `exec()` calls afterward — no long-running server process to wait on, unlike
   `devpi_index`/`docker_registry`.
@@ -78,12 +76,16 @@ This plan lands the Dockerfile + fixture + one smoke test proving the fixture wo
 test yet. Those are real, separate pieces of follow-up work once this infra exists; scoping them in
 now would be speculative given no such test has been written or reviewed yet.
 
-**Forward note, not yet a decision:** the smoke test's module scope is fine because it's the only
-test in its module. Once a real mutating test lands (e.g. one that runs `agents.claude-hook` and
-asserts on `~/.claude/settings.json`), multiple tests sharing one container's `$HOME` may see
-cross-test state leakage the way `devpi_index`/`docker_registry`'s shared-fixture model avoids only
-because every test there uploads/pushes a distinctly-named artifact. Revisit fixture scope
-(module-shared vs. a fresh container/copy per test) when that first real test is written, not now.
+[DEFERRED: the real mutating tests — `selfinstall.py`, `agents.py`, `direnv.py` exercised against
+this isolated `$HOME` — are the actual point of building the fixture, and none exist yet. This is
+the next piece of work on this plan, not a separate concern someone else picks up.]
+
+[DEFERRED: fixture scope needs revisiting when that first mutating test is written. The smoke test's
+module scope is fine only because it is the only test in its module; once several tests share one
+container's `$HOME`, they can leak state into each other — which `devpi_index`/`docker_registry`
+avoid only because every test there uploads or pushes a distinctly-named artifact, a property a
+`$HOME`-mutating test does not have. Decide module-shared vs. a fresh container per test then, with
+a real test in hand, rather than guessing now.]
 
 ## Files touched
 
@@ -101,5 +103,5 @@ because every test there uploads/pushes a distinctly-named artifact. Revisit fix
 - `$HOME` starts clean — no `.claude`, no repo-tasks-specific state, before anything runs.
 - The bind-mounted repo source lands at `/home/tester/repo-tasks` and is readable (`pyproject.toml`
   present).
-- Real `selfinstall.py`/`agents.py`/`direnv.py` tests against this fixture are explicitly out of
-  scope here — separate follow-up, not tracked by this plan.
+- Real `selfinstall.py`/`agents.py`/`direnv.py` tests against this fixture are not written yet —
+  tracked by the `[DEFERRED:]` items in Design §3, which is what keeps this plan `in-progress`.

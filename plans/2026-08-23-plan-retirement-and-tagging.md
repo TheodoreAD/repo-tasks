@@ -106,6 +106,14 @@ of `[UNVERIFIED:`, which is negative-space and free to check.
 fact — a tag whose scope is "everything below this heading" can't be migrated mechanically, which is
 the entire point.
 
+**Placement rule: a tag opens its own line** — starting a paragraph, or immediately after a list
+marker. [PITFALL: found while retrofitting Phase 2. A bare `rg '\[DEFERRED:'` also matches every
+prose _mention_ of a tag, so a document that discusses the convention (this one) reports a large
+false backlog, and a tag buried mid-paragraph is easy to miss when skimming. Anchoring the pattern —
+`rg '^\s*[-*]?\s*\[DEFERRED:'` — drops the false positives to zero, but only works if tags are
+consistently written at line start. Verified against this repo: unanchored reports 5 files, anchored
+reports the 4 that actually carry deferrals.]
+
 ### 2. The two gates this buys
 
 The payoff is that the skill's two hardest judgment calls become greps that either return nothing or
@@ -113,13 +121,13 @@ block:
 
 ```shell
 # promotion gate — must be empty before status leaves `idea`
-rg '\[NEEDS CLARIFICATION:' plans/<file>.md
+rg '^\s*[-*]?\s*\[NEEDS CLARIFICATION:' plans/<file>.md
 
 # deletion gate — must be empty before `rm`
-rg '\[DEFERRED:|\[UNVERIFIED:' plans/<file>.md
+rg '^\s*[-*]?\s*\[DEFERRED:|^\s*[-*]?\s*\[UNVERIFIED:' plans/<file>.md
 
 # repo-wide backlog, without opening a single file
-rg -c '\[DEFERRED:' plans/
+rg -c '^\s*[-*]?\s*\[DEFERRED:' plans/
 ```
 
 The deletion gate is the one that would have caught all three Class E items above. It is a hard
@@ -259,8 +267,8 @@ that repo, not this one).
 
 ## Verification
 
-- `rg '\[DEFERRED:|\[UNVERIFIED:' plans/<file>.md` empty for each of the six, immediately before its
-  deletion — the gate from §2, applied to its own pilot.
+- The §2 deletion gate returns empty for each of the six, immediately before its deletion — the gate
+  applied to its own pilot.
 - `rg 'plans/2026-08-19-release-management|plans/2026-08-19-docker-image-tasks|plans/2026-08-19-python-package-tasks|plans/2026-08-20-venv-deps-tasks|plans/2026-08-22-local-index-and-registry-testing|plans/2026-08-19-gitflow-protected-branches'`
   returns zero hits repo-wide after Phase 5 — not just in `plans/`, per the skill's whole-repo grep
   rule.

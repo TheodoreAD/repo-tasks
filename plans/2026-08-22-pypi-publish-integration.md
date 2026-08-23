@@ -1,6 +1,6 @@
 ---
 status: planned
-updated: 2026-08-22
+updated: 2026-08-23
 ---
 
 ## Context
@@ -18,7 +18,12 @@ safe testing tier (a local `devpi-server`) — that plan is what gets exercised 
 `inv quality.test`. This plan covers the real, external `test.pypi.org`/`pypi.org` instead:
 deliberate, occasional, manual/CI-triggered, never run automatically on a schedule or on every
 commit — rate limits, real long-lived-if-mismanaged credentials, and genuinely irreversible side
-effects (a version once uploaded to real PyPI can never be re-uploaded or reused, even if deleted).
+effects.
+
+[PITFALL: a version number once uploaded to real PyPI can never be re-uploaded or reused, even after
+deleting the release. There is no undo and no second attempt at the same version — which is why §1
+below makes TestPyPI unconditionally first, and why `--dry-run` is a local iteration tool rather
+than the safety gate.]
 
 ## Design
 
@@ -101,8 +106,10 @@ local-iteration tool, not a CI gate).
 ## Verification
 
 - `inv dist.publish --index testpypi --dry-run` locally against the real endpoint — already done in
-  a prior session, confirms command construction is correct.
-- The actual first TestPyPI publish, the first real-PyPI publish, and the first CI-workflow run are
-  each manual, human-supervised, one-time verification steps — never automated, and never triggered
-  by an agent without explicit confirmation immediately beforehand given the irreversibility
-  involved.
+  a prior session, confirms command construction is correct. [UNVERIFIED: none of §5's rollout has
+  actually been done — no TestPyPI publish, no trusted-publisher setup on either index, no CI
+  workflow, and the name's availability on real PyPI is still unconfirmed (`dist.versions` reporting
+  "no releases" proves only that nothing was uploaded under that name, not that it is unclaimed).
+  Each of these is a manual, human-supervised, one-time step — never automated, and never triggered
+  by an agent without explicit confirmation immediately beforehand, given the irreversibility
+  above.]
