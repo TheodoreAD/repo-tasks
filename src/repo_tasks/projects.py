@@ -37,27 +37,67 @@ class HelmChart:
     group: str
 
 
+def _load_toml(path: Path) -> dict[str, object]:
+    with path.open("rb") as f:
+        return cast(dict[str, object], tomllib.load(f))
+
+
+def _project_at(path: Path, data: dict[str, object]) -> PythonProject | None:
+    """One `[project]` table as a PythonProject, or None for a table-less pyproject.toml — a
+    workspace root that only groups members (uv's "virtual" root) legitimately has none."""
+    project = cast(dict[str, str] | None, data.get("project"))
+    if project is None:
+        return None
+    return PythonProject(name=project["name"], path=path, version=project["version"])
+
+
+def _workspace_member_dirs(data: dict[str, object]) -> list[Path]:
+    """Every directory matched by `[tool.uv.workspace].members` and not by its `exclude` — uv's
+    own two globs, both relative to the workspace root. Sorted so the resolved project order is
+    stable across filesystems, which matters because callers index `[0]`."""
+    tool = cast(dict[str, object], data.get("tool", {}))
+    uv = cast(dict[str, object], tool.get("uv", {}))
+    workspace = cast(dict[str, list[str]] | None, uv.get("workspace"))
+    if workspace is None:
+        return []
+
+    root = Path()
+    included = {d for pattern in workspace.get("members", []) for d in root.glob(pattern) if d.is_dir()}
+    excluded = {d for pattern in workspace.get("exclude", []) for d in root.glob(pattern)}
+    return sorted(included - excluded)
+
+
 def discover_python_projects(c) -> list[PythonProject]:
-    """Resolve every python project in the consumer repo. `c` is unused in Phase 1 — kept in the
-    signature since Phase 2's workspace-glob resolution will need it.
+    """Resolve every python project in the consumer repo, the root's own first. `c` is unused —
+    kept in the signature for symmetry with the other two discover functions.
 
-    Phase 1: no `[tool.uv.workspace]` in the root pyproject.toml means the repo root's own
-    `[project]` table is the one implicit project. Phase 2 will additionally resolve each
-    `[tool.uv.workspace].members` glob's own pyproject.toml into its own PythonProject.
+    No `[tool.uv.workspace]` in the root pyproject.toml means the repo root's own `[project]`
+    table is the one implicit project (Phase 1, still the common case and still zero-config).
+    With one, each `members` glob's own pyproject.toml resolves into its own PythonProject too
+    — `uv`'s workspace table is the source of truth, never a parallel manifest of our own.
+
+    Root-first ordering is load-bearing: `dist.py` and `version.py` treat `[0]` as "the repo's
+    own project" when no `--project`/`--group` narrows it down, so adding a workspace member must
+    never change what a no-flag invocation acts on.
     """
-    pyproject_path = Path("pyproject.toml")
-    with pyproject_path.open("rb") as f:
-        data = tomllib.load(f)
+    root_data = _load_toml(Path("pyproject.toml"))
+    root = _project_at(Path(), root_data)
+    projects = [root] if root is not None else []
 
-    project = cast(dict[str, str], data["project"])
-    return [PythonProject(name=project["name"], path=Path(), version=project["version"])]
+    for member_dir in _workspace_member_dirs(root_data):
+        member_pyproject = member_dir / "pyproject.toml"
+        if not member_pyproject.exists():
+            continue
+        member = _project_at(member_dir, _load_toml(member_pyproject))
+        if member is not None:
+            projects.append(member)
+    return projects
 
 
 def _load_repo_tasks_toml() -> dict[str, object]:
     if not _REPO_TASKS_TOML.exists():
         return {}
-    with _REPO_TASKS_TOML.open("rb") as f:
-        return cast(dict[str, object], tomllib.load(f))
+    return _load_toml(_REPO_TASKS_TOML)
 
 
 def discover_docker_images(c) -> list[DockerImage]:

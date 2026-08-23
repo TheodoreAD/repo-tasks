@@ -1,6 +1,11 @@
-"""Tests for repo_tasks.projects: Phase 1's single-implicit-project fallback, run against this
-repo's own pyproject.toml (mirrors test_quality.py's existing MockContext style, though
-discover_python_projects doesn't touch c.run yet)."""
+"""Tests for repo_tasks.projects: the single-implicit-project fallback run against this repo's own
+pyproject.toml, plus workspace-member resolution against throwaway trees built in tmp_path (mirrors
+test_quality.py's existing MockContext style, though discover_python_projects doesn't touch c.run).
+
+The workspace cases deliberately build their own minimal tree rather than pointing at this repo's
+real examples/ — discovery logic gets a fast, minimal case it fully controls (an excluded member, a
+member dir with no pyproject.toml, a table-less root), independent of whatever the dogfood sample
+happens to look like."""
 
 from pathlib import Path
 
@@ -8,11 +13,78 @@ from invoke import MockContext
 
 from repo_tasks import projects
 
+_ROOT_PYPROJECT = '[project]\nname = "root-pkg"\nversion = "1.0.0"\n'
 
-def test_discover_python_projects_returns_repo_root_as_sole_project():
+
+def _write_member(root: Path, relative: str, name: str, version: str) -> None:
+    member = root / relative
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "{version}"\n')
+
+
+def _write_workspace_root(root: Path, members: str, exclude: str = "", project: str = _ROOT_PYPROJECT) -> None:
+    exclude_line = f"exclude = {exclude}\n" if exclude else ""
+    (root / "pyproject.toml").write_text(f"{project}\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}")
+
+
+def test_discover_python_projects_returns_repo_root_first():
     c = MockContext(run=True)
     result = projects.discover_python_projects(c)
-    assert result == [projects.PythonProject(name="repo-tasks", path=Path(), version="0.1.0")]
+    assert result[0] == projects.PythonProject(name="repo-tasks", path=Path(), version="0.1.0")
+
+
+def test_discover_python_projects_no_workspace_table_means_root_alone(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(_ROOT_PYPROJECT)
+    c = MockContext(run=True)
+    assert projects.discover_python_projects(c) == [
+        projects.PythonProject(name="root-pkg", path=Path(), version="1.0.0")
+    ]
+
+
+def test_discover_python_projects_resolves_workspace_member_globs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_workspace_root(tmp_path, '["examples/*"]')
+    _write_member(tmp_path, "examples/beta", "beta", "0.2.0")
+    _write_member(tmp_path, "examples/alpha", "alpha", "0.1.0")
+    c = MockContext(run=True)
+    # Root first, then members sorted — callers index [0] for "the repo's own project".
+    assert projects.discover_python_projects(c) == [
+        projects.PythonProject(name="root-pkg", path=Path(), version="1.0.0"),
+        projects.PythonProject(name="alpha", path=Path("examples/alpha"), version="0.1.0"),
+        projects.PythonProject(name="beta", path=Path("examples/beta"), version="0.2.0"),
+    ]
+
+
+def test_discover_python_projects_honours_workspace_exclude(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_workspace_root(tmp_path, '["examples/*"]', exclude='["examples/skipped"]')
+    _write_member(tmp_path, "examples/kept", "kept", "0.1.0")
+    _write_member(tmp_path, "examples/skipped", "skipped", "0.1.0")
+    c = MockContext(run=True)
+    result = projects.discover_python_projects(c)
+    assert [p.name for p in result] == ["root-pkg", "kept"]
+
+
+def test_discover_python_projects_skips_member_dir_without_pyproject(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_workspace_root(tmp_path, '["examples/*"]')
+    _write_member(tmp_path, "examples/real", "real", "0.1.0")
+    (tmp_path / "examples" / "not-a-project").mkdir()
+    c = MockContext(run=True)
+    result = projects.discover_python_projects(c)
+    assert [p.name for p in result] == ["root-pkg", "real"]
+
+
+def test_discover_python_projects_allows_a_table_less_workspace_root(tmp_path, monkeypatch):
+    """uv's "virtual" workspace root — a pyproject.toml that only groups members, no [project]."""
+    monkeypatch.chdir(tmp_path)
+    _write_workspace_root(tmp_path, '["examples/*"]', project="")
+    _write_member(tmp_path, "examples/only", "only", "0.1.0")
+    c = MockContext(run=True)
+    assert projects.discover_python_projects(c) == [
+        projects.PythonProject(name="only", path=Path("examples/only"), version="0.1.0")
+    ]
 
 
 def test_discover_docker_images_empty_with_no_config_and_no_dockerfile(tmp_path, monkeypatch):
