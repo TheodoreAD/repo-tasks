@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-24
 ---
 
@@ -47,8 +47,7 @@ All three hit live while landing the dogfood sample:
 
 ## Landed 2026-08-24
 
-Everything in Recommended direction below is implemented except §3 (where the dogfood sample lives),
-which is still awaiting a call:
+Everything in Recommended direction below is implemented, §3 included:
 
 - Every dependency group folded into `dev`; `quality` renamed `repo-tasks-quality` and kept only
   because it is an exported manifest. `pyrightconfig.json`'s `tests/integration` exclude deleted
@@ -108,9 +107,10 @@ taking a plain `uv sync` from 39 packages to roughly 82. Not urgent — it works
 constraint, and `uv` is fast. Tidying it is deferred to
 `plans/2026-08-24-devpi-dependency-weight.md`.]
 
-[NEEDS CLARIFICATION: does `tests/unit/` get its own `conftest.py` immediately, or stay bare until
-something needs it? The split's stated value is that the two tiers can have genuinely different
-fixtures and approaches; an empty file adds a level of indirection with nothing in it yet.]
+[DECISION: `tests/unit/` gets its own `conftest.py` from day one, alongside `tests/` and
+`tests/integration`. Resolved 2026-08-24 — it is not empty indirection: `c` (the `MockContext`
+nearly every unit test wants) and `tmp_cwd` (an empty directory that is also cwd) between them
+replaced local setup in 145 tests.]
 
 ## Recommended direction
 
@@ -155,15 +155,15 @@ and smoke tests are still integration tests.]
 system is wired up at all. **Regression** is everything else in the tier. Speed and breadth, not
 subject matter.
 
-[NEEDS CLARIFICATION: the module behind the namespace. Repo convention is one module per facility
-named after what it owns, which argues for `src/repo_tasks/test.py` — but `test` is a real stdlib
-package name (CPython's own test suite), so `testing.py` with an explicit
-`add_collection(..., name="test")` may be the safer spelling. The namespace is `test` either way;
-only the filename is in question.]
+[DECISION: the module is `testing.py`, the collection is `test`. Resolved 2026-08-24 — `test.py`
+inside an installed package would sit next to CPython's own stdlib `test` package, and
+`add_collection` names the collection explicitly anyway. `quality.py` imports `unit` from it to
+chain into `check`, following the established `from .sibling import name` pattern.]
 
-[NEEDS CLARIFICATION: `inv quality.test` disappears, which breaks any consumer naming it directly,
-and this package still has no deprecation convention. Same question as the old `test` → `test-unit`
-rename, now unavoidable rather than optional.]
+[DECISION: no deprecation shim; `inv quality.test` and `quality.test_integration` simply go.
+Resolved 2026-08-24 — this package has no users yet, so backwards compatibility costs nothing to
+skip. Both sibling consumers were checked: each declares only a `dev` group and runs
+`inv quality.check`, so neither names the removed tasks.]
 
 ### 2a. `testpaths` already implements the fallback — measured
 
@@ -270,3 +270,21 @@ rather than a tier — see the decision under Open questions.
 
 Sequence matters — do the group change first, then `pyrightconfig.json`'s exclude can be deleted
 rather than migrated, and `configs-round-trip-divergence.md`'s defect 1 loses most of its bite.
+
+## Migrated to
+
+- **Code and tests** — `src/repo_tasks/testing.py` (the `test` namespace), `quality.py`'s
+  `from .testing import unit`, `pyproject.toml`'s single `dev` group plus the `repo-tasks-quality`
+  manifest, `pytest.ini`'s `testpaths`/`markers`, the three conftests, and
+  `tests/fixtures/sample-service`.
+- [`contributing/test-tiers.md`](../contributing/test-tiers.md) — the tier table and per-tier
+  commands, why the split is enforced by an include rather than an exclude, the two measurements
+  that constrain `testpaths`, the conftest layout, and the `tmp_cwd` safety rationale.
+- `plans/2026-08-24-devpi-dependency-weight.md` — the one deferred item, split out at the time
+  rather than left here.
+- **Not migrated:** the package-count measurements (39 → ~82) and the per-dependency breakdown. They
+  are evidence for a decision already made and recorded; the devpi plan carries the numbers that
+  still matter.
+- **Not migrated:** the sibling-repo pitfall about inheriting `testpaths = tests/unit` with a flat
+  `tests/`. It belongs to those repos, not this one, and is raised with them directly rather than
+  parked in a plan they do not read.
