@@ -9,7 +9,7 @@ from pathlib import Path
 
 from invoke import task
 
-from .projects import discover_python_projects
+from .projects import discover_helm_charts, discover_python_projects
 
 
 def _resolve_project(c, group):
@@ -44,10 +44,10 @@ def next_version(current, part):
     raise ValueError(f"unknown version part {part!r}")
 
 
-def _bumpversion_config(project, tag) -> str:
+def _bumpversion_config(project, charts, tag) -> str:
     pyproject_path = project.path / "pyproject.toml"
     tag_config = 'tag = true\ntag_name = "v{new_version}"' if tag else "tag = false"
-    return f"""\
+    config = f"""\
 [tool.bumpversion]
 current_version = "{project.version}"
 commit = true
@@ -58,11 +58,31 @@ filename = "{pyproject_path}"
 search = 'version = "{{current_version}}"'
 replace = 'version = "{{new_version}}"'
 """
+    # The search patterns assume `helm create`'s own scaffold quoting: `version:` unquoted,
+    # `appVersion:` quoted. The quoted appVersion form also keeps the bare `version: X` search
+    # from matching inside the appVersion line (`version: X` is a substring of an unquoted
+    # `appVersion: X`). bump-my-version fails loudly when a search string is absent, so a chart
+    # straying from that quoting breaks the bump instead of half-applying it.
+    for chart in charts:
+        chart_yaml = chart.path / "Chart.yaml"
+        config += f"""
+[[tool.bumpversion.files]]
+filename = "{chart_yaml}"
+search = "version: {{current_version}}"
+replace = "version: {{new_version}}"
+
+[[tool.bumpversion.files]]
+filename = "{chart_yaml}"
+search = 'appVersion: "{{current_version}}"'
+replace = 'appVersion: "{{new_version}}"'
+"""
+    return config
 
 
 def _bump(c, part, group=None, tag=True):
     project = _resolve_project(c, group)
-    config = _bumpversion_config(project, tag)
+    charts = [chart for chart in discover_helm_charts(c) if chart.group == project.name]
+    config = _bumpversion_config(project, charts, tag)
     with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as f:
         _ = f.write(config)
         config_path = Path(f.name)
