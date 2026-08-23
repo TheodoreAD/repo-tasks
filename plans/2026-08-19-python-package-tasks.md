@@ -112,3 +112,19 @@ into here; the two modules are orthogonal by construction.
 - `publish` only ever run deliberately by a human against a real index when the dogfood step is
   actually undertaken — never exercised automatically in CI/tests before then. `--dry-run` is safe
   to exercise earlier, against a real index, without an actual upload.
+
+## Migrated to
+
+- `README.md`'s "dist: build, publish, and query a package index" section already covers Design §1's
+  task surface, including why `versions` hand-rolls a PEP 691/503 index query (`uv` has no
+  subcommand for it) — no migration needed.
+- [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — Design
+  §2 (release-time actions stay out of the quality composite, and `publish` never runs from an
+  automated one) and the `pre=[clean]`/`pre=[build]` freshness pattern.
+- [`contributing/versioning.md`](../contributing/versioning.md) — Design §3, `dist.py` reading the
+  version but never writing it, as part of the single-writer rule.
+- `plans/2026-08-22-pypi-publish-integration.md` — Design §4's dogfood-publish paragraph, which that
+  plan was already written as the concrete follow-through on.
+- Design §5 (monorepo phasing) is `plans/2026-08-19-monorepo-workspace-foundation.md`'s to own and
+  is already stated there. Design §6 (no interaction with venv's editable/CI mode) described an
+  orthogonality that is evident from the code and needs no separate record.

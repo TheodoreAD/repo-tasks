@@ -57,10 +57,14 @@ it's also protected, otherwise stays a plain local fast-forward.
 
 ## Migrated to
 
-All four open questions above got resolved and implemented directly in
-`plans/2026-08-19-release-management.md`'s Design §2 ("PR mode (default) vs. local mode"), rather
-than as a separate follow-on: PR mode is now the default (not opt-in — reverses this plan's rough
-direction above), `local=True` is the opt-in alternative; finish is async two-step (`*_finish` opens
-the PR and stops, `*_finalize` tags + opens the develop/redirect-target PR once a human has merged
-it); `develop`'s merge-back always goes through a PR too, uniformly, no protection-status detection
-needed. See that file for the actual design and `src/repo_tasks/gitflow.py` for the implementation.
+All four open questions above got resolved and implemented directly in `gitflow.py`, rather than as
+a separate follow-on: PR mode is now the default (not opt-in — reverses this plan's rough direction
+above), `local=True` is the opt-in alternative; finish is async two-step (`*_finish` opens the PR
+and stops, `*_finalize` tags + opens the develop/redirect-target PR once a human has merged it);
+`develop`'s merge-back always goes through a PR too, uniformly, so no protection-status detection is
+needed at all.
+
+That design was recorded in `plans/2026-08-19-release-management.md` Design §2, which has itself
+since been retired — it now lives in
+[`contributing/release-flow.md`](../contributing/release-flow.md), under "PR mode (default) vs.
+local mode". See `src/repo_tasks/gitflow.py` for the implementation.

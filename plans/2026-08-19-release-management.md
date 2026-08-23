@@ -339,3 +339,24 @@ until something notices via a failed `--locked` sync. Not urgent today (the `ven
 would surface this in practice hasn't landed yet), but `_bump` (or `bump`'s caller in `gitflow.py`)
 should run `deps.lock` as part of the bump commit once that module exists, so the commit that
 changes the version and the commit that re-locks never drift apart.
+
+## Migrated to
+
+- [`contributing/release-flow.md`](../contributing/release-flow.md) — Design §2 in full: the branch
+  model, branch-then-bump ordering and why, PR mode vs `local=True`, the two-step
+  `*_finish`/`*_finalize` split, `sync/<tag>` branches, the hotfix redirect, `support/*` and
+  `support_hotfix/*`, and the version-line merge conflict as a known bad state with its recovery.
+- [`contributing/versioning.md`](../contributing/versioning.md) — the Context section's hands-on
+  tool comparison (bump-my-version vs commitizen vs python-semantic-release, including the two
+  concrete python-semantic-release blockers), Design §1's runtime-generated per-group config and why
+  the CLI-only mode can't work, tag-name schemes, Design §3's explicit-bump-only rule, and why
+  `next_version` is safe to hand-roll.
+- [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — the
+  `_next_steps()` rule, which Design §2 explicitly established as general rather than gitflow-local,
+  and the never-auto-resolve posture.
+- `plans/2026-08-23-uv-lock-on-version-bump.md` — the `## Known follow-up (2026-08-20)` section,
+  which was live unfinished work rather than landed design.
+- `plans/2026-08-19-gitflow-test-repo-twin.md` already owned the one thing the four dry-run rounds
+  left unproven (`gh pr create` against a real GitHub-linked repo) and now carries it as an
+  `[UNVERIFIED:]` tag. The rounds themselves are not migrated: the bugs they caught are fixed, in
+  git history, and pinned by the regression tests they added.

@@ -165,3 +165,14 @@ Docker preinstalled, so CI can opt in by additionally `pip install`-ing
   with neither installed and seeing a clean pass, not a skip-related failure.
 - A machine lacking either prerequisite sees the integration tests skip with a clear, specific
   reason string — never a hard failure that looks like a real regression.
+
+## Migrated to
+
+- [`contributing/test-tiers.md`](../contributing/test-tiers.md) — this plan in full: the tier split
+  and why it is enforced structurally via `pytest.ini`'s `addopts`, the skip-don't-fail posture,
+  devpi-server over pypiserver on PEP 691 coverage (and why `simple-repository-server` was
+  rejected), the `+simple` URL shape and `--set-cfg` pitfalls, the devpi-client setup sequence,
+  `registry:3` via testcontainers, the `127.0.0.1`-not-`localhost` pitfall with its `daemon.json`
+  fallback, and the two real `dist.py` parsing bugs this tier caught along with the regression tests
+  that pin them.
+- `tests/integration/conftest.py`'s reference to this plan now points at that file instead.

@@ -102,3 +102,18 @@ automatic re-auth cycle before failing outright:
   `--platforms` presence/absence, `--tag` override.
 - Real build/push exercised manually against `dogfood-sample-service.md`'s Dockerfile once it
   exists.
+
+## Migrated to
+
+- `README.md`'s "docker: build, push, and release an image" section already documents the task
+  surface, including buildx's `--load` limitation — no migration needed for Design §1–2.
+- [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — the
+  multi-arch reasoning from the Context section and Design §3, generalized as "opt into expensive
+  paths, don't default into them" (the buildx bootstrap, QEMU's 5–20x penalty, the `--push`-only
+  constraint), plus the raise-don't-guess handling of an unknown `--project` and the smart-default
+  root-`Dockerfile` discovery.
+- [`contributing/versioning.md`](../contributing/versioning.md) — the tag scheme coming from the
+  group's version rather than a whole-repo version.
+- `plans/2026-08-23-registry-auth-retry.md` — Design §4 in full. It was deferred work, not landed
+  design, and `plans/2026-08-19-helm-chart-tasks.md` §4 now points at the same plan instead of at
+  this file.

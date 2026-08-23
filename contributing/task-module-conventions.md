@@ -71,6 +71,24 @@ silently picking one.
 while a docker _runtime_ image wants neither dev deps nor an editable install. One boolean cannot
 express that, and would have to guess.
 
+## Opt into expensive paths, don't default into them
+
+When a capability carries real cost and nothing currently needs it, accept it as a flag from day one
+but leave the common path cheap — rather than either building around it unconditionally or dropping
+it and reworking later.
+
+`docker.build`'s `--platforms` is the worked example. Multi-arch builds are single-arch by default;
+passing `--platforms=linux/amd64,linux/arm64` opts into `docker buildx`. Building around buildx
+unconditionally would have imposed three costs with no cross-arch deployment target to justify them:
+a `buildx create --use` builder bootstrap, QEMU cross-compilation that can run 5–20x slower for
+compute-heavy build steps unless native-arch runners are used, and a `--push`-only constraint —
+buildx cannot `--load` a multi-platform result into local `docker images` the way single-platform
+builds can.
+
+That last one leaks into the task's own contract, which is why `build`'s docstring has to say that
+multi-platform builds push as part of `build` itself. A flag that changes what a task _does_, not
+just how, needs saying so where the caller will see it.
+
 ## Stop loudly, and say what to run next
 
 Any command that stops short of "the whole flow is done" — a PR was opened and needs a human, a

@@ -226,3 +226,21 @@ published, not a second from-source build that merely resolves to the same versi
   read-only pass/fail without ever touching `.venv`.
 - `inv deps.export` exercised locally, confirming the generated `requirements.txt` matches
   `uv.lock`'s pinned versions and omits the local project itself.
+
+## Migrated to
+
+- `README.md`'s "venv/deps: lock-respecting, CI/docker-aware" section already covers Design §1–2's
+  task surface, §4's two-flag CI/docker usage, and §6's deps-only-layer plus wheel-install recipe —
+  it remains that recipe's single home.
+- [`contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — Design
+  §5's lock-file discipline as the "never silently mutate" rule (`--locked`, never `--frozen`, never
+  bare `uv sync`), `deps.lock`'s single-writer ownership of `uv.lock`, Design §4's name-flags-after-
+  what-they-do reasoning, and Design §3's `dev_env.py` split as the worked example of one module per
+  facility.
+- [`contributing/versioning.md`](../contributing/versioning.md) — the astral-sh/uv#15643 interaction
+  flagged in the Context section, as a known interaction of `version.bump`.
+- `plans/2026-08-19-dogfood-sample-service.md` — §6's closing note that the Dockerfile should follow
+  this recipe rather than restate it, now a `[DEFERRED:]` item on the plan that owns that
+  Dockerfile.
+- `plans/2026-08-23-uv-lock-on-version-bump.md` — the actual fix for uv#15643, which this plan
+  correctly identified as `version.py`'s problem rather than its own.
