@@ -5,6 +5,9 @@ updated: 2026-08-23
 
 ## Context
 
+Sibling: `plans/2026-08-24-uv-lock-path-changes.md` covers the other way `uv.lock` reaches a state a
+plain `uv lock` will not fix — a workspace member that moved. Same file, different cause.
+
 Extracted from the now-retired `plans/2026-08-19-release-management.md`'s
 `## Known follow-up (2026-08-20)` section during `plans/2026-08-23-plan-retirement-and-tagging.md` —
 it was live unfinished work sitting inside a file marked `landed`, so it needed a home with a status
