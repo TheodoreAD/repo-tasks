@@ -270,10 +270,12 @@ Phase 6 — the skill itself (own commit, in a different repo). The skill is **a
 `power-user-linux-setup/skills/plan-docs/`** and installed to `~/.agents/skills/` by `inv ai.skills`
 — `~/.claude/skills` is a symlink to that install directory, not the source. Edit the source repo.
 
-[PITFALL: `inv ai.skills` never overwrites a file that is already there, so editing the source does
-**not** update an already-installed copy. After a skill edit, `~/.agents/skills/plan-docs/SKILL.md`
-is stale until it is explicitly refreshed. Anything reading the installed copy — including a Claude
-Code session loading the skill — keeps seeing the old version.]
+[PITFALL: a skill edit does not reach the installed copy until `inv ai.skills` is re-run, so
+`~/.agents/skills/<name>/` stays stale in the meantime — and a Claude Code session loads the
+_installed_ copy, not the source. `inv ai.skills` does refresh it (digest comparison against the
+source, then a full replace); `-y` skips the per-skill prompt for an unattended run. The one case it
+will not touch is content whose `.pulse-source` marker is missing or points elsewhere, which it
+treats as foreign and leaves alone even with `-y`.]
 
 ## Verification
 
