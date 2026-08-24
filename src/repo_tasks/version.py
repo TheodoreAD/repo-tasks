@@ -50,19 +50,38 @@ def next_version(current, part):
     raise ValueError(f"unknown version part {part!r}")
 
 
-def _bumpversion_config(project, charts, tag) -> str:
+def _bumpversion_config(project, charts, tag, lock_path=None) -> str:
     pyproject_path = project.path / "pyproject.toml"
     tag_config = 'tag = true\ntag_name = "v{new_version}"' if tag else "tag = false"
+    # uv.lock embeds the project's own version, and `uv sync --locked` rejects a lock whose copy
+    # disagrees with pyproject.toml (astral-sh/uv#15643) — so a bump that left it alone would
+    # commit a stale lock that fails the next `venv.sync` on a tree that looks clean. Rewriting
+    # the field here keeps it in the same commit bump-my-version already owns; `uv lock --check`
+    # as a pre-commit hook proves the rewrite left the lock consistent before anything is
+    # committed, so a pattern that ever misfires fails the bump instead of shipping. Measured:
+    # a text-rewritten version passes both `uv lock --check` and `uv sync --locked`.
+    hook_config = 'pre_commit_hooks = ["uv lock --check"]\n' if lock_path is not None else ""
     config = f"""\
 [tool.bumpversion]
 current_version = "{project.version}"
 commit = true
 {tag_config}
-
+{hook_config}
 [[tool.bumpversion.files]]
 filename = "{pyproject_path}"
 search = 'version = "{{current_version}}"'
 replace = 'version = "{{new_version}}"'
+"""
+    # Anchored on the preceding `name = ...` line: uv.lock spells this project's own version
+    # exactly like every dependency's (`version = "X"` inside a [[package]] block), so a bare
+    # search would also hit any dependency pinned at the same number. The name line is unique
+    # per package, and uv always writes it immediately before `version`.
+    if lock_path is not None:
+        config += f"""
+[[tool.bumpversion.files]]
+filename = "{lock_path}"
+search = "name = \\"{project.name}\\"\\nversion = \\"{{current_version}}\\""
+replace = "name = \\"{project.name}\\"\\nversion = \\"{{new_version}}\\""
 """
     # The search patterns assume `helm create`'s own scaffold quoting: `version:` unquoted,
     # `appVersion:` quoted. The quoted appVersion form also keeps the bare `version: X` search
@@ -88,7 +107,10 @@ replace = 'appVersion: "{{new_version}}"'
 def _bump(c, part, group=None, tag=True):
     project = _resolve_project(c, group)
     charts = [chart for chart in discover_helm_charts(c) if chart.group == project.name]
-    config = _bumpversion_config(project, charts, tag)
+    # The workspace root's lock, never `project.path / "uv.lock"`: a workspace member has no lock
+    # of its own, its version lives in the root one alongside every other member's.
+    lock_path = Path("uv.lock") if Path("uv.lock").exists() else None
+    config = _bumpversion_config(project, charts, tag, lock_path=lock_path)
     with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as f:
         _ = f.write(config)
         config_path = Path(f.name)

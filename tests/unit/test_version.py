@@ -2,6 +2,7 @@
 logic — the per-group config bump-my-version actually reads) plus bump's overall command shape,
 following test_quality.py's existing MockContext style."""
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,52 @@ def test_bumpversion_config_bumps_chart_version_and_quoted_app_version():
     assert "search = 'appVersion: \"{current_version}\"'" in config
 
 
+def test_bumpversion_config_without_a_lock_never_mentions_uv():
+    project = projects.PythonProject(name="sample", path=Path(), version="0.1.0")
+    config = version._bumpversion_config(project, charts=[], tag=True)  # pyright: ignore[reportPrivateUsage]
+    assert "uv.lock" not in config
+    assert "pre_commit_hooks" not in config
+
+
+def test_bumpversion_config_rewrites_the_lock_anchored_on_the_project_name_and_checks_it():
+    # uv.lock spells this project's version exactly like every dependency's, so the search is
+    # anchored on the `name = ...` line uv writes immediately before it — and `uv lock --check`
+    # runs before the commit so a misfire fails the bump rather than shipping a stale lock.
+    project = projects.PythonProject(name="sample", path=Path(), version="0.1.0")
+    config = version._bumpversion_config(project, charts=[], tag=True, lock_path=Path("uv.lock"))  # pyright: ignore[reportPrivateUsage]
+    assert 'filename = "uv.lock"' in config
+    assert 'search = "name = \\"sample\\"\\nversion = \\"{current_version}\\""' in config
+    assert 'replace = "name = \\"sample\\"\\nversion = \\"{new_version}\\""' in config
+    assert 'pre_commit_hooks = ["uv lock --check"]' in config
+    # The generated file is TOML bump-my-version has to parse: the `\n` must survive as a real
+    # newline, which only a basic (double-quoted) string gives.
+    files: list[dict[str, str]] = tomllib.loads(config)["tool"]["bumpversion"]["files"]  # pyright: ignore[reportAny]
+    lock_entry = next(f for f in files if f["filename"] == "uv.lock")
+    assert lock_entry["search"] == 'name = "sample"\nversion = "{current_version}"'
+
+
+def test_bump_passes_the_root_lock_only_when_it_exists(c, tmp_cwd, monkeypatch):
+    seen = {}
+
+    def _capture(project, charts, tag, lock_path=None):
+        seen["lock_path"] = lock_path
+        return original_config(project, charts, tag, lock_path=lock_path)
+
+    original_config = version._bumpversion_config  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(version, "_bumpversion_config", _capture)
+    monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
+    project = projects.PythonProject(name="sample", path=Path("svc"), version="0.1.0")
+    monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
+
+    version.bump.body(c, part="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert seen["lock_path"] is None
+
+    # The workspace root's lock, never one under the member's own path.
+    (tmp_cwd / "uv.lock").write_text("")
+    version.bump.body(c, part="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert seen["lock_path"] == Path("uv.lock")
+
+
 def test_bump_includes_only_charts_sharing_the_bumped_group(c, monkeypatch):
     charts = [
         projects.HelmChart(name="repo-tasks-chart", path=Path("chart"), registry=None, group="repo-tasks"),
@@ -42,9 +89,9 @@ def test_bump_includes_only_charts_sharing_the_bumped_group(c, monkeypatch):
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: charts)
     seen = {}
 
-    def _capture(project, charts, tag):
+    def _capture(project, charts, tag, lock_path=None):
         seen["charts"] = charts
-        return original_config(project, charts, tag)
+        return original_config(project, charts, tag, lock_path=lock_path)
 
     original_config = version._bumpversion_config  # pyright: ignore[reportPrivateUsage]
     monkeypatch.setattr(version, "_bumpversion_config", _capture)

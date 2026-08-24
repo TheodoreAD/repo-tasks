@@ -60,6 +60,69 @@ def test_group_bump_moves_project_and_chart_together(c, tmp_path, monkeypatch, s
     assert _git(tmp_path, "rev-list", "--count", "HEAD") == "2"
 
 
+_LOCKABLE_PYPROJECT = """\
+[project]
+name = "{name}"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+"""
+
+
+def _uv(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["uv", *args], cwd=root, check=False, capture_output=True, text=True)
+
+
+def test_bump_relocks_in_the_same_commit(c, tmp_path, monkeypatch):
+    # The regression this pins: uv.lock embeds the project's own version (astral-sh/uv#15643), so
+    # a bump that only rewrote pyproject.toml left `uv lock --check` failing on a tree that looks
+    # clean. The lock must move in the bump's own commit, and uv itself must accept the result.
+    (tmp_path / "pyproject.toml").write_text(_LOCKABLE_PYPROJECT.format(name="probe"))
+    assert _uv(tmp_path, "lock").returncode == 0
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    project = PythonProject(name="probe", path=Path(), version="0.1.0")
+    monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
+    monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
+
+    version.bump.body(c, part="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+    assert 'name = "probe"\nversion = "0.1.1"' in (tmp_path / "uv.lock").read_text()
+    check = _uv(tmp_path, "lock", "--check")
+    assert check.returncode == 0, check.stderr
+    assert _git(tmp_path, "rev-list", "--count", "HEAD") == "2"
+    assert "uv.lock" in _git(tmp_path, "show", "--stat", "--format=", "HEAD")
+    assert _git(tmp_path, "status", "--porcelain") == ""
+
+
+def test_workspace_member_bump_relocks_the_root_lock(c, tmp_path, monkeypatch):
+    # A member has no lock of its own — its version sits in the root uv.lock next to every other
+    # member's, which is exactly where a bare `version = "0.1.0"` search would hit the wrong one.
+    root_pyproject = _LOCKABLE_PYPROJECT.format(name="root") + '\n[tool.uv.workspace]\nmembers = ["svc"]\n'
+    (tmp_path / "pyproject.toml").write_text(root_pyproject)
+    (tmp_path / "svc").mkdir()
+    (tmp_path / "svc" / "pyproject.toml").write_text(_LOCKABLE_PYPROJECT.format(name="svc"))
+    assert _uv(tmp_path, "lock").returncode == 0
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    member = PythonProject(name="svc", path=Path("svc"), version="0.1.0")
+    monkeypatch.setattr(version, "discover_python_projects", lambda c: [member])
+    monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
+
+    version.bump.body(c, part="minor", group="svc")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+    lock_text = (tmp_path / "uv.lock").read_text()
+    assert 'name = "svc"\nversion = "0.2.0"' in lock_text
+    assert 'name = "root"\nversion = "0.1.0"' in lock_text
+    assert 'version = "0.1.0"' in (tmp_path / "pyproject.toml").read_text()
+    check = _uv(tmp_path, "lock", "--check")
+    assert check.returncode == 0, check.stderr
+
+
 def test_group_bump_leaves_an_unrelated_groups_chart_alone(c, tmp_path, monkeypatch, sample_chart_dir):
     chart_dir = tmp_path / "other-chart"
     chart_dir.mkdir()
