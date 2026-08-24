@@ -42,10 +42,9 @@ done should call `deps.lock`, not shell out to `uv lock` itself. See
 ## No-op cleanly when an artifact kind is absent
 
 A task must be safe to run in a repo that has none of what it operates on. `quality.shell_check`
-established the pattern for "no `*.sh` files here"; `helm.py` follows it for zero `[[helm]]` entries
-(each task prints a short "nothing to do" note and returns). `docker.py` currently diverges: its
-tasks raise when zero images are discovered — tolerable while nothing wires them into a composite;
-tracked in `plans/2026-08-23-docker-no-op-alignment.md`. An explicit `--project` naming something
+established the pattern for "no `*.sh` files here"; `helm.py` and `docker.py` follow it for zero
+`[[helm]]` entries / zero images (each task prints a short "nothing to do" note and returns —
+`docker.release` as one unit, before its first step). An explicit `--project` naming something
 undiscovered is an error in every module, per "ambiguity is an error" below — the no-op rule is
 about the artifact kind being absent entirely, not about a named target missing.
 

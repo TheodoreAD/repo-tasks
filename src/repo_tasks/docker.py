@@ -8,17 +8,20 @@ from invoke import task
 from .projects import discover_docker_images
 from .version import current_version
 
+_NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
+
 
 def _resolve_image(c, project):
+    """The image to act on, or None when the repo has no images at all — tasks no-op cleanly on
+    None (an imageless repo is a normal state, so a composite can wire these unconditionally), but
+    an explicit --project naming nothing is an error, never a guess. Same shape as helm.py."""
     images = discover_docker_images(c)
     if project is not None:
         images = [i for i in images if i.name == project]
         if not images:
             raise ValueError(f"no docker image found for project {project!r}")
         return images[0]
-    if not images:
-        raise ValueError("no docker image found (no repo-tasks.toml [[docker]] entries and no root Dockerfile)")
-    return images[0]
+    return images[0] if images else None
 
 
 @task(
@@ -31,8 +34,12 @@ def _resolve_image(c, project):
 )
 def build(c, project=None, tag=None, platforms=None):
     """Build a docker image (docker build, or docker buildx build --push when platforms is
-    given — buildx can't --load a multi-platform result into local docker images)."""
+    given — buildx can't --load a multi-platform result into local docker images). No-ops cleanly
+    in a repo with no images."""
     image = _resolve_image(c, project)
+    if image is None:
+        print(f"[docker.build] {_NO_IMAGES}")
+        return
     resolved_tag = tag or current_version(c, group=image.group)
     target = f"{image.image}:{resolved_tag}"
     if platforms:
@@ -50,16 +57,23 @@ def build(c, project=None, tag=None, platforms=None):
 )
 def push(c, project=None, tag=None):
     """Push a docker image (docker push). Single-arch path only — a multi-platform build already
-    pushed as part of build itself."""
+    pushed as part of build itself. No-ops cleanly in a repo with no images."""
     image = _resolve_image(c, project)
+    if image is None:
+        print(f"[docker.push] {_NO_IMAGES}")
+        return
     resolved_tag = tag or current_version(c, group=image.group)
     c.run(f"docker push {image.image}:{resolved_tag}", echo=True)
 
 
 @task(help={"project": "Image to release (default: the sole/first discovered image)"})
 def release(c, project=None):
-    """Build and push an image tagged with its group's current version, plus latest."""
+    """Build and push an image tagged with its group's current version, plus latest. No-ops
+    cleanly, as one unit, in a repo with no images."""
     image = _resolve_image(c, project)
+    if image is None:
+        print(f"[docker.release] {_NO_IMAGES}")
+        return
     tag = current_version(c, group=image.group)
     build(c, project=project, tag=tag)
     c.run(f"docker tag {image.image}:{tag} {image.image}:latest", echo=True)

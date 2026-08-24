@@ -91,7 +91,16 @@ def test_resolve_image_raises_when_project_not_found(c, monkeypatch):
         docker.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
 
-def test_resolve_image_raises_when_none_discovered(c, monkeypatch):
+@pytest.mark.parametrize("task_name", ["build", "push", "release"])
+def test_tasks_no_op_cleanly_with_zero_images(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
-    with pytest.raises(ValueError, match="no docker image found"):
-        docker.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    getattr(docker, task_name).body(c)  # pyright: ignore[reportAny]
+    c.run.assert_not_called()
+    assert "nothing to do" in capsys.readouterr().out
+
+
+def test_explicit_project_still_errors_with_zero_images(c, monkeypatch):
+    # Absence no-ops; a --project naming nothing is ambiguity, and stays an error.
+    monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
+    with pytest.raises(ValueError, match="nonexistent"):
+        docker.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
