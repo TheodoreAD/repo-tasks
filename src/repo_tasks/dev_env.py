@@ -2,14 +2,21 @@
 together into the one command to run after cloning. Owns no logic of its own — each concern's
 real implementation lives in its own module (venv.py, direnv.py, agents.py)."""
 
-from invoke import task
+from invoke import Collection, task
 
-from .agents import claude_hook
+from .agents import wire_claude_hook
 from .direnv import allow
 from .venv import create
 
 
-@task(pre=[create, allow, claude_hook])
+@task(pre=[create, allow, wire_claude_hook])
 def setup(c):
     """Run once after cloning: create/refresh .venv, let direnv auto-activate it, and wire
     Claude Code's Bash tool to auto-activate it too. The one command to run before anything else."""
+
+
+# Explicit namespace, not Collection.from_module's auto-scan: the three imports above exist for
+# `setup`'s pre-chain, and the auto-scan republished each of them under a second name
+# (`dev-env.create`, `dev-env.allow`, `dev-env.claude-hook`) alongside their real ones in
+# venv/direnv/agents. This module deliberately owns exactly one task.
+ns = Collection(setup)

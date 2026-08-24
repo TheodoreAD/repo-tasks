@@ -6,7 +6,7 @@ Running tests is not this module's job — that lives in testing.py, under its o
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
 with no prerequisites beyond the dev dependency group."""
 
-from invoke import task
+from invoke import Collection, task
 
 from .testing import unit
 
@@ -92,3 +92,21 @@ def check(c):
 def precommit(c):
     """Fix, then check — the one command to run before considering a change
     done, with no need to know or invoke the individual tools."""
+
+
+# Explicit namespace, not Collection.from_module's auto-scan: `unit` is imported above for
+# `check`'s pre-chain, and the auto-scan adds every Task object it finds in the module — which
+# published testing.py's `unit` a second time as `inv quality.unit`. One task, one name.
+ns = Collection(
+    lint_check,
+    lint_apply,
+    format_check,
+    format_apply,
+    type_check,
+    shell_check,
+    shell_format_check,
+    shell_format_apply,
+    fix,
+    check,
+    precommit,
+)
