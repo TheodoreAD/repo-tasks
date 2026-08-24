@@ -67,6 +67,28 @@ def test_integration_targets_noop_without_a_tier(c, task_name, tmp_cwd, capsys):
     c.run.assert_not_called()
 
 
+@pytest.fixture
+def workflows_dir(tmp_cwd: Path) -> Path:
+    (tmp_cwd / ".github" / "workflows").mkdir(parents=True)
+    return tmp_cwd
+
+
+def test_workflows_runs_act_for_the_push_event_by_default(c, workflows_dir):
+    testing.workflows.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with("act push", echo=True)
+
+
+def test_workflows_passes_job_event_and_dry_run_through(c, workflows_dir):
+    testing.workflows.body(c, job="quality", event="pull_request", dry_run=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with("act pull_request -j quality -n", echo=True)
+
+
+def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
+    testing.workflows.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert "nothing to do" in capsys.readouterr().out
+    c.run.assert_not_called()
+
+
 def test_integration_dir_constant_matches_the_repos_own_layout():
     assert Path("tests/integration") == testing._INTEGRATION_DIR  # pyright: ignore[reportPrivateUsage]
 

@@ -22,6 +22,10 @@ _INTEGRATION_DIR = Path("tests/integration")
 
 _NO_INTEGRATION = f"no {_INTEGRATION_DIR} directory — nothing to do"
 
+_WORKFLOWS_DIR = Path(".github/workflows")
+
+_NO_WORKFLOWS = f"no {_WORKFLOWS_DIR} directory — nothing to do"
+
 # pytest's "no tests were collected" exit code. Treated as success everywhere here, so a repo with
 # no python tests at all (a quality-gates-only repo bootstrapped via configs.ensure-deps, say)
 # still passes `check` — the same safe-to-run-unconditionally contract shell_check has.
@@ -73,6 +77,29 @@ def regression(c):
     """Run everything in the integration tier that isn't smoke (`-m "not smoke"`) — the broad,
     slower half. No-ops cleanly with no integration tier."""
     _integration(c, '-m "not smoke"', "regression")
+
+
+@task(
+    help={
+        "job": "Run only this job id (act -j); default: every job the event triggers",
+        "event": "GitHub event to simulate (default: push)",
+        "dry-run": "Print the plan without running any container (act -n)",
+    }
+)
+def workflows(c, job=None, event="push", dry_run=False):
+    """Run the repo's GitHub Actions workflows locally with act (nektos/act), in Docker containers
+    standing in for the hosted runners. Needs a reachable Docker daemon; no-ops cleanly in a repo
+    with no .github/workflows directory. Not a tier and not in any gate: it re-runs the gate the
+    way CI would, which is only worth doing when a workflow file itself changed."""
+    if not _WORKFLOWS_DIR.exists():
+        print(f"[test.workflows] {_NO_WORKFLOWS}")
+        return
+    cmd = f"act {event}"
+    if job:
+        cmd += f" -j {job}"
+    if dry_run:
+        cmd += " -n"
+    c.run(cmd, echo=True)
 
 
 @task(pre=[unit, integration])
