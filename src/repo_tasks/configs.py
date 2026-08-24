@@ -212,5 +212,12 @@ def ensure_deps(c):
         return
 
     insertion = "".join(f'  "{dep}",\n' for dep in missing)
+    if not match.group("items").strip():
+        # `dev = []` (dprint's own preferred empty shape) or `dev = [\n]`: splicing after the
+        # opening bracket would leave the first entry on the bracket's line, which dprint rejects.
+        # Rebuild the whole array in the one multi-line shape dprint accepts — this runs before
+        # any venv exists, so there is no formatter available afterwards to clean it up.
+        pyproject_path.write_text(text[: match.start()] + f"dev = [\n{insertion}]" + text[match.end() :])
+        return
     insert_at = match.end("items")
     pyproject_path.write_text(text[:insert_at] + insertion + text[insert_at:])

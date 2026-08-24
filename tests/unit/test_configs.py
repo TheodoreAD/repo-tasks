@@ -131,6 +131,19 @@ def test_ensure_deps_adds_missing_and_leaves_present_entries_untouched(tmp_cwd):
             assert f'"{dep}"' in text
 
 
+@pytest.mark.parametrize("empty_array", ["dev = []", "dev = [\n]"])
+def test_ensure_deps_rebuilds_an_empty_dev_array_in_multiline_shape(tmp_cwd, empty_array):
+    # Splicing after the opening bracket of `dev = []` used to leave the first entry on the
+    # bracket's line — a shape dprint rejects, and this runs before any venv (so any dprint)
+    # exists. Both empty spellings must come out as the one multi-line shape dprint accepts.
+    head = '[project]\nname = "x"\nversion = "0.1.0"\n\n[dependency-groups]\n'
+    (tmp_cwd / "pyproject.toml").write_text(f"{head}{empty_array}\n")
+    c = MockContext(run=Result(exited=1))
+    configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    expected = "dev = [\n" + "".join(f'  "{dep}",\n' for dep in configs._quality_deps()) + "]\n"  # pyright: ignore[reportPrivateUsage]
+    assert (tmp_cwd / "pyproject.toml").read_text().endswith(f"[dependency-groups]\n{expected}")
+
+
 def test_ensure_deps_idempotent_on_second_run(tmp_cwd):
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]

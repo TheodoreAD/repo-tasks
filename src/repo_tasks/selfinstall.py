@@ -20,6 +20,9 @@ _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")
 _INSTALL_CMD = "uv tool install --force --with-executables-from invoke"
 
+# Must stay shfmt-clean under the shipped .editorconfig (`space_redirects = true`: `> /dev/null`,
+# never `>/dev/null`) — otherwise `configure` writes it and `quality.fix` rewrites it, forever.
+# tests/integration/test_written_files_integration.py runs shfmt over the rendered script.
 _STAMP_TEMPLATE = """#!/usr/bin/env bash
 set -euo pipefail
 
@@ -29,7 +32,7 @@ set -euo pipefail
 # Re-running this script by habit would silently reinstall the global tool to whatever version
 # *this* repo last pinned, yanking it out from under any other repo just being worked on.
 
-command -v uv >/dev/null 2>&1 || {{
+command -v uv > /dev/null 2>&1 || {{
   echo "uv not found on PATH — install uv first" >&2
   exit 1
 }}
