@@ -1,8 +1,26 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-25
 depends_on: [scaffoldapy]
 ---
+
+## Migrated to
+
+All three steps and the `scaffoldapy` follow-up landed 2026-08-25:
+
+- Step 1 (stamp shfmt-clean) → the rule is a comment on `selfinstall._STAMP_TEMPLATE`, enforced by
+  `tests/integration/test_written_files_integration.py`. The "test or shell out to shfmt" question
+  resolved as the test: `stamp` stays decoupled from any quality tool.
+- Step 2 (`ensure_deps` empty array) → comment and unit test in `configs.py`/`test_configs.py`. The
+  `tomlkit` question resolved as "keep the regex, special-case the blank array": no new dependency,
+  no reliance on a transitive one.
+- Step 3 → `shell_format_check` is in `quality.check`'s `pre=` with the asymmetry recorded in
+  `check`'s docstring; the audit before landing found every consumer's tracked `*.sh` already
+  shfmt-clean (`power-user-linux-setup`, `scaffoldapy`, this repo), so nothing went red.
+- `scaffoldapy` → the template's empty dev group takes the `[]` shape and its workaround comment is
+  gone; its e2e suite passed against a global `repo-tasks` refreshed to carry step 2.
+
+Nothing deliberately left out.
 
 ## Landed 2026-08-25 — steps 1 and 2
 
