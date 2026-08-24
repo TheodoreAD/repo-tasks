@@ -104,6 +104,26 @@ def test_check_gates_on_workflow_check():
     assert "workflow_check" in [t.name for t in quality.check.pre]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
 
+def test_check_gates_on_shell_format_check():
+    # The check-only half of shell formatting, so drift is caught by CI rather than only ever
+    # surfaced by `fix` rewriting the file.
+    assert "shell_format_check" in [t.name for t in quality.check.pre]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
+def test_shell_format_check_runs_shfmt_diff_when_files_found():
+    c = MockContext(
+        run={
+            "git ls-files --cached --others --exclude-standard -- '*.sh'": Result(stdout="./a.sh\n", exited=0),
+            "shfmt -d ./a.sh": Result(exited=0),
+        }
+    )
+    quality.shell_format_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
+        ("shfmt -d ./a.sh",),
+        {"echo": True},
+    )
+
+
 def test_shell_format_check_noop_when_no_sh_files():
     c = MockContext(run=Result(stdout="", exited=0))
     quality.shell_format_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]

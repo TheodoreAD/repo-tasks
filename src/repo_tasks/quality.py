@@ -104,9 +104,12 @@ def fix(c):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(pre=[lint_check, format_check, type_check, shell_check, workflow_check, unit])
+@task(pre=[lint_check, format_check, type_check, shell_check, shell_format_check, workflow_check, unit])
 def check(c):
-    """CI-style gate: every check, no changes written."""
+    """CI-style gate: every check, no changes written. Shell formatting is checked here as well
+    as linted — python has always had both `format_check` and a formatter in the gate, and shell
+    without the check half meant drift was only ever surfaced by `fix` mutating the file (a
+    written script that shfmt disagreed with oscillated in `git status` for weeks, unseen by CI)."""
 
 
 @task(pre=[fix, check])

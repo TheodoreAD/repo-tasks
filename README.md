@@ -1,8 +1,8 @@
 # repo-tasks
 
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
-module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`workflow_check`, and the
-composite `fix`/`check`/`precommit` graph), `test` (one target per tier —
+module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`shell_format`/
+`workflow_check`, and the composite `fix`/`check`/`precommit` graph), `test` (one target per tier —
 `unit`/`integration`/`smoke`/`regression`/`all`, with only the unit tier in the default gate — plus
 `workflows`, which runs the repo's GitHub Actions locally through
 [act](https://github.com/nektos/act)), `venv` (`sync`/`create`/`delete`/`install_wheel` —
