@@ -301,7 +301,25 @@ model and a flag overriding it would make ownership mean two different things.]
 - Spot-check the reverse direction: for each of the four `contributing/` files, confirm a reader
   arriving with that file's question finds the answer without needing a deleted plan.
 
-[UNVERIFIED: the claim that Class C content is fully redundant with code/tests/README rests on
-reading, not on a mechanical check. Before deleting each plan, confirm its Class C claims actually
-appear in `src/repo_tasks/*.py` docstrings or `README.md` — a task flag documented _only_ in a plan
-would be silently lost.]
+[DECISION: the "check Class C claims are really in the code before deleting" caution is satisfied —
+it is now a standing rule in the `plan-docs` skill itself ("Before dropping anything as 'already in
+the code', actually check it is. Verify the claims you migrate, too"), so it applies to every future
+retirement rather than needing to be remembered from this plan. Resolved 2026-08-24; it was the one
+tag blocking this plan's own deletion.]
+
+## Migrated to
+
+- **The `plan-docs` skill** — the whole design. The five-tag vocabulary, the promotion and deletion
+  gates with their anchored greps, "tag at transitions, not while drafting", the retirement
+  procedure and its commit-the-Migrated-to-first rule, and the `contributing/`-by-question layout
+  all live in `power-user-linux-setup/skills/plan-docs/SKILL.md`, which is where they are actually
+  read from. That is the permanent home; this plan was the design pass that produced it.
+- **`contributing/`** — the four files this plan created (`task-module-conventions.md`,
+  `release-flow.md`, `versioning.md`, `test-tiers.md`) exist and have been extended repeatedly
+  since, including today.
+- **`AGENTS.md`** — the `plans/` section pointing at the tag greps.
+- **Not migrated:** the per-plan retirement log (which of the six retired plans gave up what). It is
+  a record of one afternoon's mechanical work, fully visible in git history, and reproducing it here
+  would duplicate what `git log --diff-filter=D -- plans/` already answers.
+- **Not migrated:** the file-size discussion under Context. It argued for a convention that was
+  adopted; the convention is in the skill, and the argument for it does not need re-reading.
