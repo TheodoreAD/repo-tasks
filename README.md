@@ -1,23 +1,25 @@
 # repo-tasks
 
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
-module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`, and the composite
-`fix`/`check`/`precommit` graph), `test` (`unit`/`integration`/`smoke`/`regression`/`all` — one
-target per tier, with only the unit tier in the default gate), `venv`
-(`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle, CI/docker-aware), `deps`
-(`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write `uv.lock`), `dist`
-(`clean`/`build`/`publish`/`versions` — build a wheel, publish it, and query a package index for a
-project's released versions), `docker` (`build`/`push`/`release` — image name/Dockerfile resolved
-from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged from the version-grouping model),
-`helm` (`lint`/`package`/`push` — charts resolved from `repo-tasks.toml`'s `[[helm]]` entries,
-versioned by that same grouping model), `direnv` (`allow` — idempotent shell auto-activation),
-`agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv
-environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above),
-and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs`
-(`pull`/`diff` — materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/
-`.editorconfig` from this package's own canonical copies), and `repo_tasks` (nested as
-`repo-tasks.*` on the CLI — `update`/`status`/`version`/`stamp`, managing this package's own
-daily-driver global install, decoupled from any consumer's dependency groups) — extracted from
+module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`workflow_check`, and the
+composite `fix`/`check`/`precommit` graph), `test` (one target per tier —
+`unit`/`integration`/`smoke`/`regression`/`all`, with only the unit tier in the default gate — plus
+`workflows`, which runs the repo's GitHub Actions locally through
+[act](https://github.com/nektos/act)), `venv` (`sync`/`create`/`delete`/`install_wheel` —
+lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
+the only tasks that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a
+wheel, publish it, and query a package index for a project's released versions), `docker`
+(`build`/`push`/`release` — image name/Dockerfile resolved from `repo-tasks.toml` or a zero-config
+root `Dockerfile`, tagged from the version-grouping model), `helm` (`lint`/`package`/`push` — charts
+resolved from `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model),
+`direnv` (`allow` — idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding
+agent's shell execution to pick up the direnv environment), `dev_env` (`setup` — the one-time
+post-clone bootstrap composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
+[zensical](https://zensical.org/)), `configs` (`pull`/`diff` — materializes
+`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this package's own
+canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
+`update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
+decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo. `inv configure`
@@ -41,8 +43,8 @@ unmodified. `precommit` (`fix` then `check`) is the one command an agent always 
 know or invoke the individual tools. Every task, leaf and composite alike, carries a succinct
 one-line docstring — what `inv -l` shows as help text. Every command echoes (`echo=True`) what it
 ran, except a step that would involve a secret (none here do). `shell_check`/`shell_format_*` no-op
-cleanly on a repo with zero `*.sh` files, so they're safe to run unconditionally — no per-repo
-opt-out needed.
+cleanly on a repo with zero `*.sh` files, and `workflow_check` (actionlint) on one with no
+`.github/workflows`, so they're safe to run unconditionally — no per-repo opt-out needed.
 
 Each tool gets its own dedicated config file (`ruff.toml`, `pyrightconfig.json`, `pytest.ini`) — not
 consolidated into `pyproject.toml` — so a template-driven config update across many repos can

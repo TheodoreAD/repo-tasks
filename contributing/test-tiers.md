@@ -13,6 +13,13 @@ Three tiers, with deliberately different prerequisites. The default one must sta
 versus everything else — and are registered before anything is marked, since `--strict-markers`
 rejects an unregistered marker.
 
+`inv test.workflows` is not a tier: it runs the repo's own GitHub Actions workflows locally through
+[act](https://github.com/nektos/act) (Docker containers standing in for the hosted runners), which
+re-runs the gate the way CI would. That is only worth doing when a workflow file itself changed —
+the static half, `inv quality.workflow-check` (actionlint), is what runs on every commit. act's
+runner-image map lives in `~/.config/act/actrc`, deployed by `power-user-linux-setup`'s
+`[packages.act]`; without it act's first run is an interactive prompt, fatal under a task.
+
 ## Why the split is enforced structurally
 
 `test.unit`/`check`/`precommit` must never start silently requiring Docker. Enforced by
