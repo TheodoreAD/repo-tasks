@@ -153,6 +153,17 @@ also wired into `__init__.py`, so those two forms make the submodule depend on `
 already depends on it — a `reportImportCycles` false positive in basedpyright. Targeting the
 submodule file directly avoids it. See `version.py`/`gitflow.py` for the pattern.
 
+**A module that imports a sibling's task must declare an explicit `ns`.** `Collection.from_module`
+adds every `Task` object it finds in a module's namespace, and an imported one is indistinguishable
+from a defined one — so a task pulled in for a `pre=` chain gets published a second time under the
+importing module's name. `quality.py` importing `testing.unit` produced `inv quality.unit` beside
+`inv test.unit`; `dev_env.py` importing its three prerequisites produced `dev-env.create`,
+`dev-env.allow` and `dev-env.claude-hook` beside the `venv`/`direnv`/`agents` tasks that own them.
+Nothing declared any of the four and no test compared `inv --list` against what the modules define,
+so they went unnoticed long enough for a consumer repo to document one of them as if it were the
+real name. Both modules now end with `ns = Collection(<the tasks they actually own>)`, which
+`from_module` prefers over its auto-scan; do the same in any module whose imports include a task.
+
 ## Echo every command that does something
 
 `c.run(..., echo=True)` for any command with an effect — what ran should be visible and
