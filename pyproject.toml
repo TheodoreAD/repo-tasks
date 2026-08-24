@@ -19,6 +19,8 @@ repo-tasks-quality = [
   "shellcheck-py",
   "shfmt-py",
   "dprint-py",
+  "actionlint-py",
+  "act-bin",
 ]
 # The only group install/sync tasks address, alongside the main dependencies. Everything this repo
 # needs to develop and test itself lives here; there is deliberately no third group to remember,
