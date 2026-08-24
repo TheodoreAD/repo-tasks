@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-08-23
+status: in-progress
+updated: 2026-08-24
 ---
 
 ## Context
@@ -70,15 +70,17 @@ API-token auth (`--token`/`UV_PUBLISH_TOKEN`) stays documented as the fallback f
 publishing manually from their own machine outside CI (e.g. an early manual TestPyPI push before CI
 exists yet) — the token lives in the human's own secret manager, never committed to this repo.
 
-### 4. CI workflow (new — this repo has no GitHub Actions workflows at all yet)
+### 4. CI workflow
 
-`.github/workflows/publish.yml`, triggered on a `vX.Y.Z` tag push (matches `version.py`'s existing
-tag scheme, per [`contributing/versioning.md`](../contributing/versioning.md)), with
-`permissions: id-token: write` (required for OIDC trusted publishing). Steps:
+`.github/workflows/publish.yml` (landed 2026-08-24, alongside the existing `ci.yml` and the docker
+workflows), triggered on a `vX.Y.Z` tag push (matches `version.py`'s existing tag scheme, per
+[`contributing/versioning.md`](../contributing/versioning.md)) or by hand, with
+`permissions: id-token: write` (required for OIDC trusted publishing). Two jobs:
 `inv dist.publish --index testpypi` first (unconditional), then `inv dist.publish` against real PyPI
-gated behind a GitHub Environment protection rule requiring manual approval — _that_ protection rule
-is the actual safety gate ensuring a human confirms before the irreversible real-PyPI step, not
-`--dry-run` (which stays a local-iteration tool, not a CI gate).
+in the `pypi` GitHub Environment, whose required-reviewer protection rule is the actual safety gate
+ensuring a human confirms before the irreversible real-PyPI step — not `--dry-run` (which stays a
+local-iteration tool, not a CI gate). The workflow cannot succeed until §5's manual steps are done:
+neither index has a pending publisher registered, and the `pypi` environment does not exist yet.
 
 ### 5. Rollout order
 
@@ -95,8 +97,8 @@ is the actual safety gate ensuring a human confirms before the irreversible real
 
 ## Files touched
 
-- `pyproject.toml` — `[[tool.uv.index]]` `testpypi` entry.
-- `.github/workflows/publish.yml` (new).
+- (Done) `pyproject.toml` — `[[tool.uv.index]]` `testpypi` entry; `uv lock --check` unaffected.
+- (Done) `.github/workflows/publish.yml`, inert until the manual setup in §5 — see §4.
 - `README.md` — document the eventual `uv add repo-tasks` PyPI install path as an alternative to the
   git-dependency one, once real.
 - (Done) the loose "dogfood publish plan" paragraph that used to be the only record of this lived in

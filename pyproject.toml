@@ -32,6 +32,16 @@ dev = [
   "testcontainers>=4.15.0",
 ]
 
+# Named so `inv dist.publish --index testpypi` / `inv dist.list-versions --index testpypi` can
+# target it. `explicit = true` keeps it out of ordinary dependency resolution entirely — it is
+# only ever consulted by a command naming it. Real PyPI needs no entry: it is uv's implicit
+# default, so the bare `inv dist.publish` already targets it.
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
 [tool.uv.workspace]
 # The one member is this repo's dogfood sample (tests/fixtures/sample-service) — a real second
 # project
