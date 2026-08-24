@@ -11,7 +11,7 @@ holds because pytest instantiates a module-scoped fixture once per *module* — 
 module gets its own container, untouched by these mutations —
 and because every mutation here lands on a disjoint path: the tool install under ~/.local/bin and
 ~/.local/share/uv (a fixture, so nothing depends on test file-order), direnv's allow database under
-~/.local/share/direnv, claude-hook's output in its own scratch project dir plus
+~/.local/share/direnv, wire-claude-hook's output in its own scratch project dir plus
 ~/.cache/claude-code. A future test that can't keep that disjoint-paths property belongs in a
 function-scoped container of its own, not in this module."""
 
@@ -86,7 +86,7 @@ def test_claude_hook_wires_clean_home(installed_repo_tasks: DockerContainer):
     env_file = f"{_HOME}/.cache/claude-code/home-tester-hooked-project-direnv-env"
     exit_code, output = _run(
         installed_repo_tasks,
-        f"mkdir -p {project} && touch {project}/.envrc && cd {_REPO} && inv agents.claude-hook --dir {project}",
+        f"mkdir -p {project} && touch {project}/.envrc && cd {_REPO} && inv agents.wire-claude-hook --dir {project}",
     )
     assert exit_code == 0, output
 

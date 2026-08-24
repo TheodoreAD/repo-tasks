@@ -1,4 +1,4 @@
-"""Tests for repo_tasks.agents: exercises claude_hook's real filesystem/JSON logic against
+"""Tests for repo_tasks.agents: exercises wire_claude_hook's real filesystem/JSON logic against
 tmp_path — the merge-into-existing-settings behavior and idempotency are the parts worth
 covering directly."""
 
@@ -8,15 +8,15 @@ from typing import cast
 from repo_tasks import agents
 
 
-def test_claude_hook_noop_without_envrc(c, tmp_path, capsys):
-    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+def test_wire_claude_hook_noop_without_envrc(c, tmp_path, capsys):
+    agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert not (tmp_path / ".claude").exists()
     assert "nothing to hook" in capsys.readouterr().out
 
 
-def test_claude_hook_writes_new_settings(c, tmp_path):
+def test_wire_claude_hook_writes_new_settings(c, tmp_path):
     (tmp_path / ".envrc").write_text("use flake\n")
-    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
     settings_path = tmp_path / ".claude" / "settings.json"
     settings = cast(
@@ -30,14 +30,14 @@ def test_claude_hook_writes_new_settings(c, tmp_path):
     assert env_file.exists()
 
 
-def test_claude_hook_merges_into_existing_settings(c, tmp_path):
+def test_wire_claude_hook_merges_into_existing_settings(c, tmp_path):
     (tmp_path / ".envrc").write_text("use flake\n")
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     existing = {"hooks": {"PreToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "echo hi"}]}]}}
     (claude_dir / "settings.json").write_text(json.dumps(existing))
 
-    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
     settings = cast(
         agents._ClaudeSettings,  # pyright: ignore[reportPrivateUsage]
@@ -47,12 +47,12 @@ def test_claude_hook_merges_into_existing_settings(c, tmp_path):
     assert matchers == {"Write", "Bash"}
 
 
-def test_claude_hook_already_configured_is_idempotent(c, tmp_path, capsys):
+def test_wire_claude_hook_already_configured_is_idempotent(c, tmp_path, capsys):
     (tmp_path / ".envrc").write_text("use flake\n")
-    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     settings_path = tmp_path / ".claude" / "settings.json"
     before = settings_path.read_text()
 
-    agents.claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert settings_path.read_text() == before
     assert "already configured" in capsys.readouterr().out

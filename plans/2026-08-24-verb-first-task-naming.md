@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-08-24
 depends_on: [power-user-linux-setup]
 ---
@@ -38,23 +38,70 @@ There was never a conflict; the earlier reading of this as an inversion came fro
 to. The only change wanted upstream is listing `test` among rule 3's examples so the next reader
 doesn't repeat the same misreading.]
 
-[NEEDS CLARIFICATION: what else in this package violates the rule? A first read of `inv --list`
-suggests `docs.build`/`docs.serve`/`docs.clean`, `configs.pull`/`configs.diff`,
-`quality.lint-check`/`lint-apply`/`format-check`/`format-apply`, `deps.lock`/`check`/`list`/`tree`/
-`export`, `venv.sync`/`create`/`delete`/`install-wheel`, `dist.build`/`publish`/`versions` and
-`gitflow.*` are already verb-first or covered by the community-convention exception. `dev-env.setup`
-is verb-first. Needs an actual audit against the rule rather than this impression, including whether
-`format-check`/`format-apply` is one of the object-first families the convention explicitly allows.]
+## Audit result (2026-08-24)
 
-[NEEDS CLARIFICATION: `repo-tasks.version`/`.status`/`.update`/`.stamp` — `version` and `status` are
-community conventions and stay, but is `stamp` a verb here (write the stamp file) or a noun? It
-reads as a verb, so probably fine.]
+67 tasks in `inv --list`. Three names violated the rule; two more entries turned out not to be tasks
+at all.
 
-## Recommended direction
+### Renamed
 
-Audit `inv --list` against the rule and land whatever renames it turns up in one pass. The `test`
-namespace question is settled (it conforms), so the only thing this owes the other plan is the audit
-result — that plan cannot reach `landed` until this one resolves.
+| current              | becomes                   | why                                                      |
+| -------------------- | ------------------------- | -------------------------------------------------------- |
+| `agents.claude-hook` | `agents.wire-claude-hook` | noun leaf; its own docstring already starts "Wire"       |
+| `dist.versions`      | `dist.list-versions`      | noun leaf; its own docstring already starts "List"       |
+| `configs-promote`    | `configs.promote`         | top-level noun-verb; pairs with `configs.pull`'s subject |
 
-No deprecation burden either way: this package has no consumers yet, which is why the test-task
-rename this session shipped without a shim.
+`configs.promote` moves into the shipped `configs` collection _locally_ — repo-tasks' own `tasks.py`
+adds it with `ns.collections["configs"].add_task(...)`, so it still never ships in the package (see
+`configs.py`'s note on why consumers must not get it), but it reads as one subject with two opposed
+verbs: `pull` is package → root, `promote` is root → package.
+
+### Two tasks that were never meant to exist
+
+`inv --list` also showed `quality.unit`, `dev-env.allow`, `dev-env.create` and `dev-env.claude-hook`
+— none of them declared. `Collection.from_module` adds _every_ `Task` object it finds in a module's
+namespace, so a task imported for a `pre=` chain gets republished under the importing module's name.
+`quality.py` imports `testing.unit`; `dev_env.py` imports all three of its prerequisites.
+
+[PITFALL: an imported task is a published task. `from .testing import unit` in `quality.py` gave
+`inv quality.unit` as a second name for `inv test.unit`, and `dev_env.py`'s three `pre=` imports
+gave `dev-env.create`/`dev-env.allow`/`dev-env.claude-hook` as second names for tasks owned by
+`venv`/`direnv`/`agents`. Nothing declared them and no test caught them — they only show up by
+reading `inv --list` against the module sources. Fix: give any module that imports a task an
+explicit module-level `ns = Collection(...)`, which `Collection.from_module` prefers over its
+auto-scan.]
+
+This matters beyond tidiness: `power-user-linux-setup` had documented `inv dev-env.claude-hook` in
+`docs/claude-code.md` (including a heading) and `tests/README.md` — a command whose entire existence
+was an accident of an import statement. Those now point at `agents.wire-claude-hook`.
+
+### Conforming — recorded so nobody "fixes" them
+
+- **`gitflow.feature-start`/`feature-finish`/`release-*`/`hotfix-*`/`support-*`** — object-first,
+  and deliberately so: this is git-flow's own CLI naming (`git flow feature start`). Rule 2's
+  community-convention clause covers it, and the pairs are exactly the object-first family rule 1
+  carves out.
+- **`quality.format-check`/`format-apply`/`lint-check`/`lint-apply`/`shell-format-*`** — the
+  object-first family the convention names explicitly.
+- **`quality.shell-check`/`type-check`, `deps.check`, `configs.diff`, `deps.list`,
+  `repo-tasks.status`, `repo-tasks.version`** — rule 2.
+- **`deps.tree`** — a direct `uv tree` wrapper, named after the subcommand it wraps. Rule 2.
+- **`repo-tasks.stamp`** — `stamp` is the verb (write the stamp file), resolving this plan's own
+  earlier question.
+- **`test.*`** — rule 3, as already decided above.
+- Everything else already leads with a verb.
+
+## Landed
+
+All three renames plus the two accidental-task fixes are in, `inv quality.precommit` green (199
+tests). `power-user-linux-setup`'s own plan is unblocked.
+
+[PITFALL: running this repo's gate from another repo's session needs its venv on `PATH`, not just an
+absolute `inv` path. `~/AGENTS.md`'s documented cross-repo form —
+`cd <repo> && <repo>/.venv/bin/inv <task>` — is not sufficient here, because the quality tasks shell
+out to bare `pytest`/`ruff`, which resolve from `PATH` and so came from the _calling_ repo's venv.
+The visible symptom was `ImportError: cannot import name 'helm' from 'repo_tasks'` pointing at
+`power-user-linux-setup/.venv/lib/.../repo_tasks/__init__.py` — the consumer's _installed_ copy, not
+this working tree. `cd <repo> && PATH=<repo>/.venv/bin:$PATH <repo>/.venv/bin/inv <task>` is the
+form that works. Note the failure only appeared once type-check passed and the run got as far as the
+unit tier; two earlier runs stopped at pyright and looked like ordinary type errors.]

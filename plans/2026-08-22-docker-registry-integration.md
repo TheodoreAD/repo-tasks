@@ -12,8 +12,8 @@ where it should. The image to push for real now exists, so nothing blocks that.
 
 Depends on the routine, every-commit-safe registry testing tier (`registry:3` via `testcontainers`),
 per [`contributing/test-tiers.md`](../contributing/test-tiers.md) — that covers what gets exercised
-on every `inv quality.test`. This plan covers the real, external GHCR instead: deliberate,
-occasional, manual/CI-triggered, not run automatically.
+on every `inv test.unit`. This plan covers the real, external GHCR instead: deliberate, occasional,
+manual/CI-triggered, not run automatically.
 
 ## Design
 

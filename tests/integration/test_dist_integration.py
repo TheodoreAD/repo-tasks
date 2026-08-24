@@ -1,6 +1,6 @@
 """Real, non-mocked round trip for repo_tasks.dist against a local devpi-server (see conftest.py's
 devpi_index fixture): build the real wheel, publish it for real, then query it back through both of
-dist.versions' code paths (PEP 691 JSON and the PEP 503 HTML fallback) — unlike tests/test_dist.py's
+dist.list_versions' code paths (PEP 691 JSON and the PEP 503 HTML fallback) — unlike tests/test_dist.py's
 unit tests, nothing here is mocked, so this is what actually caught dist.py's two real parsing gaps
 (see tests/test_dist.py's test_versions_derives_from_json_filename_when_version_key_absent and
 test_versions_html_fallback_strips_sha256_fragment)."""
@@ -29,7 +29,7 @@ def test_versions_json_round_trip(c, devpi_index, capsys):
     _build_and_publish(c, devpi_index)
     capsys.readouterr()  # drain build/publish's own echoed output
 
-    dist.versions.body(c, index=devpi_index.simple_url)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c, index=devpi_index.simple_url)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
     project = discover_python_projects(c)[0]
     assert capsys.readouterr().out.splitlines() == [project.version]

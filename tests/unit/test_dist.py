@@ -87,7 +87,7 @@ def test_versions_prints_from_json_versions_key(c, monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     payload = json.dumps({"versions": ["2.0", "1.0", "1.10"]})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0", "1.10", "2.0"]
 
 
@@ -96,7 +96,7 @@ def test_versions_derives_from_json_files_when_versions_key_absent(c, monkeypatc
     files = [{"filename": "x-1.0.whl", "version": "1.0"}, {"filename": "x-2.0.whl", "version": "2.0"}]
     payload = json.dumps({"files": files})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0", "2.0"]
 
 
@@ -107,7 +107,7 @@ def test_versions_derives_from_json_filename_when_version_key_absent(c, monkeypa
     files = [{"filename": "repo_tasks-1.0.0-py3-none-any.whl"}, {"filename": "repo_tasks-2.0.0.tar.gz"}]
     payload = json.dumps({"files": files})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
 
 
@@ -124,7 +124,7 @@ def test_versions_falls_back_to_html_when_json_unavailable(c, monkeypatch, capsy
         return html.encode()
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
 
 
@@ -143,7 +143,7 @@ def test_versions_html_fallback_strips_sha256_fragment(c, monkeypatch, capsys):
         return html.encode()
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert capsys.readouterr().out.splitlines() == ["1.0.0"]
 
 
@@ -154,7 +154,7 @@ def test_versions_no_releases_found_on_404(c, monkeypatch, capsys):
         raise dist._NotFoundError  # pyright: ignore[reportPrivateUsage]
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert "no releases found" in capsys.readouterr().out
 
 
@@ -167,7 +167,7 @@ def test_versions_no_releases_found_after_html_404(c, monkeypatch, capsys):
         raise dist._NotFoundError  # pyright: ignore[reportPrivateUsage]
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
     assert "no releases found" in capsys.readouterr().out
 
 

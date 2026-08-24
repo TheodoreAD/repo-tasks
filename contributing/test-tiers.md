@@ -83,8 +83,8 @@ by the integration tier the first time it ran against a real index (see below).
 
 `pypiserver` (MIT/zlib, actively maintained) was the more obvious first pick, but its `CHANGES.rst`
 confirms it **has never added PEP 691 JSON Simple API support** — only the PEP 503 HTML index.
-Testing `dist.versions()` against it would exercise only the HTML-fallback branch, leaving the JSON
-branch — the primary path against any modern index, including real PyPI — completely untested.
+Testing `dist.list-versions()` against it would exercise only the HTML-fallback branch, leaving the
+JSON branch — the primary path against any modern index, including real PyPI — completely untested.
 
 `devpi-server` (MIT, actively maintained) serves both: PEP 691 JSON on its own `/simple` endpoint
 and PEP 503 HTML for non-JSON-aware clients. It is the one local server that exercises both of
@@ -227,7 +227,7 @@ filesystem/JSON logic against `tmp_path`:
   project venv existing yet — the daily-driver model, end to end.
 - `direnv.allow` flips a really-blocked `.envrc` to allowed, proven behaviorally via `direnv export`
   failing before and succeeding after.
-- `agents.claude-hook` wires a fresh project on a fresh `$HOME`, including the env cache file
+- `agents.wire-claude-hook` wires a fresh project on a fresh `$HOME`, including the env cache file
   materializing under the real `~/.cache/claude-code`.
 
 ### Fixture scope: one container per module, disjoint mutations within one

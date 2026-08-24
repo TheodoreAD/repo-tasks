@@ -37,7 +37,7 @@ def test_quality_module_is_individually_importable():
 
 def test_ns_nests_dev_env_under_its_own_name():
     # invoke dashifies the collection name for the CLI (`inv dev-env.setup`), same as it does for
-    # underscored task names (`claude_hook` -> `claude-hook`) — the dict key reflects that.
+    # underscored task names (`wire_claude_hook` -> `wire-claude-hook`) — the dict key reflects that.
     dev_env_collection = ns.collections["dev-env"]
     assert dev_env_collection is not None
     assert "setup" in dev_env_collection.task_names
@@ -86,7 +86,7 @@ def test_ns_nests_direnv_under_its_own_name():
 def test_ns_nests_agents_under_its_own_name():
     agents_collection = ns.collections["agents"]
     assert agents_collection is not None
-    assert "claude-hook" in agents_collection.task_names
+    assert "wire-claude-hook" in agents_collection.task_names
 
 
 def test_direnv_module_is_individually_importable():
@@ -94,13 +94,13 @@ def test_direnv_module_is_individually_importable():
 
 
 def test_agents_module_is_individually_importable():
-    assert agents.claude_hook is not None
+    assert agents.wire_claude_hook is not None
 
 
 def test_ns_nests_dist_under_its_own_name():
     dist_collection = ns.collections["dist"]
     assert dist_collection is not None
-    assert {"clean", "build", "publish", "versions"} <= set(dist_collection.task_names)
+    assert {"clean", "build", "publish", "list-versions"} <= set(dist_collection.task_names)
 
 
 def test_dist_module_is_individually_importable():

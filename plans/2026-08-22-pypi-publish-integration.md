@@ -14,7 +14,7 @@ accidental upload). The now-retired `plans/2026-08-19-python-package-tasks.md` s
 
 Depends on the routine, every-commit-safe testing tier — a local `devpi-server`, per
 [`contributing/test-tiers.md`](../contributing/test-tiers.md) — which is what gets exercised on
-every `inv quality.test`. This plan covers the real, external `test.pypi.org`/`pypi.org` instead:
+every `inv test.unit`. This plan covers the real, external `test.pypi.org`/`pypi.org` instead:
 deliberate, occasional, manual/CI-triggered, never run automatically on a schedule or on every
 commit — rate limits, real long-lived-if-mismanaged credentials, and genuinely irreversible side
 effects.
@@ -48,9 +48,9 @@ explicit = true
 
 `explicit = true` keeps this index out of ordinary dependency resolution entirely — it's only ever
 consulted when a command names it directly (`inv dist.publish --index testpypi`,
-`inv dist.versions --index testpypi`, or a scratch project's own
+`inv dist.list-versions --index testpypi`, or a scratch project's own
 `uv add --index testpypi repo-tasks` for verification). Real PyPI needs no named entry at all — it's
-`uv`'s own implicit default index already, so bare `inv dist.publish`/`inv dist.versions` (no
+`uv`'s own implicit default index already, so bare `inv dist.publish`/`inv dist.list-versions` (no
 `--index`) already targets it correctly, exactly as landed.
 
 ### 3. Auth: Trusted Publishing (OIDC) primary, API token as the manual/local fallback
@@ -83,9 +83,9 @@ is the actual safety gate ensuring a human confirms before the irreversible real
 ### 5. Rollout order
 
 1. Reserve/confirm the name on TestPyPI, publish `0.1.0` there for real, confirm
-   `inv dist.versions --index testpypi` sees it and a scratch project's
+   `inv dist.list-versions --index testpypi` sees it and a scratch project's
    `uv add --dev --index testpypi repo-tasks` actually installs it.
-2. Confirm the name is still unclaimed on real PyPI. Note: `inv dist.versions` reporting "no
+2. Confirm the name is still unclaimed on real PyPI. Note: `inv dist.list-versions` reporting "no
    releases found" today only means nothing's been _uploaded_ under that name yet — it doesn't prove
    the name itself isn't already reserved by someone else. Real confirmation only happens at the
    first upload attempt.
@@ -107,8 +107,8 @@ is the actual safety gate ensuring a human confirms before the irreversible real
 - `inv dist.publish --index testpypi --dry-run` locally against the real endpoint — already done in
   a prior session, confirms command construction is correct. [UNVERIFIED: none of §5's rollout has
   actually been done — no TestPyPI publish, no trusted-publisher setup on either index, no CI
-  workflow, and the name's availability on real PyPI is still unconfirmed (`dist.versions` reporting
-  "no releases" proves only that nothing was uploaded under that name, not that it is unclaimed).
-  Each of these is a manual, human-supervised, one-time step — never automated, and never triggered
-  by an agent without explicit confirmation immediately beforehand, given the irreversibility
-  above.]
+  workflow, and the name's availability on real PyPI is still unconfirmed (`dist.list-versions`
+  reporting "no releases" proves only that nothing was uploaded under that name, not that it is
+  unclaimed). Each of these is a manual, human-supervised, one-time step — never automated, and
+  never triggered by an agent without explicit confirmation immediately beforehand, given the
+  irreversibility above.]

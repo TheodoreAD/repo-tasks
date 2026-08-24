@@ -3,8 +3,9 @@ every consumer repo uses (see README.md)."""
 
 import difflib
 from pathlib import Path
+from typing import cast
 
-from invoke import task
+from invoke import Collection, task
 
 from repo_tasks import ns
 from repo_tasks.configs import _CONFIG_FILES
@@ -13,7 +14,7 @@ __all__ = ["ns"]
 
 
 @task(help={"apply": "Write root -> package (default: print-only diff)"})
-def configs_promote(c, apply=False):
+def promote(c, apply=False):
     """Diff this repo's own root config files against src/repo_tasks/configs/* (the shipped
     baseline) — print-only by default; --apply writes root -> package once a root-level tuning
     is ready to ship to every consumer. The other direction from `configs.pull`: this repo is the
@@ -29,9 +30,9 @@ def configs_promote(c, apply=False):
         changed = True
         if apply:
             package_path.write_text(root_text)
-            print(f"[configs-promote] {name}: root -> package")
+            print(f"[configs.promote] {name}: root -> package")
             continue
-        print(f"[configs-promote] {name} differs:")
+        print(f"[configs.promote] {name} differs:")
         lines = difflib.unified_diff(
             package_text.splitlines(keepends=True),
             root_text.splitlines(keepends=True),
@@ -40,10 +41,14 @@ def configs_promote(c, apply=False):
         )
         print("".join(lines))
     if not changed:
-        print("[configs-promote] root already matches package")
+        print("[configs.promote] root already matches package")
 
 
-# invoke's @task decorator has no type stub, so pyright falls back to the plain undecorated
-# function signature for anything decorated with it — add_task's `task: Task` parameter doesn't
-# tolerate that the way ns's own Collection(...) constructor call does (see __init__.py).
-ns.add_task(configs_promote)  # pyright: ignore[reportArgumentType]
+# Added into the shipped `configs` collection rather than as a top-level task: `promote` is the
+# other direction of `configs.pull` and reads as one subject with two verbs. It stays out of the
+# package itself (see configs.py) — this is repo-tasks' own tasks.py, so the task exists only here.
+#
+# Two separate pyright accommodations, both pre-existing in kind: invoke types
+# Collection.collections loosely (hence the cast), and its @task decorator has no type stub, so
+# pyright sees the plain undecorated function where add_task wants a Task (hence the ignore).
+cast(Collection, ns.collections["configs"]).add_task(promote, name="promote")  # pyright: ignore[reportArgumentType]

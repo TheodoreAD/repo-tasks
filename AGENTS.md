@@ -11,7 +11,7 @@ repeat them here, only what's specific to this repo.
 
 - `inv quality.precommit` — fix then check; the one command to run before considering a change done.
 - `inv quality.check` — CI-style gate alone, no mutations.
-- `inv quality.type-check` / `inv quality.test` / etc. — individual tasks, see `inv -l`.
+- `inv quality.type-check` / `inv test.unit` / etc. — individual tasks, see `inv -l`.
 
 ## Where things are written down
 

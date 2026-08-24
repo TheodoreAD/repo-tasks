@@ -105,10 +105,10 @@ Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_ch
 (no allowances), so type-check config must exist everywhere `check` runs.
 
 `inv dev-env.setup` is the one command to run once after cloning: `venv.create` (syncs `.venv` from
-`uv.lock`) + `direnv.allow` + `agents.claude-hook` (wiring Claude Code's Bash tool to auto-activate
-the venv too, no-ops if the repo has no `.envrc`) — `dev_env.py` itself owns no logic, it's pure
-orchestration of those three modules. `inv docs.build`/`docs.serve` assume `zensical` is installed —
-add it as a project `docs` dependency group, it isn't a dependency of this package.
+`uv.lock`) + `direnv.allow` + `agents.wire-claude-hook` (wiring Claude Code's Bash tool to
+auto-activate the venv too, no-ops if the repo has no `.envrc`) — `dev_env.py` itself owns no logic,
+it's pure orchestration of those three modules. `inv docs.build`/`docs.serve` assume `zensical` is
+installed — add it as a project `docs` dependency group, it isn't a dependency of this package.
 
 ### venv/deps: lock-respecting, CI/docker-aware
 
@@ -138,9 +138,9 @@ recipe written out in full, against a real service.
 `inv dist.build` builds a wheel (`--sdist` for the sdist+wheel pair PyPI conventionally expects)
 into a freshly-cleaned `dist/` — a stale wheel from a previous version can never survive into a
 fresh build. `inv dist.publish` always builds fresh first (`pre=[build]`) and runs `uv publish`
-(`--index`/`--dry-run` passed through). `inv dist.versions` lists a project's published versions by
-querying a package index directly — PEP 691 JSON Simple API, falling back to the PEP 503 HTML file
-listing if the index doesn't serve the JSON media type — since `uv` itself has no
+(`--index`/`--dry-run` passed through). `inv dist.list-versions` lists a project's published
+versions by querying a package index directly — PEP 691 JSON Simple API, falling back to the PEP 503
+HTML file listing if the index doesn't serve the JSON media type — since `uv` itself has no
 list-remote-versions subcommand. `dist.py` never touches `.venv` or installs anything editable; it's
 orthogonal to `venv.py`/`deps.py` by construction. All three take `--project` to name a workspace
 member; omitted, they act on the repo's own root project.

@@ -1,6 +1,6 @@
 """AI coding agent facility: wiring an agent tool's shell execution to pick up this repo's
 direnv-managed environment. Currently just Claude Code; a second agent tool's own hook would land
-here too, alongside claude_hook, rather than displacing it."""
+here too, alongside wire_claude_hook, rather than displacing it."""
 
 import json
 from pathlib import Path
@@ -40,7 +40,7 @@ def _direnv_hook_command(env_file: Path) -> str:
 
 
 @task(help={"dir": "Project directory to wire the hook for (default: current directory)"})
-def claude_hook(c, dir="."):  # noqa: A002
+def wire_claude_hook(c, dir="."):  # noqa: A002
     """Wire Claude Code's Bash tool to auto-activate this project's direnv environment on every
     call, by writing <dir>/.claude/settings.json with env.CLAUDE_ENV_FILE and a PreToolUse/Bash
     hook that refreshes it from `direnv export zsh` before each command.
@@ -60,7 +60,7 @@ def claude_hook(c, dir="."):  # noqa: A002
     hook_entry: _ClaudeHookEntry = {"type": "command", "command": _direnv_hook_command(env_file)}
 
     if not envrc.exists():
-        print(f"[agents.claude-hook] {envrc} not found — nothing to hook, skipping")
+        print(f"[agents.wire-claude-hook] {envrc} not found — nothing to hook, skipping")
         return
 
     settings: _ClaudeSettings = (
@@ -70,7 +70,7 @@ def claude_hook(c, dir="."):  # noqa: A002
     bash_group = next((g for g in settings.get("hooks", {}).get("PreToolUse", []) if g.get("matcher") == "Bash"), None)
     hook_ok = bash_group is not None and hook_entry in bash_group.get("hooks", [])
     if env_ok and hook_ok:
-        print(f"[agents.claude-hook] {settings_path} already configured")
+        print(f"[agents.wire-claude-hook] {settings_path} already configured")
         return
 
     settings.setdefault("env", {})["CLAUDE_ENV_FILE"] = str(env_file)
@@ -87,4 +87,4 @@ def claude_hook(c, dir="."):  # noqa: A002
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")
     _CLAUDE_ENV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     env_file.touch(exist_ok=True)
-    print(f"[agents.claude-hook] {settings_path}: direnv hook configured ({env_file})")
+    print(f"[agents.wire-claude-hook] {settings_path}: direnv hook configured ({env_file})")

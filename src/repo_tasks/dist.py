@@ -159,7 +159,7 @@ def publish(c, project=None, index=None, dry_run=False):
         "index": "Package index base URL to query (default: PyPI)",
     }
 )
-def versions(c, project=None, index=None):
+def list_versions(c, project=None, index=None):
     """List a project's published versions from a package index — PEP 691 JSON Simple API,
     falling back to the PEP 503 HTML file listing if the index doesn't serve the JSON media
     type. Works unmodified against PyPI, TestPyPI, or any private PEP 503/691-compliant index."""
@@ -177,7 +177,7 @@ def versions(c, project=None, index=None):
         found = []
 
     if not found:
-        print(f"[dist.versions] no releases found for {name!r} at {base}")
+        print(f"[dist.list_versions] no releases found for {name!r} at {base}")
         return
     for v in sorted(found, key=_version_sort_key):
         print(v)
