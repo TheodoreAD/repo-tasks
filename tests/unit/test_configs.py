@@ -3,32 +3,34 @@ installed-package source, exercised via the default no-source-override path) plu
 --source local: override, which is also what the two-primitive authoring workflow
 (configs.pull --source local:<path>, then configs-promote) actually relies on."""
 
+import re
+
 import pytest
 from invoke import Exit, MockContext, Result
 
 from repo_tasks import configs
 
 
-def test_pull_materializes_every_file_from_installed_package(c, tmp_cwd):
+def test_pull_materializes_every_file_verbatim_from_installed_package(c, tmp_cwd):
     configs.pull.body(c, source=None)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    # pyrightconfig.json's `include` gets filtered to what actually exists at the pull target
-    # (see test_pull_filters_pyright_include_to_existing_paths below) — every other file is a
-    # verbatim copy of the canonical source.
-    for name in [n for n in configs._CONFIG_FILES if n != "pyrightconfig.json"]:  # pyright: ignore[reportPrivateUsage]
+    # Verbatim, pyrightconfig.json included: its `include` used to be filtered per consumer to
+    # the entries that existed (a literal path that doesn't exist is a hard basedpyright error),
+    # which made root and package diverge and let `configs.promote` ship the narrowed list back
+    # as canonical. The shipped globs tolerate absence, so nothing is resolved any more.
+    for name in configs._CONFIG_FILES:  # pyright: ignore[reportPrivateUsage]
         assert (tmp_cwd / name).read_text() == (configs._source_dir(None) / name).read_text()  # pyright: ignore[reportPrivateUsage]
 
 
-def test_pull_filters_pyright_include_to_existing_paths(c, tmp_cwd):
-    # basedpyright hard-errors (exit 3) on an `include` entry that isn't a real path, unlike
-    # `exclude`, which tolerates missing entries fine — this is the fix for that, confirmed live
-    # against the actual installed basedpyright, not just this filtering logic in isolation.
-    (tmp_cwd / "tests").mkdir()
-    (tmp_cwd / "tests" / "test_something.py").write_text("")
-    configs.pull.body(c, source=None)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    pyright_text = (tmp_cwd / "pyrightconfig.json").read_text()
-    assert '"include": ["tests"]' in pyright_text
-    for missing in ("src", "tasks", "tasks.py"):
-        assert f'"{missing}"' not in pyright_text
+def test_shipped_pyright_include_entries_tolerate_absence():
+    # Every entry must be a glob in its last segment — `tests*`, not `tests` or `tests/**`: only
+    # that shape exits 0 when nothing matches (measured against basedpyright 1.39.10), and it is
+    # the entire reason pull can be verbatim. A literal entry would exit 3 in any consumer that
+    # lacks the path.
+    text = (configs._source_dir(None) / "pyrightconfig.json").read_text()  # pyright: ignore[reportPrivateUsage]
+    entries: list[str] = re.findall(r'"([^"]+)"', re.search(r'"include":\s*\[([^\]]*)\]', text).group(1))  # pyright: ignore[reportOptionalMemberAccess]
+    assert entries
+    for entry in entries:
+        assert entry.endswith("*") and "/" not in entry, entry
 
 
 def test_pull_overwrites_existing_file(c, tmp_cwd):
