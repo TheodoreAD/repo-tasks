@@ -1,7 +1,28 @@
 ---
-status: idea
-updated: 2026-08-23
+status: landed
+updated: 2026-08-25
 ---
+
+## Migrated to
+
+Landed 2026-08-25 as option (a): `_bumpversion_config` adds a `uv.lock` file entry, anchored on the
+`name = "<project>"` line, plus `pre_commit_hooks = ["uv lock --check"]`, so the lock moves inside
+bump-my-version's own commit and uv verifies it before the commit lands. Every open question above
+resolved on the way:
+
+- commit atomicity → (a), the anchored pattern exists and bump-my-version takes it as a multi-line
+  basic string; the safety check passed (measured: `uv lock --check` and `uv sync --locked` both
+  accept the rewritten lock).
+- call sites → `_bump`, so `version.bump` standalone and both `gitflow.py` starts are covered.
+- single-writer → `version.py` writes the version field, which is its row of the table; it never
+  runs `uv lock`. The rule text now says so.
+- group with no python member → `_resolve_project` already errors; a repo with no `uv.lock` gets no
+  entry and no hook; a workspace member's version is rewritten in the root lock.
+
+Decision and pitfalls → `contributing/versioning.md` ("`uv.lock` moves with the bump") and
+`contributing/task-module-conventions.md` (single-writer rules). The regression the plan asked for →
+`tests/integration/test_version_integration.py`, single project and workspace member, against a real
+`uv lock`. Nothing deliberately left out.
 
 ## Context
 
