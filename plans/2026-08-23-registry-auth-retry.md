@@ -21,11 +21,13 @@ login` being already done is the caller's responsibility, matching `quality.py`'
 no-secrets-touched stance.
 
 **The premise has weakened since it was written, and that is the first thing to settle.**
-`plans/2026-08-22-docker-registry-integration.md` §3 established that the CI path needs none of
-this: `docker/login-action` + `GITHUB_TOKEN` authenticates once up front and `GITHUB_TOKEN` doesn't
-expire mid-job. That plan says so directly — the retry logic "remains meaningful only for a human's
-local/interactive session hitting a stale credential." So the remaining audience is one developer on
-one machine whose SSO session lapsed, which may not justify a shared helper module at all.
+[`contributing/release-workflows.md`](../contributing/release-workflows.md) (from the now-retired
+`plans/2026-08-22-docker-registry-integration.md`) established that the CI path needs none of this:
+`docker/login-action` + `GITHUB_TOKEN` authenticates once up front and `GITHUB_TOKEN` doesn't expire
+mid-job — verified by a real `inv docker.release` run against GHCR on 2026-08-24. The retry logic
+remains meaningful only for a human's local/interactive session hitting a stale credential. So the
+remaining audience is one developer on one machine whose SSO session lapsed, which may not justify a
+shared helper module at all.
 
 ## Open questions
 

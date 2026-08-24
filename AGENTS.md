@@ -24,6 +24,8 @@ repeat them here, only what's specific to this repo.
     states.
   - [`versioning.md`](contributing/versioning.md) — semver, grouping, and the python/docker/helm
     format split.
+  - [`release-workflows.md`](contributing/release-workflows.md) — how images reach GHCR, why the
+    release workflows are dispatched by hand, and how to check a workflow locally first.
   - [`test-tiers.md`](contributing/test-tiers.md) — the unit / integration / clean-OS split and its
     fixtures.
 - `plans/` — work not yet done. Anything unfinished belongs here, never as prose in the files above.

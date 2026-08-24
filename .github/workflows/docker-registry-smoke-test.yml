@@ -1,9 +1,9 @@
 name: docker-registry-smoke-test
 
 # One-off, manually-triggered proof that GITHUB_TOKEN + docker/login-action can authenticate
-# against ghcr.io and push, before this repo has any real Dockerfile to build for real (see
-# plans/2026-08-22-docker-registry-integration.md Design §6, verification step 1). Not wired into
-# the regular CI trigger -- deliberate/occasional, same as the real docker-release workflow will be.
+# against ghcr.io and push, from before this repo had any real Dockerfile to build. Superseded for
+# everything but a quick auth check by docker-release.yml (see contributing/release-workflows.md).
+# Not wired into the regular CI trigger -- deliberate/occasional, same as docker-release.
 on:
   workflow_dispatch:
 

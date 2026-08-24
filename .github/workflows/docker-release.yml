@@ -1,12 +1,12 @@
 name: docker-release
 
-# Build and push the dogfood sample's image to GHCR with the repo's own `inv docker.release` —
-# the real, external half of plans/2026-08-22-docker-registry-integration.md. Manually triggered
-# only, like the auth smoke test before it: a registry push is deliberate and occasional, never a
-# side effect of every commit (the every-commit tier runs against a throwaway local registry, see
-# contributing/test-tiers.md). A tag-push trigger waits on the per-group tag scheme
-# (`<group>-vX.Y.Z`, contributing/versioning.md) actually existing in version.py — until then a
-# `v*` tag names the root project's version, not the sample's.
+# Build and push the dogfood sample's image to GHCR with the repo's own `inv docker.release` — see
+# contributing/release-workflows.md for the registry choice, the auth, and why this is manually
+# triggered only: a registry push is deliberate and occasional, never a side effect of every commit
+# (the every-commit tier runs against a throwaway local registry, contributing/test-tiers.md). A
+# tag-push trigger waits on the per-group tag scheme (`<group>-vX.Y.Z`, contributing/versioning.md)
+# actually existing in version.py — until then a `v*` tag names the root project's version, not the
+# sample's.
 on:
   workflow_dispatch:
     inputs:

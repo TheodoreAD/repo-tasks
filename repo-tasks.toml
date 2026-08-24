@@ -13,8 +13,7 @@ name = "sample-service"
 path = "."
 dockerfile = "tests/fixtures/sample-service/Dockerfile"
 # Lowercase owner segment, deliberately: GHCR rejects any uppercase character in an image ref, and
-# this account's GitHub username is mixed-case (TheodoreAD). Confirmed by the registry smoke test
-# in plans/2026-08-22-docker-registry-integration.md.
+# this account's GitHub username is mixed-case (TheodoreAD). See contributing/release-workflows.md.
 image = "ghcr.io/theodoread/sample-service"
 group = "sample-service"
 
