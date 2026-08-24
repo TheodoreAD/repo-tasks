@@ -5,6 +5,8 @@ import re
 
 from invoke import Exit, task
 
+from .gitflow import _next_steps
+
 # The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
 # records the member's `source = { editable = "<old path>" }` and uv reads that stale entry before
 # noticing the manifest changed, so both `uv lock` and `uv lock --check` fail with this message
@@ -34,9 +36,9 @@ def lock(c, upgrade=False, package=None):
     if match:
         print(
             f"\n[deps.lock] workspace member {match.group('name')!r} looks moved — uv.lock still records its old "
-            "path, and a plain `uv lock` never re-resolves that.\nNext steps:\n"
-            f"  - inv deps.lock --package {match.group('name')}"
+            "path, and a plain `uv lock` never re-resolves that."
         )
+        _next_steps(f"inv deps.lock --package {match.group('name')}")
     raise Exit(code=result.exited)
 
 
