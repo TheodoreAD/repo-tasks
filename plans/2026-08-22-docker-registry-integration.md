@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-24
 ---
 
@@ -92,10 +92,18 @@ matches its deliberate/occasional posture anyway.]
    `ghcr.io` and pushes `ghcr.io/theodoread/repo-tasks-scratch:smoke-test`
    (`sha256:c766679d161d4ffe3dc4503b4c9f90b978f0d363fcedb02d1ae0cd271e645c0a`) — run
    https://github.com/TheodoreAD/repo-tasks/actions/runs/32631113222.
-2. Real `inv docker.release` exercised end-to-end in CI against GHCR. Unblocked since 2026-08-23:
-   the sample service's image and chart exist and already round-trip against a local registry.
-3. Confirm the pushed package appears under the GitHub org/user's Packages tab with the expected
-   name and visibility.
+2. **Done (2026-08-24):** real `inv docker.release --project sample-service` end-to-end in CI
+   against GHCR — run https://github.com/TheodoreAD/repo-tasks/actions/runs/32762887843, pushing
+   `ghcr.io/theodoread/sample-service:0.1.0` and `:latest`
+   (`sha256:e76b928d20cd3ae32bab373c23568cc2162fe96db3ccbefa21ade25fc6f962e0`).
+3. **Done (2026-08-24):** the package exists under the expected name; `docker manifest inspect`
+   resolves it from a logged-in client. Visibility is **private**: an anonymous
+   `GET https://ghcr.io/v2/theodoread/sample-service/tags/list` answers 401.
+
+[PITFALL: a new GHCR package is private by default even when the publishing repo is public — §1's
+"same visibility as the owning repo" was wrong. Nothing in the workflow or `GITHUB_TOKEN` controls
+this; making it public is a one-time manual flip in the package's settings on github.com, and only
+matters once something outside the account needs to pull it.]
 
 ## Files touched
 
@@ -110,10 +118,19 @@ matches its deliberate/occasional posture anyway.]
 
 ## Verification
 
-- Auth-only smoke test (login + push a throwaway scratch image) — done 2026-08-23, see §6.1.
+All three steps of §6 done — the auth smoke test on 2026-08-23, the real release and the package
+check on 2026-08-24. Nothing left unverified.
 
-[UNVERIFIED: the full `docker.release` round trip against GHCR has never run — only the auth-only
-smoke test has, and the sample service's round trip runs against a _local_ registry. What is left is
-running it against GHCR and confirming the pushed package appears under the account's Packages tab
-with the expected name and visibility. No longer blocked on anything external. This plan cannot
-reach `landed` until then.]
+## Migrated to
+
+- [`contributing/release-workflows.md`](../contributing/release-workflows.md) (new): the GHCR-over-
+  Docker-Hub decision and its `GITHUB_TOKEN` auth (§1, §3), the lowercase-owner pitfall (§1), the
+  private-by-default pitfall (§6), the no-tag-trigger decision (§5), and how to check a workflow
+  locally before dispatching it.
+- `.github/workflows/docker-release.yml`'s own header carries the dispatch-only posture, and
+  `repo-tasks.toml`'s `[[docker]]` comment the lowercase rule where it bites — both already there.
+- Not migrated: §2 ("`docker.py` needs zero changes") is a statement about code that is true by
+  reading `docker.py`; §4's local `docker login` recipe is GHCR's own documentation; §6's run URLs
+  and digests are a verification log.
+- `plans/2026-08-23-registry-auth-retry.md` still owns the interactive-session auth-retry idea this
+  plan deferred to it; its citation of this file's §3 is rewritten to point at `contributing/`.
