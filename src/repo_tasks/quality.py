@@ -11,9 +11,21 @@ from invoke import Collection, task
 from .testing import unit
 
 
-def _sh_files(c):
-    result = c.run("git ls-files --cached --others --exclude-standard -- '*.sh'", hide=True, warn=True)
+def _tracked_files(c, *patterns: str):
+    """Files matching the git pathspecs — tracked or untracked-but-not-ignored, so a script written
+    a moment ago is checked before it is ever `git add`ed. An empty list on any git failure (not a
+    repo at all), which every caller treats as "nothing to do"."""
+    specs = " ".join(f"'{p}'" for p in patterns)
+    result = c.run(f"git ls-files --cached --others --exclude-standard -- {specs}", hide=True, warn=True)
     return result.stdout.split() if result.ok else []
+
+
+def _sh_files(c):
+    return _tracked_files(c, "*.sh")
+
+
+def _workflow_files(c):
+    return _tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
 
 
 @task
@@ -78,12 +90,21 @@ def shell_format_apply(c):
         c.run(f"shfmt -w {' '.join(files)}", echo=True)
 
 
+@task
+def workflow_check(c):
+    """Run actionlint against every GitHub Actions workflow file (.github/workflows/*.yml). No-ops
+    cleanly on a repo with no workflows, so it is safe in every consumer's `check`."""
+    files = _workflow_files(c)
+    if files:
+        c.run(f"actionlint {' '.join(files)}", echo=True)
+
+
 @task(pre=[lint_apply, format_apply, shell_format_apply])
 def fix(c):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(pre=[lint_check, format_check, type_check, shell_check, unit])
+@task(pre=[lint_check, format_check, type_check, shell_check, workflow_check, unit])
 def check(c):
     """CI-style gate: every check, no changes written."""
 
@@ -106,6 +127,7 @@ ns = Collection(
     shell_check,
     shell_format_check,
     shell_format_apply,
+    workflow_check,
     fix,
     check,
     precommit,

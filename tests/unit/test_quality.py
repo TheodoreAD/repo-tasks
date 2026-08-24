@@ -7,6 +7,10 @@ from invoke import MockContext, Result
 
 from repo_tasks import quality
 
+_WORKFLOW_LISTING = (
+    "git ls-files --cached --others --exclude-standard -- '.github/workflows/*.yml' '.github/workflows/*.yaml'"
+)
+
 
 def test_lint_check(c):
     quality.lint_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess] — invoke's untyped Task.body
@@ -74,6 +78,30 @@ def test_shell_check_runs_shellcheck_when_files_found():
         ("shellcheck ./a.sh",),
         {"echo": True},
     )
+
+
+def test_workflow_check_noop_when_no_workflow_files():
+    c = MockContext(run=Result(stdout="", exited=0))
+    quality.workflow_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    c.run.assert_called_once_with(_WORKFLOW_LISTING, hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_workflow_check_runs_actionlint_when_files_found():
+    c = MockContext(
+        run={
+            _WORKFLOW_LISTING: Result(stdout=".github/workflows/ci.yml\n", exited=0),
+            "actionlint .github/workflows/ci.yml": Result(exited=0),
+        }
+    )
+    quality.workflow_check.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
+        ("actionlint .github/workflows/ci.yml",),
+        {"echo": True},
+    )
+
+
+def test_check_gates_on_workflow_check():
+    assert "workflow_check" in [t.name for t in quality.check.pre]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
 
 def test_shell_format_check_noop_when_no_sh_files():
