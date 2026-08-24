@@ -8,7 +8,11 @@ from typing import TypedDict, cast
 
 from invoke import task
 
-_CLAUDE_ENV_CACHE_DIR = Path.home() / ".cache" / "claude-code"
+
+def _claude_env_cache_dir() -> Path:
+    """Resolved at call time, not import time, so an overridden HOME (the unit tier's
+    `isolated_home` fixture) actually lands — a module-level constant would freeze the real home."""
+    return Path.home() / ".cache" / "claude-code"
 
 
 class _ClaudeHookEntry(TypedDict):
@@ -30,7 +34,7 @@ def _claude_env_file_path(base: Path) -> Path:
     """Deterministic per-project CLAUDE_ENV_FILE path — sanitized-abs-path scheme, same one
     Claude Code's own auto-memory directory uses, so two repos sharing a basename never collide."""
     slug = str(base).replace("/", "-").lstrip("-")
-    return _CLAUDE_ENV_CACHE_DIR / f"{slug}-direnv-env"
+    return _claude_env_cache_dir() / f"{slug}-direnv-env"
 
 
 def _direnv_hook_command(env_file: Path) -> str:
@@ -85,6 +89,6 @@ def wire_claude_hook(c, dir="."):  # noqa: A002
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")
-    _CLAUDE_ENV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.touch(exist_ok=True)
     print(f"[agents.wire-claude-hook] {settings_path}: direnv hook configured ({env_file})")

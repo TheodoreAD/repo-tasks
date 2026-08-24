@@ -12,6 +12,20 @@ import pytest
 from invoke import MockContext
 
 
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A fake HOME for every unit test, so nothing in this tier can touch the developer's real one.
+
+    `agents.wire_claude_hook` writes an env-cache file under `Path.home()/.cache/claude-code`; run
+    against the real home it left one stale file per test per run (~400 measured). Autouse rather
+    than opt-in for the same reason `tmp_cwd` exists: the tier's "nothing outside tmp_path"
+    contract should be impossible to forget, not something each test remembers. The tier never
+    shells out, so patching `os.environ` is enough — no library holds its own env snapshot here."""
+    home = tmp_path_factory.mktemp("home")
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
 @pytest.fixture
 def c() -> MockContext:
     """A MockContext whose `run` accepts any command and reports success, so a task under test

@@ -14,7 +14,7 @@ def test_wire_claude_hook_noop_without_envrc(c, tmp_path, capsys):
     assert "nothing to hook" in capsys.readouterr().out
 
 
-def test_wire_claude_hook_writes_new_settings(c, tmp_path):
+def test_wire_claude_hook_writes_new_settings(c, tmp_path, isolated_home):
     (tmp_path / ".envrc").write_text("use flake\n")
     agents.wire_claude_hook.body(c, dir=str(tmp_path))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
 
@@ -28,6 +28,7 @@ def test_wire_claude_hook_writes_new_settings(c, tmp_path):
     bash_group = next(g for g in settings.get("hooks", {}).get("PreToolUse", []) if g["matcher"] == "Bash")
     assert bash_group["hooks"][0]["command"] == agents._direnv_hook_command(env_file)  # pyright: ignore[reportPrivateUsage]
     assert env_file.exists()
+    assert env_file.is_relative_to(isolated_home), "env-cache file must land under the fake HOME, never the real one"
 
 
 def test_wire_claude_hook_merges_into_existing_settings(c, tmp_path):
