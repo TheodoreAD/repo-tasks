@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-23
+status: in-progress
+updated: 2026-08-25
 ---
 
 ## Context
@@ -66,14 +66,21 @@ The clean-OS mutating tests landed (`tests/integration/test_clean_os_user_effect
 section gained its "What the tier covers" and "Fixture scope" subsections in the same pass — this
 file's test-tiers gap is closed.
 
-### `contributing/task-module-conventions.md` — assembled, needs a coherence pass
+### `contributing/task-module-conventions.md` — coherence pass done 2026-08-25
 
-[NEEDS CLARIFICATION: this file was assembled from conventions scattered across five different
-plans, none of which stated them as a set. It reads consistently, but nothing has verified that the
-rules are actually _complete_ or that the code follows all of them uniformly. Worth one deliberate
-pass: grep each rule against every module and confirm it holds — e.g. does every task really pass
-`echo=True`, does every discovery path really raise rather than guess on an unknown `--project`? Any
-rule the code doesn't actually follow is either a bug to fix or a rule to drop.]
+Every rule grepped against every module. Held as written: single-writer, echo on every action, flag
+naming, `--project` actually selecting, release actions out of the quality composite, sibling
+imports, config-per-file. Three did not, all fixed:
+
+- "Freshness via `pre=`" claimed `dist.publish` has `pre=[build]`; it calls `build` from its body,
+  and the file's own PITFALL says why. Doc corrected.
+- "No-op cleanly" — `dist.*` tracebacked (`IndexError`/`FileNotFoundError`) in a repo with no python
+  project, and a Dockerfile-only repo with no `pyproject.toml` (which "smart defaults" promises
+  works) died in `current_version`. `discover_python_projects` now returns `[]` for no
+  `pyproject.toml`, `dist.*` no-op, and `version.py` raises a clear `ValueError` — recorded in the
+  rule as its one deliberate exception.
+- "Say what to run next" — `deps.lock`'s new hint hand-rolled the format; it now imports
+  `_next_steps`, and the rule names that as the intended cross-module use.
 
 ### Cross-cutting
 

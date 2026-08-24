@@ -9,10 +9,10 @@ depends_on: [scaffoldapy]
 - `_STAMP_TEMPLATE` writes `> /dev/null`; `ensure_deps` rebuilds a blank `dev = []`/`dev = [\n]`
   array in the one multi-line shape dprint accepts (unit test pins the exact output).
 - `tests/integration/test_written_files_integration.py` runs the real `shfmt -d` and `dprint check`
-  over both written files, under the shipped `.editorconfig`/`dprint.json`. Integration tier
-  because the unit tier's contract forbids subprocesses — the verdict has to be the formatter's own.
-  Resolves the first open question below: a test over the rendered output, not `stamp` shelling
-  out to `shfmt` (which would couple `selfinstall` to a quality tool it doesn't otherwise need).
+  over both written files, under the shipped `.editorconfig`/`dprint.json`. Integration tier because
+  the unit tier's contract forbids subprocesses — the verdict has to be the formatter's own.
+  Resolves the first open question below: a test over the rendered output, not `stamp` shelling out
+  to `shfmt` (which would couple `selfinstall` to a quality tool it doesn't otherwise need).
 
 Still open: step 3 and the `scaffoldapy` follow-up.
 
