@@ -87,13 +87,17 @@ def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
     return sorted({v for fn in filenames if (v := _version_from_filename(fn, normalized_name)) is not None})
 
 
+_NO_PROJECTS = "no python project (no pyproject.toml [project] table and no workspace members) — nothing to do"
+
+
 def _resolve_project(c, project):
     """The python project to act on: the named one, or the repo's own (root-first ordering in
-    projects.py) when no --project narrows it down. An explicit --project naming nothing is an
-    error, never a silent fallback to the root."""
+    projects.py) when no --project narrows it down — or None when the repo has no python project
+    at all, which tasks no-op cleanly on. An explicit --project naming nothing is an error, never
+    a silent fallback to the root."""
     python_projects = discover_python_projects(c)
     if project is None:
-        return python_projects[0]
+        return python_projects[0] if python_projects else None
     matches = [p for p in python_projects if p.name == project]
     if not matches:
         raise ValueError(f"no python project found for {project!r}")
@@ -123,8 +127,11 @@ def build(c, project=None, sdist=False):
 
     Always names the target with `--package`, workspace or not: a single-project repo is its own
     workspace of one to uv, so the flag is a no-op there and the command stays identical across
-    both shapes."""
+    both shapes. No-ops cleanly in a repo with no python project."""
     target = _resolve_project(c, project)
+    if target is None:
+        print(f"[dist.build] {_NO_PROJECTS}")
+        return
     cmd = "uv build" if sdist else "uv build --wheel"
     c.run(f"{cmd} --package {target.name}", echo=True)
 
@@ -142,7 +149,11 @@ def publish(c, project=None, index=None, dry_run=False):
 
     Those two run from this body rather than as `pre=[build]`: invoke's pre-tasks take no
     arguments from the caller, so a pre-built `build` would always build the *root* project and
-    silently publish the wrong wheel for `--project=<member>`."""
+    silently publish the wrong wheel for `--project=<member>`. No-ops cleanly, as one unit, in a
+    repo with no python project."""
+    if _resolve_project(c, project) is None:
+        print(f"[dist.publish] {_NO_PROJECTS}")
+        return
     clean(c)
     build(c, project=project)
     cmd = "uv publish"
@@ -162,8 +173,13 @@ def publish(c, project=None, index=None, dry_run=False):
 def list_versions(c, project=None, index=None):
     """List a project's published versions from a package index — PEP 691 JSON Simple API,
     falling back to the PEP 503 HTML file listing if the index doesn't serve the JSON media
-    type. Works unmodified against PyPI, TestPyPI, or any private PEP 503/691-compliant index."""
-    name = _resolve_project(c, project).name
+    type. Works unmodified against PyPI, TestPyPI, or any private PEP 503/691-compliant index.
+    No-ops cleanly in a repo with no python project."""
+    target = _resolve_project(c, project)
+    if target is None:
+        print(f"[dist.list_versions] {_NO_PROJECTS}")
+        return
+    name = target.name
     normalized = _normalize(name)
     base = (index or _DEFAULT_INDEX).rstrip("/")
     url = f"{base}/{normalized}/"

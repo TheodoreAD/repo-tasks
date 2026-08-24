@@ -79,8 +79,15 @@ def discover_python_projects(c) -> list[PythonProject]:
     Root-first ordering is load-bearing: `dist.py` and `version.py` treat `[0]` as "the repo's
     own project" when no `--project`/`--group` narrows it down, so adding a workspace member must
     never change what a no-flag invocation acts on.
+
+    No `pyproject.toml` at all is an empty list, not an error — a Dockerfile-only or
+    quality-gates-only repo is a normal state, and each caller decides what absence means for it
+    (`dist.*` no-op, `version.*` raise, `discover_docker_images` falls back to the directory name).
     """
-    root_data = _load_toml(Path("pyproject.toml"))
+    root_pyproject = Path("pyproject.toml")
+    if not root_pyproject.exists():
+        return []
+    root_data = _load_toml(root_pyproject)
     root = _project_at(Path(), root_data)
     projects = [root] if root is not None else []
 
@@ -128,10 +135,7 @@ def discover_docker_images(c) -> list[DockerImage]:
     dockerfile = Path("Dockerfile")
     if not dockerfile.exists():
         return []
-    try:
-        python_projects = discover_python_projects(c)
-    except FileNotFoundError:
-        python_projects = []
+    python_projects = discover_python_projects(c)
     name = python_projects[0].name if python_projects else Path.cwd().name
     return [DockerImage(name=name, path=Path(), dockerfile=dockerfile, image=name, group=name)]
 

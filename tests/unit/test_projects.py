@@ -38,6 +38,10 @@ def test_discover_python_projects_finds_this_repos_own_dogfood_member(c):
     assert names == ["repo-tasks", "sample-service"]
 
 
+def test_discover_python_projects_is_empty_without_a_pyproject(c, tmp_cwd):
+    assert projects.discover_python_projects(c) == []
+
+
 def test_discover_python_projects_no_workspace_table_means_root_alone(c, tmp_cwd):
     (tmp_cwd / "pyproject.toml").write_text(_ROOT_PYPROJECT)
     assert projects.discover_python_projects(c) == [

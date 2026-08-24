@@ -31,6 +31,20 @@ def test_clean_removes_dist_dir(c, tmp_cwd):
     assert not (tmp_cwd / "dist").exists()
 
 
+@pytest.mark.parametrize("task_name", ["build", "publish", "list_versions"])
+def test_tasks_no_op_cleanly_with_no_python_project(c, tmp_cwd, monkeypatch, capsys, task_name):
+    monkeypatch.setattr(dist, "discover_python_projects", lambda c: [])
+    getattr(dist, task_name).body(c)  # pyright: ignore[reportAny]
+    c.run.assert_not_called()
+    assert "nothing to do" in capsys.readouterr().out
+
+
+def test_explicit_project_still_errors_with_no_python_project(c, monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", lambda c: [])
+    with pytest.raises(ValueError, match="nonexistent"):
+        dist.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+
+
 def test_build_default_is_wheel_only(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     dist.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]

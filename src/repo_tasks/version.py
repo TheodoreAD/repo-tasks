@@ -13,11 +13,17 @@ from .projects import discover_helm_charts, discover_python_projects
 
 
 def _resolve_project(c, group):
+    """The python project whose `[project].version` is the group's version. Absence is an error
+    here, not a no-op like `dist.py`/`docker.py`/`helm.py`: nothing else can supply a version, so a
+    bump has nothing to write and a `current_version` query has nothing to answer — say so, rather
+    than an IndexError out of `[0]`."""
     python_projects = discover_python_projects(c)
     if group is not None:
         python_projects = [p for p in python_projects if p.name == group]
         if not python_projects:
             raise ValueError(f"no project found for group {group!r}")
+    if not python_projects:
+        raise ValueError("no python project found (no pyproject.toml [project] table and no workspace members)")
     return python_projects[0]
 
 

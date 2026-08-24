@@ -80,6 +80,13 @@ def test_current_version_raises_for_an_unknown_group(c):
         version.current_version(c, group="no-such-project")
 
 
+def test_current_version_raises_clearly_with_no_python_project(c, tmp_cwd):
+    # A Dockerfile-only repo reaches this through docker.build's default tag — a ValueError that
+    # names the cause, never an IndexError out of `[0]` or a FileNotFoundError from discovery.
+    with pytest.raises(ValueError, match="no python project found"):
+        version.current_version(c)
+
+
 @pytest.mark.parametrize(
     ("part", "expected"),
     [
