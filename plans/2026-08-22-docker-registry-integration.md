@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-23
+updated: 2026-08-24
 ---
 
 ## Context
@@ -71,11 +71,18 @@ manual step for a human publishing from their own machine, never stored in this 
 
 ### 5. CI workflow
 
-`.github/workflows/docker-release.yml` (new — or merged into
-`plans/2026-08-22-pypi-publish-integration.md`'s `publish.yml` as a second job, whichever reads more
-coherently once both are actually being written), triggered on the same `vX.Y.Z` tag push as the
-PyPI publish workflow, running `inv docker.release`. `examples/sample-service/Dockerfile` gives it
-something real to build, so this can now be written for real rather than merged inert.
+`.github/workflows/docker-release.yml` (landed 2026-08-24), `workflow_dispatch`-only with a
+`project` input defaulting to `sample-service`, running `inv docker.release` after
+`docker/login-action`. Kept separate from `publish.yml` rather than merged as a second job: the two
+release different artifacts on different cadences, and a docker push is not gated by the PyPI
+environment rule.
+
+[DECISION: no tag-push trigger yet. The plan's original "same `vX.Y.Z` tag push as the PyPI
+workflow" is wrong for this image — `v*` tags name the root `repo-tasks` project's version, while
+the image is versioned by the `sample-service` group, whose tag scheme (`<group>-vX.Y.Z`, per
+`contributing/versioning.md`) `version.py` does not emit yet (`tag_name = "v{new_version}"` is
+hardcoded). Add the trigger once that exists; until then the workflow is dispatched by hand, which
+matches its deliberate/occasional posture anyway.]
 
 ### 6. Verification order
 
@@ -92,7 +99,8 @@ something real to build, so this can now be written for real rather than merged 
 
 ## Files touched
 
-- `.github/workflows/docker-release.yml` (new, or a job added to `publish.yml`).
+- (Done) `.github/workflows/docker-release.yml`. Passes `inv quality.workflow-check` (actionlint)
+  and an `inv test.workflows --event workflow_dispatch --job release --dry-run` plan under act.
 - (Done) `repo-tasks.toml` — the real `[[docker]]` entry, landed with the dogfood sample rather than
   by this plan. Its `image` is already the GHCR ref this plan pushes to.
 - The cross-references from the now-retired `plans/2026-08-19-dogfood-sample-service.md` and
