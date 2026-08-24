@@ -146,13 +146,34 @@ file-writing and committing stays 100% owned by bump-my-version.
 If a future change ever customizes `parse`/`serialize` (a pre-release scheme would), this assumption
 breaks and `next_version` must change with it.
 
-## Known interaction: `uv.lock` goes stale on bump
+## `uv.lock` moves with the bump
 
 `uv.lock` embeds the project's own version, and
 [astral-sh/uv#15643](https://github.com/astral-sh/uv/issues/15643) means `uv sync --locked` fails
-when only that version changed. `version.bump` does not re-run `uv lock`, so a bump commit leaves
-the lock stale — surfacing later as a confusing `venv.sync` failure on a tree that looks clean.
+when only that version changed. A bump that left the lock alone would commit a stale one, surfacing
+later as a confusing `venv.sync` failure on a tree that looks clean — and `venv.py` passes
+`--locked` everywhere precisely so staleness fails loudly, so the discipline that keeps the repo
+safe is what turns this into a first-release-day trap.
 
-Unfixed. Tracked in `plans/2026-08-23-uv-lock-on-version-bump.md`, which also records why the
-obvious fix doesn't work: bump-my-version owns the commit (`commit = true`), so a later re-lock
-lands in a _second_ commit.
+[DECISION: the generated bump config carries a `uv.lock` file entry, so bump-my-version rewrites the
+version there in the same commit it already owns. The obvious alternative — run `deps.lock` after
+the bump — lands the lock in a _second_ commit, because bump-my-version makes the commit itself
+(`commit = true`); taking commit construction away from it (`commit = false`, `version.py` doing the
+`git add`/`git commit`) was rejected as undoing a deliberate part of the tool choice. Only the
+workspace root's `uv.lock` is touched: a member has no lock of its own, its version sits in the root
+one. A repo with no `uv.lock` gets no entry and no hook.]
+
+[PITFALL: `uv.lock` spells the project's own version exactly like every dependency's — a bare
+`version = "X"` inside a `[[package]]` block — so a bare search would also hit any dependency pinned
+at the same number. The entry is anchored on the `name = "<project>"` line uv writes immediately
+before `version`, which is unique per package. That is a multi-line search, so the generated TOML
+spells it as a basic (double-quoted) string — a single-quoted TOML string is literal and would hand
+bump-my-version a backslash and an `n`.]
+
+The generated config also sets `pre_commit_hooks = ["uv lock --check"]`, so the rewrite is verified
+by uv itself before anything is committed: if the anchored search ever misfires, the bump fails
+instead of shipping a stale lock. Measured: a text-rewritten version passes both `uv lock --check`
+and `uv sync --locked`, and `tests/integration/test_version_integration.py` pins that against a real
+`uv lock` for a single project and for a workspace member. This is not a second writer of
+`uv.lock`'s resolution — `deps.lock` still owns every dependency in the file — see
+[`task-module-conventions.md`](task-module-conventions.md#single-writer-rules).

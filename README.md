@@ -117,7 +117,11 @@ installed — add it as a project `docs` dependency group, it isn't a dependency
 `venv.sync` (and `venv.create`, its no-args first-time wrapper) always run `uv sync --locked` — this
 fails loudly on a missing or stale `uv.lock` instead of uv's own default of silently rewriting it.
 `inv deps.lock` is the _only_ task in this package that ever runs `uv lock`; every other
-`deps.*`/`venv.*` task is read-only with respect to the lockfile.
+`deps.*`/`venv.*` task is read-only with respect to the lockfile. The one other write to it is
+`version.bump` moving the project's own embedded version (uv's `--locked` rejects a lock whose copy
+disagrees with `pyproject.toml`), in the same commit as the bump, verified by `uv lock --check`
+before that commit lands — see
+[`contributing/versioning.md`](contributing/versioning.md#uvlock-moves-with-the-bump).
 
 One `uv lock` failure a plain re-run never fixes: a workspace member whose directory _moved_.
 `uv.lock` still records the old editable path, and both `deps.lock` and `deps.check` fail with

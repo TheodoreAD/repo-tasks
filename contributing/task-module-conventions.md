@@ -28,16 +28,22 @@ Exactly one module may write each piece of shared state:
 
 | state                     | sole writer  |
 | ------------------------- | ------------ |
-| `uv.lock`                 | `deps.lock`  |
+| `uv.lock`'s resolution    | `deps.lock`  |
 | a project's version field | `version.py` |
 
 Every other `venv.*`/`deps.*` task is read-only with respect to the lockfile; `dist.py` reads the
 version and never writes it. The point is that two modules racing to touch one value is a bug class
 that simply cannot occur if only one of them can write.
 
+The two rows meet in one place: `uv.lock` embeds the project's own version, and that field belongs
+to the second row, not the first. `version.bump` rewrites it there — a text substitution inside
+bump-my-version's own commit, anchored on the `name = ...` line above it — and never runs `uv lock`;
+`deps.lock` still owns every resolved dependency in the file. See
+[`versioning.md`](versioning.md#uvlock-moves-with-the-bump) for why that split, and not a re-lock
+after the bump, is the fix.
+
 A corollary worth stating because it is easy to violate accidentally: a module that needs locking
-done should call `deps.lock`, not shell out to `uv lock` itself. See
-`plans/2026-08-23-uv-lock-on-version-bump.md`, where this constraint shapes the fix.
+done should call `deps.lock`, not shell out to `uv lock` itself.
 
 ## No-op cleanly when an artifact kind is absent
 
