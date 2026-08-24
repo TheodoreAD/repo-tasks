@@ -62,6 +62,14 @@ Three files, which is most of the reason the directories are split at all:
   directory — `projects.py` reads `pyproject.toml` and `repo-tasks.toml`, `dist.clean` _removes_
   `dist/`, `selfinstall` reads its stamp file. A test that forgets `monkeypatch.chdir` reads, or
   deletes, this repo's own files. Taking the fixture makes that impossible to forget.]
+
+  It also holds the autouse `isolated_home`, which points `HOME` at a fresh temp directory for every
+  unit test. [PITFALL: `tmp_path` sandboxes the working tree, not the user.
+  `agents.wire_claude_hook` writes an env-cache file under `Path.home()/.cache/claude-code`, and
+  before the fixture existed each unit run left one stale `tmp-pytest-of-*` file per test in the
+  developer's real cache — ~400 accumulated before anyone noticed, because nothing failed. The
+  fixture is autouse for the same reason `tmp_cwd` exists, and `agents.py` resolves the cache
+  directory at call time rather than as an import-time constant so the override actually lands.]
 - `tests/integration/conftest.py` — the container and index fixtures, which no unit test should be
   able to reach by accident.
 
