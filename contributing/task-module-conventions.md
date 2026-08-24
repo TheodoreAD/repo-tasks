@@ -42,14 +42,21 @@ done should call `deps.lock`, not shell out to `uv lock` itself. See
 ## No-op cleanly when an artifact kind is absent
 
 A task must be safe to run in a repo that has none of what it operates on. `quality.shell_check`
-established the pattern for "no `*.sh` files here"; `helm.py` and `docker.py` follow it for zero
-`[[helm]]` entries / zero images (each task prints a short "nothing to do" note and returns —
-`docker.release` as one unit, before its first step). An explicit `--project` naming something
-undiscovered is an error in every module, per "ambiguity is an error" below — the no-op rule is
-about the artifact kind being absent entirely, not about a named target missing.
+established the pattern for "no `*.sh` files here"; `helm.py`, `docker.py` and `dist.py` follow it
+for zero `[[helm]]` entries / zero images / no python project (each task prints a short "nothing to
+do" note and returns — a composite like `docker.release` or `dist.publish` as one unit, before its
+first step). An explicit `--project` naming something undiscovered is an error in every module, per
+"ambiguity is an error" below — the no-op rule is about the artifact kind being absent entirely, not
+about a named target missing.
 
 This is what makes it safe to wire a task unconditionally into a future top-level composite without
 a per-repo opt-out.
+
+The one deliberate exception is `version.py`: `bump` and `current_version` raise a clear
+`ValueError` in a repo with no python project, because nothing else can supply a version — a bump
+has nothing to write, and a `docker.build` asking for its default tag has nothing to be told. An
+error that names the cause is the honest answer there; a silent no-op would be a bump that didn't
+bump.
 
 ## Smart defaults, so zero config is a real option
 
@@ -107,7 +114,9 @@ just how, needs saying so where the caller will see it.
 Any command that stops short of "the whole flow is done" — a PR was opened and needs a human, a
 guard clause tripped — prints exactly what to run next, via `gitflow.py`'s private
 `_next_steps(*lines)` helper. Established there, but meant to apply to any task anywhere in this
-package with the same "stops for an external reason" shape.
+package with the same "stops for an external reason" shape: `deps.lock` imports it for the
+moved-workspace-member failure that a plain re-run never fixes, the same way `gitflow.py` imports
+`version.py`'s private `_bump`.
 
 The alternative is leaving the caller to read source to find out what happens now, which is what
 this avoids.
@@ -125,8 +134,9 @@ external-facing nature — always a deliberate, standalone `inv dist.publish`. S
 ## Freshness via `pre=`, not by trusting what's on disk
 
 `dist.build` has `pre=[clean]` so a stale wheel from a previous version can never survive into a
-fresh build; `dist.publish` has `pre=[build]` so publish always ships a just-built `dist/` rather
-than whatever happened to be sitting there. Same shape as `docs.build`'s own `pre=[clean]`.
+fresh build; `dist.publish` calls `clean` and `build` from its own body so publish always ships a
+just-built `dist/` rather than whatever happened to be sitting there — from the body, not `pre=`,
+because of the `--project` pitfall above. Same shape as `docs.build`'s own `pre=[clean]`.
 
 This is the build-freshness counterpart to the lock-freshness discipline above — same principle,
 different state.
@@ -169,10 +179,10 @@ real name. Both modules now end with `ns = Collection(<the tasks they actually o
 copy-pasteable, not inferred from output.
 
 The exceptions are internal queries whose _output_ is the point rather than the command: reading the
-current branch, listing open release branches, resolving the origin URL, finding `*.sh` files, and
-querying remote tags. Those use `hide=True` (plus `warn=True` where a non-zero exit is a normal
-answer) and are not echoed, because echoing plumbing the caller didn't ask for is noise. The rule is
-about actions, not about every subprocess.
+current branch, listing open release branches, resolving the origin URL, finding `*.sh` and workflow
+files, and querying remote tags. Those use `hide=True` (plus `warn=True` where a non-zero exit is a
+normal answer) and are not echoed, because echoing plumbing the caller didn't ask for is noise. The
+rule is about actions, not about every subprocess.
 
 ## Configuration lives in its own file
 
