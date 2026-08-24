@@ -1,7 +1,29 @@
 ---
-status: idea
-updated: 2026-08-24
+status: landed
+updated: 2026-08-25
 ---
+
+## Migrated to
+
+Landed 2026-08-25, all three defects:
+
+- **1** — `configs.promote --apply` now requires `--file <name>` and writes only that file; a
+  print-only run still lists every differing file. Code contract, lives in `tasks.py`.
+- **1a** — the ratchet is structurally gone: the shipped `pyrightconfig.json` spells `include` as
+  `["src*", "tests*", "tasks*"]`, the one glob shape basedpyright tolerates when nothing matches
+  (measured — `tests/**` and `./tests` still exit 3; only a `*` in the last segment escapes), so
+  `configs.pull` copies every file verbatim and `_resolve_content` is deleted. Root and package are
+  byte-identical for all five files. The measurement and its reach limits are recorded in the
+  shipped file's own comment and in `plans/2026-08-19-gitignore-tool-alignment.md`'s audit; a unit
+  test pins the glob shape.
+- **2** — moot: `examples/sample-service` moved to `tests/fixtures/sample-service` (76ee882), and a
+  directory include is recursive, so `tests*` covers it. No `examples` entry needed.
+
+Deliberately not migrated: the "should divergence be a declared `configs.local.toml` override"
+question — with nothing left to diverge it has no live case here; it stays tracked as
+`power-user-linux-setup`'s `plans/2026-08-14-python-repo-scaffolding.md` §D. The "detect uncovered
+`*.py` files" check moved to `plans/2026-08-19-gitignore-tool-alignment.md`, next to the gitignore
+check it would share a task with.
 
 ## Context
 

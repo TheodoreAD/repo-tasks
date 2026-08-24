@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-24
+updated: 2026-08-25
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -127,9 +127,13 @@ must restate them.]
 
 [PITFALL: an `include` entry that is a **literal** path which does not exist is a hard config error
 — exit 3, `File or directory "..." does not exist`, printed alongside an otherwise clean summary
-line. An `include` entry that is a **glob** matching nothing is fine. Measured both ways. This is
-the entire reason `configs.py`'s `_resolve_content` filters the include list per consumer, and the
-reason that filtering causes the ratchet described in
+line. An `include` entry that is a **glob** matching nothing is fine — but only when the glob is in
+the **last** segment: measured 2026-08-25 (basedpyright 1.39.10), `tests/**`, `tests/*` and
+`./tests` all still exit 3 when `tests/` is absent, while `tests*` exits 0. `tests*` stays top-level
+anchored (a probe with `.venv/lib/pkg/tests`, `venv/lib/pkg/tests` and `node_modules/x/tests`
+analysed nothing) and is recursive once it matches; `tasks*` covers both `tasks/` and `tasks.py`.
+That spelling is what the shipped config uses, and why `configs.pull` no longer filters the list per
+consumer — the filtering, and the promote ratchet it caused, were retired with the now-retired
 `plans/2026-08-23-configs-round-trip-divergence.md`.]
 
 [PITFALL: `--outputjson` **swallows the exit-3 config error**. The identical config that exits 3
@@ -138,10 +142,8 @@ with nothing in the JSON to indicate a config problem. Anything that consumes ba
 a CI wrapper, a coverage check over the include list — cannot see config errors at all. A second
 layer of the same "clean output, wrong exit code" trap this repo already documents.]
 
-Note the live contradiction this leaves in the repo: `pyrightconfig.json`'s own comment claims
-"basedpyright silently no-ops on whichever entries don't exist in a given repo, so one shared list
-works everywhere with nothing to adjust per consumer." That is false for `include`, and
-`configs.py`'s docstring states the opposite correctly. The comment should go.
+`pyrightconfig.json`'s own comment used to claim the opposite ("basedpyright silently no-ops on
+whichever entries don't exist"); it now records the measurement above.
 
 ## Rule of thumb: includes, not excludes
 
@@ -168,14 +170,17 @@ How far each tool can actually honour that, given the audit above:
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: given that directory includes are recursive, the only remaining reason to
-  prefer globs is that a literal entry **hard-errors when absent** while a glob matching nothing is
-  fine — the sole cause of `configs.pull`'s per-consumer filtering and its ratchet
-  (`plans/2026-08-23-configs-round-trip-divergence.md` §1a). Is there a glob spelling of each
-  canonical entry that tolerates absence _without_ widening reach — `examples`, `tests`, `tasks`
-  each expressed so they match only a top-level directory of that name? If yes the filtering can be
-  deleted outright, root and package go byte-identical, and the ratchet disappears with no merge
-  mechanism. Not yet tested; the highest-leverage measurement left.]
+- [DECISION: canonical `include` entries are spelled `src*`/`tests*`/`tasks*` — a trailing `*` is
+  the only spelling that tolerates absence without widening reach (see the PITFALL above), so the
+  per-consumer filtering was deleted and root/package are byte-identical. The widening is confined
+  to top-level siblings sharing the prefix; checked 2026-08-25, no repo in the family has one.
+  Resolved 2026-08-25.]
+- [NEEDS CLARIFICATION: should anything _detect_ a source tree no `include` entry covers? A check
+  that every tracked `*.py` file is matched by some entry would catch a new top-level tree the
+  moment it appears — the exact gap `examples/sample-service` sat in before it moved under `tests/`.
+  Same shape as the fixed "are the paths our tools depend on actually gitignored" check below, and
+  the two probably want to be one task. Moved here from the now-retired
+  `plans/2026-08-23-configs-round-trip-divergence.md`.]
 - [NEEDS CLARIFICATION: is basedpyright's `extends` a better distribution mechanism than copying the
   file at all? A consumer's `pyrightconfig.json` could be three lines extending the canonical copy
   shipped inside the installed `repo_tasks` package. Blockers to check: `extends` resolves relative
