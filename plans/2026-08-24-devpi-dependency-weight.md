@@ -5,9 +5,9 @@ updated: 2026-08-24
 
 ## Context
 
-Split out of `plans/2026-08-23-test-tiers-and-dependency-groups.md`, which folds every dependency
-group into `dev`. That decision is right and lands independently; this plan is only about the one
-uncomfortable consequence, deliberately deferred.
+Split out of the now-retired test-tier plan, which folded every dependency group into `dev`. That
+decision is right and lands independently; this plan is only about the one uncomfortable
+consequence, deliberately deferred.
 
 `devpi-server` and `devpi-client` exist solely to give `tests/integration/test_dist_integration.py`
 a real PEP 691/503 package index to run `dist.py`'s `versions`/`publish` against. Measured

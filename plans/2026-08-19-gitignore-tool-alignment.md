@@ -156,7 +156,7 @@ How far each tool can actually honour that, given the audit above:
   remain are for _tracked_ files that must not be touched (`uv.lock`, helm `templates/*.yaml`),
   which `.gitignore` cannot express by definition.
 - **pytest** — fully, via `testpaths` instead of `--ignore`/`norecursedirs`. See
-  `plans/2026-08-23-test-tiers-and-dependency-groups.md`.
+  [`contributing/test-tiers.md`](../contributing/test-tiers.md).
 - **basedpyright** — the rule holds here too, and more easily than it first appeared. A narrow
   include list needs no excludes at all: `["src", "tests", "tasks", "tasks.py"]` never reaches
   `.venv`, which is why this repo has never leaked despite carrying an exclude that replaces the

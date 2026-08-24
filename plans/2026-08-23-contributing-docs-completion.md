@@ -5,9 +5,9 @@ updated: 2026-08-23
 
 ## Context
 
-`contributing/` was created by `plans/2026-08-23-plan-retirement-and-tagging.md` Phase 3, populated
-by migrating the durable content out of six retiring plans. Migration can only carry across what
-those plans actually contained, which is less than the four files' stated scopes describe.
+`contributing/` was created by the now-retired plan-retirement pass, populated by migrating the
+durable content out of six retiring plans. Migration can only carry across what those plans actually
+contained, which is less than the four files' stated scopes describe.
 
 This plan tracks those gaps. It exists because the alternative — leaving "TODO: document recovery"
 lines inside the `contributing/` files — is the exact failure mode the plan-docs convention forbids:

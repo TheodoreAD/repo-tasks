@@ -103,9 +103,10 @@ isn't a main dependency goes in `dev`.
 
 Follow both through and most of this plan stops applying:
 
-- The `pytest.ini` divergence goes away entirely —
-  `plans/2026-08-23-test-tiers-and-dependency-groups.md` replaces `--ignore=tests/integration` with
-  `testpaths = tests/unit`, an include rather than an exclude, identical for every consumer.
+- The `pytest.ini` divergence goes away entirely — the test-tier work (landed, see
+  [`contributing/test-tiers.md`](../contributing/test-tiers.md)) replaced
+  `--ignore=tests/integration` with `testpaths = tests/unit`, an include rather than an exclude,
+  identical for every consumer.
 - The `pyrightconfig.json` divergence goes away too, for a different reason: that exclude exists
   only because `tests/integration` can't import without the `integration` dependency group. Move
   `testcontainers` into `dev` and there is nothing to exclude.

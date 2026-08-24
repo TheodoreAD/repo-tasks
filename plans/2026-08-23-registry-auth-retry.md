@@ -6,9 +6,9 @@ updated: 2026-08-23
 ## Context
 
 Extracted from the now-retired `plans/2026-08-19-docker-image-tasks.md`'s
-`### 4. Auth — deferred, not dropped` during `plans/2026-08-23-plan-retirement-and-tagging.md`. It
-was explicitly written down there "so it isn't silently forgotten" — inside a file marked `landed`
-whose retirement ends in `rm`, which is precisely how it would have been.
+`### 4. Auth — deferred, not dropped` during the now-retired plan-retirement pass. It was explicitly
+written down there "so it isn't silently forgotten" — inside a file marked `landed` whose retirement
+ends in `rm`, which is precisely how it would have been.
 
 The now-retired `plans/2026-08-19-helm-chart-tasks.md` §4 deferred the same idea for `helm push` to
 this plan and named the same shared `src/repo_tasks/_registry_auth.py` helper, so this plan owns the
