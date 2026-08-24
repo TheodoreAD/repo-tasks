@@ -1,24 +1,47 @@
 """Tests for repo_tasks.deps: asserts the exact command string each task builds via invoke's
 MockContext — the only real logic here is flag-to-flag command construction."""
 
-from invoke import MockContext, Result
+import pytest
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import deps
 
 
 def test_lock_default(c):
     deps.lock.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv lock", echo=True)
+    c.run.assert_called_once_with("uv lock", echo=True, warn=True)
 
 
 def test_lock_upgrade(c):
     deps.lock.body(c, upgrade=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv lock --upgrade", echo=True)
+    c.run.assert_called_once_with("uv lock --upgrade", echo=True, warn=True)
 
 
 def test_lock_upgrade_package(c):
     deps.lock.body(c, package="repo-tasks")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    c.run.assert_called_once_with("uv lock --upgrade-package repo-tasks", echo=True)
+    c.run.assert_called_once_with("uv lock --upgrade-package repo-tasks", echo=True, warn=True)
+
+
+def test_lock_names_the_moved_member_and_the_retry_on_a_stale_editable_path(capsys):
+    # Verbatim uv 0.11.19 output for a workspace member whose directory moved — the one `uv lock`
+    # failure a plain re-run never fixes, so the task has to say what does.
+    stderr = (
+        "error: Failed to generate package metadata for `sample-service==0.1.0 @ editable+examples/sample-service`\n"
+        "  Caused by: Distribution not found at: file:///repo/examples/sample-service\n"
+    )
+    c = MockContext(run=Result(stderr=stderr, exited=2))
+    with pytest.raises(Exit) as exc_info:
+        deps.lock.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert exc_info.value.code == 2
+    assert "inv deps.lock --package sample-service" in capsys.readouterr().out
+
+
+def test_lock_reraises_other_failures_without_a_hint(capsys):
+    c = MockContext(run=Result(stderr="error: something else entirely\n", exited=1))
+    with pytest.raises(Exit) as exc_info:
+        deps.lock.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert exc_info.value.code == 1
+    assert "Next steps" not in capsys.readouterr().out
 
 
 def test_check():

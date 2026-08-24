@@ -119,6 +119,12 @@ fails loudly on a missing or stale `uv.lock` instead of uv's own default of sile
 `inv deps.lock` is the _only_ task in this package that ever runs `uv lock`; every other
 `deps.*`/`venv.*` task is read-only with respect to the lockfile.
 
+One `uv lock` failure a plain re-run never fixes: a workspace member whose directory _moved_.
+`uv.lock` still records the old editable path, and both `deps.lock` and `deps.check` fail with
+`Distribution not found at: <old path>` until `inv deps.lock --package <member>` re-resolves it —
+`deps.lock` recognises that message and prints exactly that command. Renaming a member in place or
+removing it needs nothing special.
+
 Two independent flags cover CI/docker, instead of one opaque `ci=` boolean — a CI test job usually
 still wants dev deps, while a runtime image wants neither:
 

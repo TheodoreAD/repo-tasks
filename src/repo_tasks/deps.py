@@ -1,7 +1,17 @@
 """Dependency lock-file operations. The only module in this package allowed to write uv.lock —
 `venv.py`'s `--locked` sync fails loudly on drift instead of ever silently regenerating it."""
 
-from invoke import task
+import re
+
+from invoke import Exit, task
+
+# The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
+# records the member's `source = { editable = "<old path>" }` and uv reads that stale entry before
+# noticing the manifest changed, so both `uv lock` and `uv lock --check` fail with this message
+# (exit 2), naming a path that no longer exists. `--upgrade-package <member>` re-resolves it.
+# Measured against uv 0.11.19: renaming a member (path unchanged) or removing it outright both
+# re-resolve fine — only a move does this.
+_MOVED_MEMBER_RE = re.compile(r"Failed to generate package metadata for `(?P<name>[^=` ]+)[^`]*@ editable\+")
 
 
 @task(
@@ -17,7 +27,17 @@ def lock(c, upgrade=False, package=None):
         cmd += " --upgrade"
     if package:
         cmd += f" --upgrade-package {package}"
-    c.run(cmd, echo=True)
+    result = c.run(cmd, echo=True, warn=True)
+    if result.ok:
+        return
+    match = _MOVED_MEMBER_RE.search(result.stderr)
+    if match:
+        print(
+            f"\n[deps.lock] workspace member {match.group('name')!r} looks moved — uv.lock still records its old "
+            "path, and a plain `uv lock` never re-resolves that.\nNext steps:\n"
+            f"  - inv deps.lock --package {match.group('name')}"
+        )
+    raise Exit(code=result.exited)
 
 
 @task
