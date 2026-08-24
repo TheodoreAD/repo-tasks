@@ -105,3 +105,21 @@ The visible symptom was `ImportError: cannot import name 'helm' from 'repo_tasks
 this working tree. `cd <repo> && PATH=<repo>/.venv/bin:$PATH <repo>/.venv/bin/inv <task>` is the
 form that works. Note the failure only appeared once type-check passed and the run got as far as the
 unit tier; two earlier runs stopped at pyright and looked like ordinary type errors.]
+
+## Migrated to
+
+- **`contributing/task-module-conventions.md`**, under "Import siblings as
+  `from .sibling import name`" — the `Collection.from_module` trap, extended onto the convention
+  that causes it rather than given a section of its own.
+- **`power-user-linux-setup/skills/invoke-task-conventions/`** — the naming rules themselves and the
+  cross-repo evidence, including this audit's conforming-on-purpose cases (`gitflow.*` mirrors
+  `git flow feature start`; `deps.tree` wraps `uv tree`).
+- The PATH-prefix pitfall is now in `~/AGENTS.md`'s "Running a command against a different repo"
+  rule, with its evidence in `power-user-linux-setup/contributing/global-agents-md.md`.
+
+Not migrated, deliberately: the rename table and the audit's pass/fail listing of all 67 tasks.
+`inv --list` is the live answer and `git log` has the before.
+
+Ready to delete — its only inbound reference is
+`power-user-linux-setup/plans/2026-08-24-invoke-task-naming-convention.md`, which is itself queued
+for retirement.
