@@ -5,8 +5,9 @@ updated: 2026-08-23
 
 ## Context
 
-Sibling: `plans/2026-08-24-uv-lock-path-changes.md` covers the other way `uv.lock` reaches a state a
-plain `uv lock` will not fix — a workspace member that moved. Same file, different cause.
+The other way `uv.lock` reaches a state a plain `uv lock` will not fix — a workspace member that
+moved — landed as a detect-and-instruct hint in `deps.lock` (see README's venv/deps section). Same
+file, different cause.
 
 Extracted from the now-retired `plans/2026-08-19-release-management.md`'s
 `## Known follow-up (2026-08-20)` section during the now-retired plan-retirement pass — it was live
