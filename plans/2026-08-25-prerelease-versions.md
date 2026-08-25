@@ -60,11 +60,12 @@ translation between strings, only parts → string per kind. The stored PEP 440 
 
 ### 1. `version.py` — parts model, per-kind serializers, rc-aware bump config
 
-- A small frozen `Version` (parts above) with `parse(pep440: str)` accepting `X.Y.Z` and `X.Y.ZrcN`
-  only — anything else (`a`, `b`, `.dev`, `.post`, local) is a `ValueError` naming the accepted
-  shapes, since a committed version is never one of those; and two serializers, `pep440()` and
-  `semver()`. Docker uses `semver()` unchanged: the rc form has no `+`, and dev builds (§3) put the
-  hash inside the pre-release identifiers.
+- A small frozen `Version` (parts above, plus optional `dev: int` and `commit: str` that only a dev
+  build sets) with `parse(pep440: str)` accepting `X.Y.Z` and `X.Y.ZrcN` only — anything else (`a`,
+  `b`, `.dev`, `.post`, local) is a `ValueError` naming the accepted shapes, since a committed
+  version is never one of those; and two serializers, `pep440()` and `semver()`. Docker uses
+  `semver()` unchanged: the rc form has no `+`, and dev builds (§3) put the hash inside the
+  pre-release identifiers.
 - The generated bump config gains a global `parse` regex for the two accepted shapes,
   `serialize = ["{major}.{minor}.{patch}{pre_l}{pre_n}", "{major}.{minor}.{patch}"]` for
   `pyproject.toml` and the `uv.lock` entry, a per-file
@@ -82,9 +83,18 @@ translation between strings, only parts → string per kind. The stored PEP 440 
   Shelling out from `gitflow.py` would add a subprocess at branch-naming time for no correctness
   gain once the pin exists — the pin is what makes the hand-rolled copy safe, exactly the argument
   `versioning.md` already makes for the `X.Y.Z` case. (2026-08-25)]
-- [UNVERIFIED: per-file `serialize` with a parts table works from the temporary generated config
-  exactly as from a static one — drive it against a throwaway repo before building on it, the way
-  the tool choice itself was verified.]
+- Verified 2026-08-25 against a throwaway repo (bump-my-version 1.5.1, temporary `--config-file`
+  regenerated per step, `pyproject.toml` + `chart/Chart.yaml` with the two per-file `serialize`
+  lists above, `parts.pre_n.first_value = "1"`): `bump minor` → `1.1.0rc1` / `version: 1.1.0-rc.1` /
+  `appVersion: "1.1.0-rc.1"`; `bump pre_n` → `rc2`, `rc3`; `bump pre_l` → `1.1.0` / `1.1.0` in all
+  three fields; one commit per step; and `show new_version --increment <part>` printed the same
+  value before every bump. The `parse` regex is
+  `(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:(?P<pre_l>rc)(?P<pre_n>\d+))?`.
+- [PITFALL: with `pre_l` in the scheme, _every_ `major`/`minor`/`patch` bump lands on `rc1` —
+  `bump patch` from `1.1.0` gives `1.1.1rc1`, never `1.1.1` (confirmed in the spike). The
+  straight-to-final hotfix path therefore passes `--new-version <next_version(..., final)>` to
+  `bump-my-version bump` instead of relying on the part arithmetic; `_bump` grows a `new_version`
+  argument for it. Two bumps (`patch` then `pre_l`) would make two commits.]
 
 ### 2. `gitflow.py` — the rc cycle lives on the release branch
 
@@ -113,13 +123,23 @@ translation between strings, only parts → string per kind. The stored PEP 440 
   cannot write `Chart.yaml`, and `uv.lock` would embed a value the backend no longer owns.
   (2026-08-25)]
 - The dev version is [dunamai](https://github.com/mtkennerly/dunamai)'s scheme (MIT, zero
-  dependencies, `Version.from_git()` + `serialize(style=..., format=...)`): base = next patch of the
-  last reachable tag, then distance and short hash — PEP 440 `1.0.1.dev5+g1a2b3c`, SemVer/Docker
-  `1.0.1-dev.5.g1a2b3c` via a `format=` that moves the hash inside the pre-release identifiers.
-  Sorts before any rc or final of the same base regardless of whether the next real release turns
-  out to be a patch or a minor. Added to `[project].dependencies`.
-- [UNVERIFIED: dunamai's exact SemVer output for a final tag at distance N with `bump=True` —
-  confirm it is `1.0.1-dev.N+gSHA` and not `-pre.N`, then pin it in a test.]
+  dependencies): `Version.from_git()` then `.bump()` — base = next patch of the last reachable final
+  tag (or the next `rc` of a reachable rc tag), plus distance and short hash. Our `Version` model
+  takes dunamai's _parts_ (`base`, `stage`, `revision`, `distance`, `commit`) and serializes them
+  itself: PEP 440 `1.0.1.dev5+g1a2b3c` / `1.1.0rc2.dev1+g81b8701`, SemVer and Docker
+  `1.0.1-dev.5.g1a2b3c` / `1.1.0-rc.2.dev.1.g81b8701`. Sorts before any rc or final of the same base
+  regardless of whether the next real release turns out to be a patch or a minor. Added to
+  `[project].dependencies`.
+- Verified 2026-08-25 (dunamai via `uvx`, scratch repo with `v1.0.0` and `v1.1.0rc1`): at distance 3
+  from a final tag `--bump` gives PEP 440 `1.0.1.dev3+677e52e` and SemVer `1.0.1-pre.3+677e52e`;
+  exactly at a tag, `1.0.0` in both; past an rc tag, `1.1.0rc2.dev1+81b8701` /
+  `1.1.0-rc.2.pre.1+81b8701`.
+- [PITFALL: dunamai's own SemVer style spells the bumped stage `-pre.N`, not `-dev.N`, and its
+  metadata has no `g` prefix — neither is what the docker tag should say. A static `--format` fixes
+  the final-tag case (`{base}-dev.{distance}.g{commit}` → `1.0.1-dev.3.g677e52e`) but cannot express
+  "stage present or absent": `{base}-{stage}.{revision}.dev.{distance}.g{commit}` renders
+  `1.0.1-..dev.2.g99f1e31` when there is no stage. So the serializers are ours, fed by the API's
+  parts — never a dunamai format string.]
 
 ### 4. Pre-releases are opt-in for every consumer, by each ecosystem's own rules
 
