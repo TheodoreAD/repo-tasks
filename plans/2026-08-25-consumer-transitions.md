@@ -19,8 +19,9 @@ side, by reading a red run, hours later:
 2. `09321ae` flipped `failOnWarnings` on in the shipped `pyrightconfig.json`. Every repo
    `scaffoldapy` generates pulls that config at generation, and the template's own code carried
    twelve warnings across four files — so all ten e2e combinations failed the moment the global tool
-   moved to that commit. `plans/2026-08-25-type-check-warning-noise.md` had recorded "scaffoldapy is
-   unaffected (verified)", which was true of scaffoldapy's own tree and false of what it generates.
+   moved to that commit. The now-retired `plans/2026-08-25-type-check-warning-noise.md` (settled
+   content in `contributing/type-checking.md`) had recorded "scaffoldapy is unaffected (verified)",
+   which was true of scaffoldapy's own tree and false of what it generates.
 
 Both were the same mechanism, seen twice in a day. What made each expensive:
 

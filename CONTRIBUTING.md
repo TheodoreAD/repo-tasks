@@ -27,6 +27,9 @@ included (`dprint` reflows prose, and a skipped gate is the most common red CI r
   why the release workflows are dispatched by hand, how to check a workflow locally first.
 - [`contributing/test-tiers.md`](contributing/test-tiers.md) — the unit / integration / clean-OS
   split and its fixtures.
+- [`contributing/type-checking.md`](contributing/type-checking.md) — why the basedpyright profile is
+  tiered rather than relaxed, why `invoke-stubs` exists and ships the way it does, every rule level
+  that deviates from `recommended`, and what `failOnWarnings` demands of new code.
 - [`contributing/consumer-sweep.md`](contributing/consumer-sweep.md) — who consumes this package,
   why a push to `main` is a deploy to all of them, and the commands that walk each one forward after
   the shared tool manifest or a shipped config changes.
