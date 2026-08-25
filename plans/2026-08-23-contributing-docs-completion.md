@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-08-25
 ---
 
@@ -9,91 +9,37 @@ updated: 2026-08-25
 durable content out of six retiring plans. Migration can only carry across what those plans actually
 contained, which is less than the four files' stated scopes describe.
 
-This plan tracks those gaps. It exists because the alternative — leaving "TODO: document recovery"
+This plan tracked those gaps. It existed because the alternative — leaving "TODO: document recovery"
 lines inside the `contributing/` files — is the exact failure mode the plan-docs convention forbids:
-prose has no status field, so nothing ever prompts a return visit. The `contributing/` files stay
-silent about what they don't cover; the silence is recorded here instead.
+prose has no status field, so nothing ever prompts a return visit.
 
-Each gap below is a real absence, not a stub. Fixing any one of them is independent work — this is
-deliberately a checklist, not a single design.
+## Resolution (2026-08-25)
 
-## Open questions
+Every gap has a home:
 
-### `contributing/versioning.md` — pre-release versions across three formats
+- **`versioning.md` — pre-release versions.** Direction decided: solve it for real (dev and rc
+  builds across all three formats), not restrict to `X.Y.Z`. Design and open questions live in
+  `plans/2026-08-25-prerelease-versions.md`; `versioning.md` points there.
+- **`release-flow.md` — recovery from bad states.** All four written up under "Known bad states and
+  how to get out". Two became guard clauses in `gitflow.py`, per the "stop loudly" convention:
+  `_require_merged_pr` (finalize before the PR merged — which used to tag and push the wrong commit
+  silently) and `_require_tag_absent` (a `sync/<tag>` PR closed unmerged, caught at the next
+  `*_start`). The abandoned-branch and wrong-commit-tag states are documentation only: nothing in
+  the flow can detect them, and the PR merge itself stays a human step a team cannot automate.
+- **`test-tiers.md`** — resolved 2026-08-23 (clean-OS tests landed with their fixture sections).
+- **`task-module-conventions.md`** — coherence pass done 2026-08-25 (three rules corrected against
+  the code).
+- **Index.** `CONTRIBUTING.md` at the repo root is the nexus — the per-file one-liners moved there
+  from `AGENTS.md`, which now points at it; `README.md` links it. GitHub reads a root
+  `CONTRIBUTING.md` natively, and the name does not collide with the `contributing/` directory.
 
-The largest gap, and the only one that is a design question rather than a writing task.
+## Migrated to
 
-[NEEDS CLARIFICATION: this repo has no pre-release/dev-version convention at all, and the three
-artifact kinds disagree on how to spell one. PEP 440 wants `1.0.0rc1`/`1.0.0.dev1`; Helm chart
-versions must be strict SemVer 2 (`1.0.0-rc1`); Docker tags forbid `+` outright, so SemVer build
-metadata cannot round-trip into an image tag. `version.py` currently assumes all three agree, which
-is true for plain `X.Y.Z` and false the moment a pre-release exists. Does the repo (a) adopt a
-convention and translate per artifact kind at write time, (b) restrict itself to `X.Y.Z` releases
-only and document that as a deliberate limitation, or (c) something narrower — e.g. pre-releases
-allowed for python only, since that is the one artifact with an index that understands them?]
+- `contributing/release-flow.md` — the four recovery procedures, the `[PITFALL:` on pre-guard
+  finalize runs, the `[DECISION:` on stateless guards.
+- `src/repo_tasks/gitflow.py` + `tests/unit/test_gitflow.py` — the two guards.
+- `CONTRIBUTING.md`, `AGENTS.md`, `README.md` — the index.
+- `plans/2026-08-25-prerelease-versions.md` — the versioning design question, as an open plan.
 
-[NEEDS CLARIFICATION: option (a) above would make `version.py` generate a bump-my-version config
-that customizes `parse`/`serialize`. That directly invalidates the assumption documented in
-`contributing/versioning.md`'s "Why `next_version` is hand-rolled" — plain arithmetic is only safe
-because the generated config never customizes them. Does `next_version` then shell out to
-`bump-my-version show --increment` after all, or is the arithmetic extended to understand the chosen
-pre-release scheme?]
-
-### `contributing/release-flow.md` — recovery from bad states
-
-The file documents one recovery procedure (the version-line merge conflict during a hotfix redirect)
-because it is the only one any plan ever wrote down. The rest are reachable states with no
-documented way out.
-
-[NEEDS CLARIFICATION: what is the recovery procedure for each of these? (1) an abandoned release
-branch — the branch exists with a bump commit on it, `develop` and `main` are untouched, and someone
-decides not to ship; (2) a tag pushed to the wrong commit, which is the irreversible-ish one since
-the tag may already be fetched elsewhere; (3) `*_finalize` run before the PR actually merged, where
-`git merge --ff-only origin/main` fails — is failing there sufficient, or does it leave partial
-state?; (4) a `sync/<tag>` PR closed without merging, leaving `main` tagged and released but
-`develop` never catching up. Each needs writing up, and (3)/(4) need checking against the actual
-code rather than reasoned about.]
-
-[NEEDS CLARIFICATION: should any of these become guard clauses that print via `_next_steps()` rather
-than documentation a human has to find? The "stop loudly and say what to run next" convention argues
-that a task which _can detect_ a bad state should say so at the point of failure. That would move
-some of this out of `contributing/` and into `gitflow.py` — a code change, not a docs change, and
-arguably the better fix for (3) specifically.]
-
-### `contributing/test-tiers.md` — resolved 2026-08-23
-
-The clean-OS mutating tests landed (`tests/integration/test_clean_os_user_effects.py`), and the
-section gained its "What the tier covers" and "Fixture scope" subsections in the same pass — this
-file's test-tiers gap is closed.
-
-### `contributing/task-module-conventions.md` — coherence pass done 2026-08-25
-
-Every rule grepped against every module. Held as written: single-writer, echo on every action, flag
-naming, `--project` actually selecting, release actions out of the quality composite, sibling
-imports, config-per-file. Three did not, all fixed:
-
-- "Freshness via `pre=`" claimed `dist.publish` has `pre=[build]`; it calls `build` from its body,
-  and the file's own PITFALL says why. Doc corrected.
-- "No-op cleanly" — `dist.*` tracebacked (`IndexError`/`FileNotFoundError`) in a repo with no python
-  project, and a Dockerfile-only repo with no `pyproject.toml` (which "smart defaults" promises
-  works) died in `current_version`. `discover_python_projects` now returns `[]` for no
-  `pyproject.toml`, `dist.*` no-op, and `version.py` raises a clear `ValueError` — recorded in the
-  rule as its one deliberate exception.
-- "Say what to run next" — `deps.lock`'s new hint hand-rolled the format; it now imports
-  `_next_steps`, and the rule names that as the intended cross-module use.
-
-### Cross-cutting
-
-[NEEDS CLARIFICATION: does `contributing/` need an index/README of its own, or is four files few
-enough that `AGENTS.md`'s pointers are sufficient? Adding one now is cheap; adding one at eight
-files is a retrofit. Decide before the count grows.]
-
-## Recommended direction
-
-Rough. Take the versioning pre-release question first — it is the only gap that is currently a live
-correctness risk rather than missing prose, since `version.py` will silently produce an invalid Helm
-chart version the first time anyone bumps to a release candidate. The rest can be written whenever
-the relevant work next brings someone into that file.
-
-Do not treat this plan as a blocker on retiring the six original plans; those retire on the strength
-of what actually migrated, and this tracks what was never there to migrate in the first place.
+Not migrated: the original per-gap `[NEEDS CLARIFICATION:` wording — each is either answered above
+or restated in the pre-release plan. Nothing deferred remains here.
