@@ -119,10 +119,13 @@ Two deliberate narrowings, commented in the stub: `Task.pre`/`.post` attributes 
 `list[Task[Any] | Call]` (no `str`) because that is what every `pre=[...]` in this family holds, and
 `Call` answers `.name` through its `__getattr__`.
 
-- [UNVERIFIED: whether a stub file in `stubPath` also reaches `from invoke import task` — that path
-  goes through the inline `invoke/__init__.py`, whose own `from .tasks import task` may resolve to
-  the inline `tasks.py` rather than the stub. The pilot switched to submodule imports in the same
-  change, so the two were never separated; matters for consumers that keep `from invoke import`.]
+- [PITFALL: a `stubPath` stub for one submodule does not reach `from invoke import task`. That path
+  goes through the inline `invoke/__init__.py`, whose own `from .tasks import task` resolves to the
+  inline `tasks.py`; a probe (2026-08-25) shows the decorated function as `(...) -> Unknown` and
+  `task` as invoke's inline `(...) -> ((...) -> Unknown)`. Only `from invoke.tasks import task`
+  picks up the stub — which the `reportPrivateImportUsage` warning already steers every consumer
+  toward. Covering the package form would need a full `typings/invoke/__init__.pyi` re-declaring the
+  whole surface; not worth it while the submodule import is the recommended form anyway.]
 - [DEFERRED: shipping the stub to consumers. Pilot only, local to `repo-tasks` for now. Options when
   it has proven out: (a) `typings/invoke/` materialized into each consumer's root by
   `configs.ensure` from a canonical copy in `src/repo_tasks/configs/` — same mechanism as
