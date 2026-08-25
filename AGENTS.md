@@ -16,18 +16,9 @@ repeat them here, only what's specific to this repo.
 ## Where things are written down
 
 - `README.md` — what the tasks are and how to use them.
-- `contributing/` — why they are built this way, and what was rejected. Read the relevant file
-  before changing behavior it covers:
-  - [`task-module-conventions.md`](contributing/task-module-conventions.md) — the rules every task
-    module follows (never silently mutate, single-writer, no-op cleanly, zero-config defaults).
-  - [`release-flow.md`](contributing/release-flow.md) — how gitflow is applied, and known bad
-    states.
-  - [`versioning.md`](contributing/versioning.md) — semver, grouping, and the python/docker/helm
-    format split.
-  - [`release-workflows.md`](contributing/release-workflows.md) — how images reach GHCR, why the
-    release workflows are dispatched by hand, and how to check a workflow locally first.
-  - [`test-tiers.md`](contributing/test-tiers.md) — the unit / integration / clean-OS split and its
-    fixtures.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — the index of `contributing/`: why things are built this way
+  and what was rejected, one file per question. Read the relevant file before changing behavior it
+  covers.
 - `plans/` — work not yet done. Anything unfinished belongs here, never as prose in the files above.
   Tagged so it can be found without opening files: `rg '^\s*[-*]?\s*\[DEFERRED:' plans/` for the
   backlog, `[NEEDS CLARIFICATION:` for open questions, `[UNVERIFIED:` for unproven claims.

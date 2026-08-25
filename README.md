@@ -34,7 +34,9 @@ tooling, venv/dependency lifecycle, canonical tool config, the dev-loop bootstra
 once and then hand-maintained per repo (project structure, `AGENTS.md`, `pyproject.toml`) is
 [`scaffoldapy`](https://github.com/TheodoreAD/scaffoldapy)'s job instead, not this package's. See
 [`contributing/repo-family-architecture.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/contributing/repo-family-architecture.md)
-in `power-user-linux-setup` for the full three-repo split and the decision rule behind it.
+in `power-user-linux-setup` for the full three-repo split and the decision rule behind it. The
+reasoning behind this repo's own design — decisions, rejected alternatives, pitfalls — is indexed in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Design
 
