@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-25
+status: in-progress
+updated: 2026-08-26
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -54,17 +54,20 @@ repo-tasks commit.]
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: should a gate step that needs a binary preflight for it and stop with the
-  fix, per task-module-conventions' "stop loudly and say what to run next" — e.g. `workflow_check`
-  checking `shutil.which("actionlint")` and failing with "actionlint missing from this project's dev
-  group — run `repo-tasks configs.ensure-deps` then `inv deps.lock`" — instead of the shell's exit
-  127? Cheap, and it converts the worst symptom into a one-line fix. Against: every tool-running
-  task would need it, and the real defect is the drift, not the message.]
-- [NEEDS CLARIFICATION: should `configs.diff` (and `repo-tasks.status`) report dev-group drift
-  against `repo-tasks-quality` the way `diff` already reports drifted config files? A consumer would
-  then see "dev group missing: actionlint-py, act-bin" from the same command that already tells it
-  its `pyrightconfig.json` is stale. Moved here from `scaffoldapy`'s retired
-  `plans/2026-08-25-ci-missing-actionlint.md`, which raised it and said it belongs to this repo.]
+- [DECISION: yes, every gate step preflights its binary — `configs.require_tool`, landed `99f26a8`.
+  The "every tool-running task would need it" objection held and was paid: eight call sites across
+  `quality.py` plus `testing._pytest`. It lives in `configs.py` because that module already owns the
+  `repo-tasks-quality` manifest and is the only place both `quality.py` and `testing.py` can import
+  from without a cycle (`quality` already imports `testing`). In the file-gated steps the call sits
+  _inside_ the `if files:` branch — hoisting it would turn "this repo has no shell scripts" into a
+  hard failure and cost those steps the no-op contract their docstrings promise. Resolved
+  2026-08-26.]
+- [DECISION: `configs.diff` reports dev-group drift alongside config-file drift, landed `e169837`.
+  Not `repo-tasks.status`: that task compares the installed tool version against the repo's stamp, a
+  different question, and `diff` is already the drift command. The dev group is read with tomllib
+  rather than `ensure_deps`' `_DEV_ARRAY_RE` — that regex sees repo-tasks' own
+  `dev = [{ include-group = "repo-tasks-quality" }]` as declaring nothing and would report the whole
+  manifest missing in the repo that owns it. Resolved 2026-08-26.]
 - [NEEDS CLARIFICATION: is the fix pinning, or a release cadence? The moment a `v0.1.0` tag exists,
   `stamp` pins consumers to it and `repo-tasks.update` targets tags — the machinery is built
   (`contributing/release-flow.md`) and unused. Pinned consumers stop tracking `main`, which turns
@@ -81,7 +84,8 @@ repo-tasks commit.]
   they predate the template and are its migration backlog, not a sweep target. The list is small
   enough today that a checklist in `contributing/` is the whole mechanism; a task that runs the
   sweep against local checkouts earns its keep only once those repos are regenerated onto the
-  template.]
+  template. Written down in `contributing/consumer-sweep.md`, landed `d47b37a`; resolved 2026-08-26.
+  Whether it becomes a task stays open, on the condition stated above.]
 - [NEEDS CLARIFICATION: should `scaffoldapy`'s e2e be this repo's canary — run before merging a
   change to `repo-tasks-quality`, `configs/`, or any `quality.*` composite? Locally that is
   `inv repo-tasks.update` from this checkout (or a `uv tool install` of the working tree) followed
@@ -93,12 +97,29 @@ repo-tasks commit.]
 
 Rough, in order of payoff per effort:
 
-1. Preflight-with-fix in the gate steps that shell out to a group-installed tool, so the failure
-   names the command that fixes it. Smallest change, immediate.
-2. Dev-group drift in `configs.diff`, so a consumer running its existing drift check sees the whole
-   picture.
-3. Write the consumer sweep down in `contributing/` now (the list of consumers and the five
-   commands), and decide separately whether it becomes a task.
+1. ~~Preflight-with-fix in the gate steps that shell out to a group-installed tool~~ — landed
+   2026-08-26, `99f26a8`.
+2. ~~Dev-group drift in `configs.diff`~~ — landed 2026-08-26, `e169837`.
+3. ~~Write the consumer sweep down in `contributing/`~~ — landed 2026-08-26, `d47b37a`. Whether it
+   becomes a task is still open.
 4. The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it ships.
 5. Tagging a release is a policy decision that changes what all of the above defends against; take
    it when the release flow is exercised for real, not as part of this plan.
+
+## Verification (2026-08-26)
+
+1–3 were exercised against a real scratch consumer, not only through `MockContext`:
+
+- Config files byte-identical, dev group short of `actionlint-py` and friends: `configs.diff` exits
+  1 with `dependency-groups.dev is missing: ...` and only the ensure-deps/lock/sync steps — the
+  incident's exact shape, which previously printed "up to date".
+- `inv quality.type-check` with `basedpyright` off `PATH`: the preflight message naming
+  `basedpyright` and the three commands, instead of exit 127.
+- `inv quality.shell-check quality.workflow-check` with `shellcheck`/`actionlint` off `PATH` in a
+  repo with neither file kind: exit 0, silent — the no-op contract survives the preflight.
+- `inv quality.precommit` here: 0 errors, 0 warnings, 294 unit tests.
+
+[UNVERIFIED: nothing has been swept yet. `power-user-linux-setup` and `scaffoldapy` still run
+whatever `main` was before these three commits, and the preflight has never been exercised from a
+consumer's own CI — only locally. The sweep in `contributing/consumer-sweep.md` is the next step,
+and item 4 is what would have made it unnecessary.]
