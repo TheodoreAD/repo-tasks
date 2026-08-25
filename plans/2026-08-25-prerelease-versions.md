@@ -1,5 +1,5 @@
 ---
-status: idea
+status: planned
 updated: 2026-08-25
 ---
 
@@ -27,9 +27,10 @@ Enterprise work needs two kinds of pre-release artifact, and they are different 
   and must never collide with anything a human will later release.
 
 Extracted from `plans/2026-08-23-contributing-docs-completion.md` (now retired) once the direction
-was settled 2026-08-25: solve it properly rather than restrict to `X.Y.Z`.
+was settled 2026-08-25: solve it properly rather than restrict to `X.Y.Z`. The three open questions
+were answered the same day; decisions are inline below.
 
-## What the three formats allow (verified 2026-08-25)
+### What the three formats allow (verified 2026-08-25)
 
 | kind       | pre-release                 | build/commit info                                              | resolver behavior                                             |
 | ---------- | --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -45,76 +46,118 @@ PEP 440 form other than a local version, which PyPI rejects.
 Ordering agrees where it matters: `dev.N < rc.N < final` in both schemes (`d` < `r` under SemVer's
 ASCII comparison; PEP 440 orders dev before pre before final by definition).
 
-## Open questions
-
-[NEEDS CLARIFICATION: where does the rc cycle live in the gitflow? Proposed: `release_start` bumps
-to `X.Y.0rc1` on the release branch (branch still named `release/X.Y.0`); a new
-`gitflow.release-candidate` bumps `pre_n` (`rc1` → `rc2`), tags `vX.Y.0rc2` on the release branch
-and pushes the tag so CI builds rc artifacts; `release_finish` bumps `pre_l` to final (`X.Y.0`)
-before opening the PR into main. Hotfixes go straight to final by default — an rc cycle on a hotfix
-is the exception, opt-in via the same task. Confirm the hotfix default.]
-
-[NEEDS CLARIFICATION: dev builds need the version written into `pyproject.toml` for `uv build` to
-see it, but must never be committed. Proposed: `dist.build --dev` (or `version.set-dev`, a working
-tree write with no commit) computes the version from git, writes it, builds, and leaves the tree
-dirty-by-design in CI (a throwaway checkout) — versus switching the project to dynamic versioning
-(`hatch-vcs`/`uv-dynamic-versioning`), which would take the version field away from `version.py`'s
-single-writer ownership and out of `uv.lock`. Which shape?]
-
-[NEEDS CLARIFICATION: does `next_version` keep its pure-arithmetic form, extended to the
-`pre_l`/`pre_n` parts and pinned by a test against
-`bump-my-version show new_version --increment
-<part>` for every transition — or shell out to `show`
-(no files needed, only `current_version` + `parse`/`serialize`) and drop the hand-rolled copy?
-`gitflow.py` needs it to name the branch before the bump exists; a subprocess there is one more
-`c.run` to mock, not a real cost.]
-
-## Recommended direction
-
-Rough. One logical version with **parts** as the source of truth — `major`, `minor`, `patch`,
-`pre_l` (`rc` | final), `pre_n` — and each artifact kind gets its own serialization of the same
-parts. No translation between strings, only parts → string per kind.
-
-1. **rc releases are bump-my-version's job, per-file `serialize`.** bump-my-version 1.5.1 supports a
-   file entry overriding `parse`/`serialize` (howto "custom version formats by file"), so the
-   generated config gains a global `parse` accepting `X.Y.Z` and `X.Y.ZrcN`,
-   `serialize =
-   ["{major}.{minor}.{patch}{pre_l}{pre_n}", "{major}.{minor}.{patch}"]` for
-   `pyproject.toml` and `uv.lock`, and
-   `["{major}.{minor}.{patch}-{pre_l}.{pre_n}", "{major}.{minor}.{patch}"]` on the two `Chart.yaml`
-   entries; `[tool.bumpversion.parts.pre_l] values = ["rc", "final"]
-   optional_value = "final"`.
-   The stored PEP 440 form stays canonical (`packaging` normalizes `1.1.0-rc.1` to `1.1.0rc1`
-   anyway). `next_version`/`current_version` grow a tiny parser for the PEP 440 form and
-   `docker.py`/`helm.py` call a `semver(version)` serializer instead of using the string raw —
-   `docker.build` tags `1.1.0-rc.1`, `helm.push` looks for `<chart>-1.1.0-rc.1.tgz`. [UNVERIFIED:
-   per-file `serialize` with a parts table works from the temporary generated config exactly as from
-   a static one — drive it against a throwaway repo before building on it, the way the tool choice
-   itself was verified.]
-2. **dev builds are computed from git, never bumped.** Base = the next patch of the last reachable
-   tag, distance and short hash appended: PEP 440 `1.0.1.dev5+g1a2b3c`, SemVer/Docker
-   `1.0.1-dev.5.g1a2b3c`. That is [dunamai](https://github.com/mtkennerly/dunamai)'s documented
-   scheme (`Version.from_git()`, `serialize(style=Style.Pep440 | Style.SemVer, format=...)`, zero
-   dependencies) — prefer it over hand-rolling `git describe` parsing; `--bump` gives the next-patch
-   framing and `format=` gives the docker shape with the hash inside the pre-release identifiers.
-   Sorts correctly regardless of whether the next real release turns out to be a patch or a minor.
-   [UNVERIFIED: dunamai's exact SemVer output for a final tag at distance N with `bump` — confirm it
-   is `1.0.1-dev.N+gSHA` and not `-pre.N`, then pin it in a test.]
-3. **Pre-releases are opt-in for every consumer, by each ecosystem's own rules.** rc and dev
-   versions never receive `latest` in `docker.release`; `helm install` skips them without `--devel`;
-   `uv`/`pip` skip them unless pinned or pre-releases are allowed. Dev builds publish only to
-   internal indexes (devpi, GHCR) — PyPI rejects local versions outright, which is the right
-   guardrail. `dist.publish` refuses a `.dev` version against an index that is not
-   `explicit = true`.
-4. **Tags.** rc tags on the release branch (`vX.Y.0rc1`) are real tags in the `v*` namespace, so
-   `publish.yml`/`docker-release.yml` triggers see them; the workflows must gate `latest` and the
-   real-PyPI job on "is final". The `<group>-vX.Y.Z` monorepo tag scheme
-   ([`versioning.md`](../contributing/versioning.md)) is orthogonal and stays deferred.
-5. `contributing/versioning.md`'s "Why `next_version` is hand-rolled" and "One version, three
-   formats" are rewritten when this lands — the assumption they document is exactly what changes.
-
 Prior art checked 2026-08-25: bump-my-version docs (parts/`optional_value`/`serialize`,
-`show
---increment` needs no files), python-semver's PEP 440 ↔ SemVer conversion notes, dunamai's
+`show --increment` needs no files), python-semver's PEP 440 ↔ SemVer conversion notes, dunamai's
 README, Helm chart docs (`version` SemVer 2 including pre-release/build metadata; `appVersion`
 free-form, quote it), distribution/reference's tag grammar.
+
+## Design
+
+One logical version with **parts** as the source of truth — `major`, `minor`, `patch`, `pre_l` (`rc`
+| final), `pre_n` — and each artifact kind gets its own serialization of the same parts. No
+translation between strings, only parts → string per kind. The stored PEP 440 form in
+`pyproject.toml` stays canonical (`packaging` normalizes `1.1.0-rc.1` to `1.1.0rc1` anyway).
+
+### 1. `version.py` — parts model, per-kind serializers, rc-aware bump config
+
+- A small frozen `Version` (parts above) with `parse(pep440: str)` accepting `X.Y.Z` and `X.Y.ZrcN`
+  only — anything else (`a`, `b`, `.dev`, `.post`, local) is a `ValueError` naming the accepted
+  shapes, since a committed version is never one of those; and two serializers, `pep440()` and
+  `semver()`. Docker uses `semver()` unchanged: the rc form has no `+`, and dev builds (§3) put the
+  hash inside the pre-release identifiers.
+- The generated bump config gains a global `parse` regex for the two accepted shapes,
+  `serialize = ["{major}.{minor}.{patch}{pre_l}{pre_n}", "{major}.{minor}.{patch}"]` for
+  `pyproject.toml` and the `uv.lock` entry, a per-file
+  `serialize = ["{major}.{minor}.{patch}-{pre_l}.{pre_n}", "{major}.{minor}.{patch}"]` on both
+  `Chart.yaml` entries, and `[tool.bumpversion.parts.pre_l] values = ["rc", "final"]`
+  `optional_value = "final"`. bump-my-version 1.5.1 documents per-file `parse`/`serialize` overrides
+  (howto "custom version formats by file").
+- `next_version(current, part)` extends to `part in {"major", "minor", "patch", "rc", "final"}`:
+  `major`/`minor`/`patch` reset to `rc1` when the caller asks for a pre-release start (see §2's
+  `_start`), `rc` increments `pre_n`, `final` drops the pre-release. It stays pure arithmetic.
+- [DECISION: `next_version` stays hand-rolled, pinned by a test that drives every transition through
+  `bump-my-version show new_version --increment <part> --current-version X --config-file <the same
+  generated config>`
+  (no files needed for `show`) so a scheme divergence fails a unit test rather than a release.
+  Shelling out from `gitflow.py` would add a subprocess at branch-naming time for no correctness
+  gain once the pin exists — the pin is what makes the hand-rolled copy safe, exactly the argument
+  `versioning.md` already makes for the `X.Y.Z` case. (2026-08-25)]
+- [UNVERIFIED: per-file `serialize` with a parts table works from the temporary generated config
+  exactly as from a static one — drive it against a throwaway repo before building on it, the way
+  the tool choice itself was verified.]
+
+### 2. `gitflow.py` — the rc cycle lives on the release branch
+
+- [DECISION: `release_start --bump minor` bumps to `X.Y.0rc1` on `release/X.Y.0` (branch named after
+  the final version, as today); a new `gitflow.release-candidate` bumps `rc` (`rcN` → `rcN+1`), tags
+  `vX.Y.0rcN+1` on the release branch and pushes the tag, so the tag-triggered workflows build
+  staging artifacts; `release_finish` bumps `final` (`X.Y.0`) as its first step and then opens the
+  PR into main as today. Hotfixes go straight to final by default — `hotfix_start` produces `X.Y.Z`,
+  and an rc cycle on a hotfix is opt-in via `--rc`, which routes it through the same
+  `release-candidate` task. This is nvie's canonical shape; the tag on the release branch is the
+  only addition. (2026-08-25)]
+- The `_require_tag_absent` guard checks the final tag as today; `release-candidate` checks its own
+  rc tag before tagging.
+- Teams that do not want a release branch for every release are a separate design —
+  `plans/2026-08-25-release-without-release-branch.md`.
+
+### 3. Dev builds — computed from git, written to the working tree, never committed
+
+- [DECISION: a `version.set-dev` task (with `dist.build --dev`, `docker.build --dev`,
+  `helm.package --dev` calling it first) computes the dev version from git and writes it into
+  `pyproject.toml`, `uv.lock` and every group `Chart.yaml` in place — the same bump-my-version
+  config with `--new-version <dev> --no-commit --no-tag`, so `version.py` stays the single writer
+  and the lock stays consistent. Locally the task refuses on a dirty tree and prints the
+  `git restore` that undoes it; in CI the checkout is throwaway. Dynamic versioning
+  (`hatch-vcs`/`uv-dynamic-versioning`) was rejected: it takes the field away from `version.py`,
+  cannot write `Chart.yaml`, and `uv.lock` would embed a value the backend no longer owns.
+  (2026-08-25)]
+- The dev version is [dunamai](https://github.com/mtkennerly/dunamai)'s scheme (MIT, zero
+  dependencies, `Version.from_git()` + `serialize(style=..., format=...)`): base = next patch of the
+  last reachable tag, then distance and short hash — PEP 440 `1.0.1.dev5+g1a2b3c`, SemVer/Docker
+  `1.0.1-dev.5.g1a2b3c` via a `format=` that moves the hash inside the pre-release identifiers.
+  Sorts before any rc or final of the same base regardless of whether the next real release turns
+  out to be a patch or a minor. Added to `[project].dependencies`.
+- [UNVERIFIED: dunamai's exact SemVer output for a final tag at distance N with `bump=True` —
+  confirm it is `1.0.1-dev.N+gSHA` and not `-pre.N`, then pin it in a test.]
+
+### 4. Pre-releases are opt-in for every consumer, by each ecosystem's own rules
+
+- `docker.release` tags `latest` only for a final version; `helm install` skips pre-release charts
+  without `--devel`; `uv`/`pip` skip them unless pinned or pre-releases are allowed.
+- `dist.publish` refuses a `.dev` version against an index that is not `explicit = true` — PyPI
+  rejects local versions outright, and the task should say so before `uv publish` does.
+- `publish.yml`/`docker-release.yml` see rc tags (they are in the `v*` namespace); both gate
+  `latest` and the real-PyPI job on "is final". The `<group>-vX.Y.Z` monorepo tag scheme
+  ([`versioning.md`](../contributing/versioning.md)) is orthogonal and stays deferred.
+
+### 5. `contributing/versioning.md`
+
+"One version, three formats" and "Why `next_version` is hand-rolled" are rewritten when this lands —
+the assumption they document is exactly what changes. `release-flow.md` gains the rc cycle.
+
+## Files touched
+
+- `src/repo_tasks/version.py` — `Version`, `parse`/`pep440`/`semver`, rc-aware `next_version`,
+  rc-aware generated config, `set_dev`.
+- `src/repo_tasks/gitflow.py` — `release_start` → rc1, `release_candidate`, `release_finish` →
+  final, `hotfix_start --rc`.
+- `src/repo_tasks/docker.py`, `helm.py`, `dist.py` — `semver()` for tags/`.tgz` names, `--dev`,
+  `latest` and publish gating.
+- `.github/workflows/publish.yml`, `docker-release.yml` — final-only gating.
+- `pyproject.toml` — `dunamai`.
+- `tests/unit/test_version.py`, `test_gitflow.py`, `test_docker.py`, `test_helm.py`, `test_dist.py`;
+  `tests/integration/test_version_integration.py` — the `show --increment` pin and the real
+  bump-my-version run over a throwaway repo with a chart.
+- `contributing/versioning.md`, `release-flow.md`.
+
+## Verification
+
+- Unit: every `next_version` transition equals `bump-my-version show new_version --increment` on the
+  same generated config; `semver()` output for `1.1.0rc1` and `1.1.0` matches what `helm lint` and
+  `docker tag` accept.
+- Integration: a real bump `1.0.0 → 1.1.0rc1 → 1.1.0rc2 → 1.1.0` over a throwaway repo with a
+  `Chart.yaml`, asserting the four file forms after each step and that `uv lock --check` passes.
+- Integration: `version.set-dev` on a tag-at-distance repo writes the expected PEP 440 and SemVer
+  forms and refuses on a dirty tree.
+- The dogfood `sample-service` group goes through one full rc cycle in local mode.
