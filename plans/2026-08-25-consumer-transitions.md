@@ -73,11 +73,15 @@ repo-tasks commit.]
   below either way.]
 - [NEEDS CLARIFICATION: what is the consumer sweep, concretely? When `repo-tasks-quality` or a
   shipped config changes, which repos need `inv repo-tasks.update` + `configs.ensure-deps` +
-  `deps.lock` + `configs.pull` + gate, and where is that list? Known today: `power-user-linux-setup`
-  (did it by hand, `395dc3d`), `scaffoldapy` (did it by hand, `56d80e8`, plus template fixes
-  `2e29f2b`), the `*-polite-mcp` repos and `product-research-pipeline` (status unknown). A checklist
-  in `contributing/` is the minimum; a task that runs the sweep against a list of local checkouts is
-  the mechanism.]
+  `deps.lock` + `configs.pull` + gate, and where is that list? Measured 2026-08-25 across
+  `~/projects/github.com-personal`: exactly two consumers exist — `power-user-linux-setup` (swept by
+  hand, `395dc3d`) and `scaffoldapy` (swept by hand, `56d80e8`, plus template fixes `2e29f2b`). The
+  five `*-polite-mcp` repos and `product-research-pipeline` do not consume repo-tasks at all (no
+  `from repo_tasks` in any `tasks.py`, no `bootstrap-repo-tasks.sh`, no workflow running the gate) —
+  they predate the template and are its migration backlog, not a sweep target. The list is small
+  enough today that a checklist in `contributing/` is the whole mechanism; a task that runs the
+  sweep against local checkouts earns its keep only once those repos are regenerated onto the
+  template.]
 - [NEEDS CLARIFICATION: should `scaffoldapy`'s e2e be this repo's canary — run before merging a
   change to `repo-tasks-quality`, `configs/`, or any `quality.*` composite? Locally that is
   `inv repo-tasks.update` from this checkout (or a `uv tool install` of the working tree) followed
