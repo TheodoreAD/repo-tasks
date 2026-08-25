@@ -260,3 +260,31 @@ code rather than by hiding output.
   combinations failed the moment the global tool reached `09321ae`. Fixed template-side in
   scaffoldapy `2e29f2b`; the lesson (a generator has two gates, and only its e2e tests the second)
   is in `plans/2026-08-25-consumer-transitions.md`.
+
+## Migrated to
+
+- [`contributing/type-checking.md`](../contributing/type-checking.md) — new file, and the bulk of
+  it: the tiering rationale, the three root causes of the noise, why `invoke-stubs` is a separate
+  PEP 561 partial-stub distribution rather than a `stubPath`, every rule level that deviates from
+  `recommended` with its reasoning, the `failOnWarnings` policy, the four pitfalls (stubPath not
+  reaching `from invoke import`, the `.pth`/`py.typed` trap, `None`-as-context surfaced by
+  annotating, `total=False` TypedDict subscripting), and the rejected alternatives (baseline,
+  `--level error`, disabling `reportUnknown*`).
+- [`plans/2026-08-26-typing-followups.md`](2026-08-26-typing-followups.md) — the two `[DEFERRED:`
+  items, which is what kept this file from being deletable: the upstream pyinvoke contribution and
+  the `sample-service` `reportImplicitOverride` line.
+- [`contributing/consumer-sweep.md`](../contributing/consumer-sweep.md) — already holds the two
+  rollout pitfalls this plan surfaced (`configs.pull` printing "pulled" when it wrote nothing; a
+  generator having two gates with only its e2e testing the second). Not migrated a second time —
+  pointed at instead.
+
+Deliberately **not** migrated:
+
+- The per-repo warning counts, the step-by-step rollout narrative, and the "landed in commit X"
+  entries. Verification logs — the state they describe is now just what the code is, and git history
+  has the commits.
+- The exact annotations added, the file lists, and `invoke-stubs`' own signatures. Code contracts,
+  live in the code and in the `invoke-stubs` repo; a copy here would drift.
+- The pilot history (a `typings/invoke/tasks.pyi` that landed first and was deleted once the package
+  existed). Superseded detail with no reader question behind it; the surviving decision records that
+  `stubPath` was rejected and why, which is the part that answers "why not just use stubPath".
