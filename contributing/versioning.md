@@ -69,7 +69,8 @@ treating them as one string. They diverge as soon as pre-release versions enter 
 forbid `+` outright so SemVer build metadata cannot round-trip.
 
 **This repo has no pre-release/dev-version convention yet, and `version.py` currently assumes the
-three formats agree.** Tracked in `plans/2026-08-23-contributing-docs-completion.md`.
+three formats agree.** The design for rc and dev builds across all three is
+`plans/2026-08-25-prerelease-versions.md`.
 
 ## Single writer
 
