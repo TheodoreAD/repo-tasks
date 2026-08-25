@@ -24,7 +24,8 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from invoke import Config, Context
+from invoke.config import Config
+from invoke.context import Context
 
 from repo_tasks import docker as docker_tasks
 from repo_tasks import helm as helm_tasks
@@ -61,7 +62,7 @@ def _repo_root_cwd():
 
 @pytest.fixture(scope="module")
 def service_version():
-    return next(p.version for p in discover_python_projects(None) if p.name == _SERVICE)
+    return next(p.version for p in discover_python_projects(_repo_context()) if p.name == _SERVICE)
 
 
 @pytest.fixture(scope="module")
@@ -70,12 +71,12 @@ def pushed_image(docker_registry):
     registry through docker.release itself. Only the image *ref* is redirected at the local
     registry; the Dockerfile, context, and version group all come from the committed
     repo-tasks.toml."""
-    image = next(i for i in discover_docker_images(None) if i.name == _SERVICE)
+    image = next(i for i in discover_docker_images(_repo_context()) if i.name == _SERVICE)
     local = replace(image, image=f"{docker_registry}/{_SERVICE}")
     mp = pytest.MonkeyPatch()
     mp.setattr(docker_tasks, "discover_docker_images", lambda c: [local])
     try:
-        docker_tasks.release.body(_repo_context())  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        docker_tasks.release.body(_repo_context())
     finally:
         mp.undo()
     return local.image
@@ -87,16 +88,16 @@ def pushed_chart(docker_registry):
     own tasks. --plain-http because helm has no equivalent of docker's automatic loopback
     insecure-registry exemption and would otherwise speak HTTPS to it."""
     ctx = _repo_context()
-    helm_tasks.lint.body(ctx)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    helm_tasks.package.body(ctx)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    helm_tasks.push.body(ctx, registry=f"oci://{docker_registry}/charts", plain_http=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm_tasks.lint.body(ctx)
+    helm_tasks.package.body(ctx)
+    helm_tasks.push.body(ctx, registry=f"oci://{docker_registry}/charts", plain_http=True)
     return f"charts/{_SERVICE}"
 
 
 def test_the_sample_service_is_one_group_across_image_and_chart():
     """The whole point of the pairing: one group, so one bump moves image tag and chart together."""
-    image = next(i for i in discover_docker_images(None) if i.name == _SERVICE)
-    chart = next(ch for ch in discover_helm_charts(None) if ch.name == _SERVICE)
+    image = next(i for i in discover_docker_images(_repo_context()) if i.name == _SERVICE)
+    chart = next(ch for ch in discover_helm_charts(_repo_context()) if ch.name == _SERVICE)
     assert image.group == chart.group == _SERVICE
 
 

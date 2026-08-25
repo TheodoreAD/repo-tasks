@@ -9,7 +9,8 @@ actually running bump-my-version."""
 import re
 
 import pytest
-from invoke import MockContext, Result
+from invoke.context import MockContext
+from invoke.runners import Result
 
 from repo_tasks import gitflow
 
@@ -39,7 +40,7 @@ def _ok(*commands):
 
 
 def test_feature_start(c):
-    gitflow.feature_start.body(c, name="foo")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.feature_start.body(c, name="foo")
     assert c.run.call_args_list[0] == (("git checkout -b feature/foo develop",), {"echo": True})
 
 
@@ -50,7 +51,7 @@ def test_feature_finish_pr_mode_opens_a_pr_against_develop(capsys):
             **_gh_pr("develop", "feature/foo", "Feature: foo", "Merging feature/foo into develop."),
         }
     )
-    gitflow.feature_finish.body(c, name="foo")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.feature_finish.body(c, name="foo")
     assert c.run.call_args_list == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git push -u origin feature/foo",), {"echo": True}),
         (
@@ -64,7 +65,7 @@ def test_feature_finish_pr_mode_opens_a_pr_against_develop(capsys):
 
 
 def test_feature_finish_local_merges_directly(c):
-    gitflow.feature_finish.body(c, name="foo", local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.feature_finish.body(c, name="foo", local=True)
     assert c.run.call_args_list == [
         (("git checkout develop",), {"echo": True}),
         (("git merge --no-ff feature/foo",), {"echo": True}),
@@ -78,7 +79,7 @@ def test_feature_finish_local_merges_directly(c):
 
 
 def test_release_start_branches_off_develop_before_bumping(c):
-    gitflow.release_start.body(c, bump="minor")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.release_start.body(c, bump="minor")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout develop"
     assert call_strings[1] == "git checkout -b release/0.2.0"
@@ -86,7 +87,7 @@ def test_release_start_branches_off_develop_before_bumping(c):
 
 
 def test_hotfix_start_branches_off_main_before_bumping(c):
-    gitflow.hotfix_start.body(c, bump="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_start.body(c, bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout main"
     assert call_strings[1] == "git checkout -b hotfix/0.1.1"
@@ -106,7 +107,7 @@ def test_release_finish_pr_mode_opens_a_pr_against_main(capsys):
             **_gh_pr("main", "release/0.2.0", "Release 0.2.0", "Merging release/0.2.0 into main."),
         }
     )
-    gitflow.release_finish.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.release_finish.body(c)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git push -u origin release/0.2.0",), {"echo": True}),
         (
@@ -126,7 +127,7 @@ def test_hotfix_finish_pr_mode_opens_a_pr_against_main():
             **_gh_pr("main", "hotfix/0.1.1", "Hotfix 0.1.1", "Merging hotfix/0.1.1 into main."),
         }
     )
-    gitflow.hotfix_finish.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_finish.body(c)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git push -u origin hotfix/0.1.1",), {"echo": True}),
         (
@@ -139,7 +140,7 @@ def test_hotfix_finish_pr_mode_opens_a_pr_against_main():
 def test_finish_pr_mode_raises_when_not_on_expected_branch_kind():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match="release/"):
-        gitflow.release_finish.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.release_finish.body(c)
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ def _local_finish_context(current_branch, open_release_branch=None):
 
 def test_release_finish_local_merges_tags_and_deletes():
     c = _local_finish_context("release/0.2.0")
-    gitflow.release_finish.body(c, local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.release_finish.body(c, local=True)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git checkout main",), {"echo": True}),
         (("git merge --no-ff release/0.2.0",), {"echo": True}),
@@ -182,7 +183,7 @@ def test_release_finish_local_merges_tags_and_deletes():
 
 def test_release_finish_local_pushes_when_requested():
     c = _local_finish_context("release/0.2.0")
-    gitflow.release_finish.body(c, local=True, push=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.release_finish.body(c, local=True, push=True)
     assert c.run.call_args_list[-2:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git push origin main develop",), {"echo": True}),
         (("git push origin v0.2.0",), {"echo": True}),
@@ -191,7 +192,7 @@ def test_release_finish_local_pushes_when_requested():
 
 def test_hotfix_finish_local_merges_into_develop_when_no_release_is_open():
     c = _local_finish_context("hotfix/0.1.1")
-    gitflow.hotfix_finish.body(c, local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_finish.body(c, local=True)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git checkout main",), {"echo": True}),
         (("git merge --no-ff hotfix/0.1.1",), {"echo": True}),
@@ -207,7 +208,7 @@ def test_hotfix_finish_local_redirects_into_an_open_release_branch():
     """nvie's documented exception: 'when a release branch currently exists, the hotfix changes
     need to be merged into that release branch, instead of develop'."""
     c = _local_finish_context("hotfix/0.1.1", open_release_branch="release/0.2.0")
-    gitflow.hotfix_finish.body(c, local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_finish.body(c, local=True)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git checkout main",), {"echo": True}),
         (("git merge --no-ff hotfix/0.1.1",), {"echo": True}),
@@ -230,13 +231,13 @@ def test_finish_local_raises_when_multiple_release_branches_are_open():
         }
     )
     with pytest.raises(ValueError, match="multiple release"):
-        gitflow.hotfix_finish.body(c, local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.hotfix_finish.body(c, local=True)
 
 
 def test_finish_local_raises_when_not_on_expected_branch_kind():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match="release/"):
-        gitflow.release_finish.body(c, local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.release_finish.body(c, local=True)
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +266,7 @@ def _finalize_context(current_branch, tag, open_release_branch=None):
 
 def test_release_finalize_fetches_tags_and_opens_a_develop_pr(capsys):
     c = _finalize_context("release/0.2.0", "v0.2.0")
-    gitflow.release_finalize.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.release_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings == [
         "git rev-parse --abbrev-ref HEAD",
@@ -287,7 +288,7 @@ def test_release_finalize_fetches_tags_and_opens_a_develop_pr(capsys):
 
 def test_hotfix_finalize_targets_develop_when_no_release_is_open():
     c = _finalize_context("hotfix/0.1.1", "v0.1.1")
-    gitflow.hotfix_finalize.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert FOR_EACH_REF in call_strings
     assert call_strings[-1].startswith("gh pr create --base develop")
@@ -295,7 +296,7 @@ def test_hotfix_finalize_targets_develop_when_no_release_is_open():
 
 def test_hotfix_finalize_redirects_into_an_open_release_branch():
     c = _finalize_context("hotfix/0.1.1", "v0.1.1", open_release_branch="release/0.2.0")
-    gitflow.hotfix_finalize.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.hotfix_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings[-1].startswith("gh pr create --base release/0.2.0")
 
@@ -303,7 +304,7 @@ def test_hotfix_finalize_redirects_into_an_open_release_branch():
 def test_finalize_raises_when_not_on_expected_branch_kind():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match="release/"):
-        gitflow.release_finalize.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.release_finalize.body(c)
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +313,7 @@ def test_finalize_raises_when_not_on_expected_branch_kind():
 
 
 def test_support_start_branches_off_the_given_base(c, capsys):
-    gitflow.support_start.body(c, version="1.4.x", base="v1.4.0")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_start.body(c, version="1.4.x", base="v1.4.0")
     c.run.assert_called_once_with("git checkout -b support/1.4.x v1.4.0", echo=True)
     out = capsys.readouterr().out
     assert "support/1.4.x" in out
@@ -329,7 +330,7 @@ def test_support_start_branches_off_the_given_base(c, capsys):
 
 
 def test_support_hotfix_start_branches_off_the_support_branch_before_bumping(c):
-    gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout support/1.4.x"
     assert call_strings[1] == "git checkout -b support-hotfix/1.4.x/0.1.1"
@@ -349,7 +350,7 @@ def test_support_hotfix_finish_pr_mode_opens_a_pr_against_the_support_branch(cap
             ),
         }
     )
-    gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_hotfix_finish.body(c, support="1.4.x")
     out = capsys.readouterr().out
     assert "inv gitflow.support-hotfix-finalize --support=1.4.x" in out
 
@@ -365,7 +366,7 @@ def test_support_hotfix_finish_local_merges_tags_and_deletes():
             f"git branch -d {branch}": Result(exited=0),
         }
     )
-    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True)
     assert c.run.call_args_list[1:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git checkout support/1.4.x",), {"echo": True}),
         ((f"git merge --no-ff {branch}",), {"echo": True}),
@@ -386,7 +387,7 @@ def test_support_hotfix_finish_local_pushes_when_requested():
             **_ok("git push origin support/1.4.x", "git push origin v0.1.1"),
         }
     )
-    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True, push=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_hotfix_finish.body(c, support="1.4.x", local=True, push=True)
     assert c.run.call_args_list[-2:] == [  # pyright: ignore[reportAttributeAccessIssue]
         (("git push origin support/1.4.x",), {"echo": True}),
         (("git push origin v0.1.1",), {"echo": True}),
@@ -404,7 +405,7 @@ def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
             **_ok("git push origin v0.1.1"),
         }
     )
-    gitflow.support_hotfix_finalize.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    gitflow.support_hotfix_finalize.body(c, support="1.4.x")
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings == [
         "git rev-parse --abbrev-ref HEAD",
@@ -420,11 +421,11 @@ def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
 def test_support_hotfix_raises_when_not_on_the_matching_support_hotfix_branch():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match=re.escape("support-hotfix/1.4.x/")):
-        gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.support_hotfix_finish.body(c, support="1.4.x")
 
 
 def test_support_hotfix_raises_for_a_different_support_lines_branch():
     """On support-hotfix/1.5.x/0.1.1 but finishing for support 1.4.x — must not accept it."""
     c = MockContext(run=_rev_parse("support-hotfix/1.5.x/0.1.1"))
     with pytest.raises(ValueError, match=re.escape("support-hotfix/1.4.x/")):
-        gitflow.support_hotfix_finish.body(c, support="1.4.x")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        gitflow.support_hotfix_finish.body(c, support="1.4.x")

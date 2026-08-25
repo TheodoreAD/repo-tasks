@@ -25,7 +25,8 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from invoke import Config, Context
+from invoke.config import Config
+from invoke.context import Context
 from testcontainers.core.container import DockerContainer
 
 from repo_tasks import docker as docker_tasks
@@ -154,7 +155,7 @@ def clean_os_container(docker_registry):
     mp.setattr(docker_tasks, "current_version", lambda c, group=None: "test")
     try:
         # build -> tag :latest -> push :test -> push :latest
-        docker_tasks.release.body(ctx)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        docker_tasks.release.body(ctx)
     finally:
         mp.undo()
 

@@ -49,7 +49,7 @@ def test_group_bump_moves_project_and_chart_together(c, tmp_path, monkeypatch, s
     monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [chart])
 
-    version.bump.body(c, part="minor", group="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    version.bump.body(c, part="minor", group="sample-service")
 
     assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text()
     chart_text = (chart_dir / "Chart.yaml").read_text()
@@ -89,7 +89,7 @@ def test_bump_relocks_in_the_same_commit(c, tmp_path, monkeypatch):
     monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
 
-    version.bump.body(c, part="patch")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    version.bump.body(c, part="patch")
 
     assert 'name = "probe"\nversion = "0.1.1"' in (tmp_path / "uv.lock").read_text()
     check = _uv(tmp_path, "lock", "--check")
@@ -113,7 +113,7 @@ def test_workspace_member_bump_relocks_the_root_lock(c, tmp_path, monkeypatch):
     monkeypatch.setattr(version, "discover_python_projects", lambda c: [member])
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
 
-    version.bump.body(c, part="minor", group="svc")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    version.bump.body(c, part="minor", group="svc")
 
     lock_text = (tmp_path / "uv.lock").read_text()
     assert 'name = "svc"\nversion = "0.2.0"' in lock_text
@@ -136,7 +136,7 @@ def test_group_bump_leaves_an_unrelated_groups_chart_alone(c, tmp_path, monkeypa
     monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [other])
 
-    version.bump.body(c, part="patch", group="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    version.bump.body(c, part="patch", group="sample-service")
 
     assert 'version = "0.1.1"' in (tmp_path / "pyproject.toml").read_text()
     assert "version: 0.1.0" in (chart_dir / "Chart.yaml").read_text()

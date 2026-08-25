@@ -6,4 +6,4 @@ from repo_tasks import agents, dev_env, direnv, venv
 
 
 def test_setup_composes_venv_direnv_and_agents_hook():
-    assert dev_env.setup.pre == [venv.create, direnv.allow, agents.wire_claude_hook]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert dev_env.setup.pre == [venv.create, direnv.allow, agents.wire_claude_hook]

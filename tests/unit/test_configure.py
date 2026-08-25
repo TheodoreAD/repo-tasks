@@ -6,4 +6,4 @@ from repo_tasks import configs, configure, dev_env, selfinstall
 
 
 def test_configure_composes_dev_env_setup_configs_pull_and_selfinstall_stamp():
-    assert configure.configure.pre == [dev_env.setup, configs.pull, selfinstall.stamp]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert configure.configure.pre == [dev_env.setup, configs.pull, selfinstall.stamp]

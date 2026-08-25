@@ -28,19 +28,19 @@ def _stub(monkeypatch, chart=None, version="1.2.3"):
 
 def test_lint_runs_helm_lint_on_the_chart_path(c, monkeypatch):
     _stub(monkeypatch)
-    helm.lint.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm.lint.body(c)
     c.run.assert_called_once_with("helm lint examples/sample-service/chart", echo=True)
 
 
 def test_package_packages_into_dist_helm(c, monkeypatch):
     _stub(monkeypatch)
-    helm.package.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm.package.body(c)
     c.run.assert_called_once_with("helm package examples/sample-service/chart --destination dist/helm", echo=True)
 
 
 def test_push_pushes_the_group_versioned_tgz_to_the_entry_registry(c, monkeypatch):
     _stub(monkeypatch)
-    helm.push.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm.push.body(c)
     c.run.assert_called_once_with(
         "helm push dist/helm/sample-service-chart-1.2.3.tgz oci://ghcr.io/org/charts", echo=True
     )
@@ -48,7 +48,7 @@ def test_push_pushes_the_group_versioned_tgz_to_the_entry_registry(c, monkeypatc
 
 def test_push_registry_flag_overrides_the_entry_registry(c, monkeypatch):
     _stub(monkeypatch)
-    helm.push.body(c, registry="oci://localhost:5000/charts")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm.push.body(c, registry="oci://localhost:5000/charts")
     c.run.assert_called_once_with(
         "helm push dist/helm/sample-service-chart-1.2.3.tgz oci://localhost:5000/charts", echo=True
     )
@@ -56,7 +56,7 @@ def test_push_registry_flag_overrides_the_entry_registry(c, monkeypatch):
 
 def test_push_plain_http_appends_the_flag(c, monkeypatch):
     _stub(monkeypatch)
-    helm.push.body(c, plain_http=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    helm.push.body(c, plain_http=True)
     c.run.assert_called_once_with(
         "helm push dist/helm/sample-service-chart-1.2.3.tgz oci://ghcr.io/org/charts --plain-http", echo=True
     )
@@ -65,13 +65,13 @@ def test_push_plain_http_appends_the_flag(c, monkeypatch):
 def test_push_raises_when_no_registry_configured_or_passed(c, monkeypatch):
     _stub(monkeypatch, chart=_stub_chart(registry=None))
     with pytest.raises(ValueError, match="no registry"):
-        helm.push.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        helm.push.body(c)
 
 
 def test_resolve_chart_raises_when_project_not_found(c, monkeypatch):
     _stub(monkeypatch)
     with pytest.raises(ValueError, match="nonexistent"):
-        helm.lint.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        helm.lint.body(c, project="nonexistent")
 
 
 @pytest.mark.parametrize("task_name", ["lint", "package", "push"])

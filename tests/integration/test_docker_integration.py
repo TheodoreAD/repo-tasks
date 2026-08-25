@@ -25,8 +25,8 @@ def test_build_and_push_round_trip(c, monkeypatch, tmp_path, docker_registry):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [image])
     monkeypatch.setattr(docker, "current_version", lambda c, group=None: "test")
 
-    docker.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
-    docker.push.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.build.body(c)
+    docker.push.body(c)
 
     url = f"http://{docker_registry}/v2/scratch-test/tags/list"
     with cast(http.client.HTTPResponse, urllib.request.urlopen(url)) as response:

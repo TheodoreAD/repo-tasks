@@ -8,7 +8,9 @@ describes."""
 from pathlib import Path
 
 import pytest
-from invoke import Exit, MockContext, Result
+from invoke.context import MockContext
+from invoke.exceptions import Exit
+from invoke.runners import Result
 
 from repo_tasks import testing
 
@@ -25,7 +27,7 @@ def test_unit_runs_a_bare_pytest_and_names_no_path():
     """Naming a path would defeat pytest's own testpaths fallback — an explicit path that doesn't
     exist is a hard exit-4 usage error, where a missing testpaths entry is only a warning."""
     c = MockContext(run=Result(exited=0))
-    testing.unit.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.unit.body(c)
     c.run.assert_called_once_with("pytest", echo=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
@@ -33,28 +35,28 @@ def test_unit_noops_cleanly_when_no_tests_collected():
     # pytest's own exit code 5 — the same safe-to-run-unconditionally contract shell_check has,
     # needed for a quality-gates-only repo with no python tests at all to pass `check`.
     c = MockContext(run=Result(exited=5))
-    testing.unit.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess] — must not raise
+    testing.unit.body(c)  # must not raise
 
 
 def test_unit_reraises_real_failures():
     c = MockContext(run=Result(exited=1))
     with pytest.raises(Exit) as exc_info:
-        testing.unit.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        testing.unit.body(c)
     assert exc_info.value.code == 1
 
 
 def test_integration_runs_the_whole_tier(c, integration_dir):
-    testing.integration.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.integration.body(c)
     c.run.assert_called_once_with("pytest tests/integration", echo=True, warn=True)
 
 
 def test_smoke_filters_on_the_marker(c, integration_dir):
-    testing.smoke.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.smoke.body(c)
     c.run.assert_called_once_with("pytest tests/integration -m smoke", echo=True, warn=True)
 
 
 def test_regression_is_the_inverse_of_smoke(c, integration_dir):
-    testing.regression.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.regression.body(c)
     c.run.assert_called_once_with('pytest tests/integration -m "not smoke"', echo=True, warn=True)
 
 
@@ -74,24 +76,24 @@ def workflows_dir(tmp_cwd: Path) -> Path:
 
 
 def test_workflows_runs_act_for_the_push_event_by_default(c, workflows_dir):
-    testing.workflows.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.workflows.body(c)
     c.run.assert_called_once_with("act push", echo=True)
 
 
 def test_workflows_passes_job_event_and_dry_run_through(c, workflows_dir):
-    testing.workflows.body(c, job="quality", event="pull_request", dry_run=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.workflows.body(c, job="quality", event="pull_request", dry_run=True)
     c.run.assert_called_once_with("act pull_request -j quality -n", echo=True)
 
 
 def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
-    testing.workflows.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    testing.workflows.body(c)
     assert "nothing to do" in capsys.readouterr().out
     c.run.assert_not_called()
 
 
 def test_integration_dir_constant_matches_the_repos_own_layout():
-    assert Path("tests/integration") == testing._INTEGRATION_DIR  # pyright: ignore[reportPrivateUsage]
+    assert Path("tests/integration") == testing._INTEGRATION_DIR
 
 
 def test_all_chains_unit_then_the_integration_tier():
-    assert [t.name for t in testing.all.pre] == ["unit", "integration"]  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    assert [t.name for t in testing.all.pre] == ["unit", "integration"]

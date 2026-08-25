@@ -21,13 +21,13 @@ def _stub_workspace():
 
 
 def test_clean_noop_when_dist_absent(c, tmp_cwd, capsys):
-    dist.clean.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.clean.body(c)
     assert "nothing to clean" in capsys.readouterr().out
 
 
 def test_clean_removes_dist_dir(c, tmp_cwd):
     (tmp_cwd / "dist").mkdir()
-    dist.clean.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.clean.body(c)
     assert not (tmp_cwd / "dist").exists()
 
 
@@ -42,38 +42,38 @@ def test_tasks_no_op_cleanly_with_no_python_project(c, tmp_cwd, monkeypatch, cap
 def test_explicit_project_still_errors_with_no_python_project(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", lambda c: [])
     with pytest.raises(ValueError, match="nonexistent"):
-        dist.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        dist.build.body(c, project="nonexistent")
 
 
 def test_build_default_is_wheel_only(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
-    dist.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.build.body(c)
     c.run.assert_called_once_with("uv build --wheel --package repo-tasks", echo=True)
 
 
 def test_build_sdist(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
-    dist.build.body(c, sdist=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.build.body(c, sdist=True)
     c.run.assert_called_once_with("uv build --package repo-tasks", echo=True)
 
 
 def test_build_project_selects_a_workspace_member(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
-    dist.build.body(c, project="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.build.body(c, project="sample-service")
     c.run.assert_called_once_with("uv build --wheel --package sample-service", echo=True)
 
 
 def test_build_unknown_project_raises(c, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
     with pytest.raises(ValueError, match="no python project found for 'nope'"):
-        dist.build.body(c, project="nope")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        dist.build.body(c, project="nope")
 
 
 def test_publish_default(c, tmp_cwd, monkeypatch):
     # tmp_cwd, not tmp_path: publish cleans dist/ from its own body, so this must never run
     # against the real repo.
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
-    dist.publish.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.publish.body(c)
     assert [call.args[0] for call in c.run.call_args_list] == [
         "uv build --wheel --package repo-tasks",
         "uv publish",
@@ -82,7 +82,7 @@ def test_publish_default(c, tmp_cwd, monkeypatch):
 
 def test_publish_with_index_and_dry_run(c, tmp_cwd, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
-    dist.publish.body(c, index="https://test.pypi.org/legacy/", dry_run=True)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.publish.body(c, index="https://test.pypi.org/legacy/", dry_run=True)
     assert c.run.call_args_list[-1].args[0] == ("uv publish --index https://test.pypi.org/legacy/ --dry-run")
 
 
@@ -90,7 +90,7 @@ def test_publish_builds_the_named_member_not_the_root(c, tmp_cwd, monkeypatch):
     """The reason publish builds from its own body instead of pre=[build]: invoke's pre-tasks take
     no caller arguments, so --project would have silently published the root project's wheel."""
     monkeypatch.setattr(dist, "discover_python_projects", _stub_workspace())
-    dist.publish.body(c, project="sample-service")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.publish.body(c, project="sample-service")
     assert [call.args[0] for call in c.run.call_args_list] == [
         "uv build --wheel --package sample-service",
         "uv publish",
@@ -101,7 +101,7 @@ def test_versions_prints_from_json_versions_key(c, monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     payload = json.dumps({"versions": ["2.0", "1.0", "1.10"]})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert capsys.readouterr().out.splitlines() == ["1.0", "1.10", "2.0"]
 
 
@@ -110,7 +110,7 @@ def test_versions_derives_from_json_files_when_versions_key_absent(c, monkeypatc
     files = [{"filename": "x-1.0.whl", "version": "1.0"}, {"filename": "x-2.0.whl", "version": "2.0"}]
     payload = json.dumps({"files": files})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert capsys.readouterr().out.splitlines() == ["1.0", "2.0"]
 
 
@@ -121,7 +121,7 @@ def test_versions_derives_from_json_filename_when_version_key_absent(c, monkeypa
     files = [{"filename": "repo_tasks-1.0.0-py3-none-any.whl"}, {"filename": "repo_tasks-2.0.0.tar.gz"}]
     payload = json.dumps({"files": files})
     monkeypatch.setattr(dist, "_get", lambda url, accept=None: payload.encode())
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
 
 
@@ -129,7 +129,7 @@ def test_versions_falls_back_to_html_when_json_unavailable(c, monkeypatch, capsy
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
 
     def fake_get(url, accept=None):
-        if accept == dist._JSON_ACCEPT:  # pyright: ignore[reportPrivateUsage]
+        if accept == dist._JSON_ACCEPT:
             raise urllib.error.URLError("no json support")
         html = (
             '<a href="../../packages/aa/repo_tasks-1.0.0-py3-none-any.whl">repo_tasks-1.0.0-py3-none-any.whl</a>\n'
@@ -138,7 +138,7 @@ def test_versions_falls_back_to_html_when_json_unavailable(c, monkeypatch, capsy
         return html.encode()
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert capsys.readouterr().out.splitlines() == ["1.0.0", "2.0.0"]
 
 
@@ -148,7 +148,7 @@ def test_versions_html_fallback_strips_sha256_fragment(c, monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project("repo-tasks"))
 
     def fake_get(url, accept=None):
-        if accept == dist._JSON_ACCEPT:  # pyright: ignore[reportPrivateUsage]
+        if accept == dist._JSON_ACCEPT:
             raise urllib.error.URLError("no json support")
         html = (
             '<a href="../../+f/aa/repo_tasks-1.0.0-py3-none-any.whl#sha256=abc123">'
@@ -157,7 +157,7 @@ def test_versions_html_fallback_strips_sha256_fragment(c, monkeypatch, capsys):
         return html.encode()
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert capsys.readouterr().out.splitlines() == ["1.0.0"]
 
 
@@ -165,10 +165,10 @@ def test_versions_no_releases_found_on_404(c, monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
 
     def fake_get(url, accept=None):
-        raise dist._NotFoundError  # pyright: ignore[reportPrivateUsage]
+        raise dist._NotFoundError
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert "no releases found" in capsys.readouterr().out
 
 
@@ -176,26 +176,26 @@ def test_versions_no_releases_found_after_html_404(c, monkeypatch, capsys):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
 
     def fake_get(url, accept=None):
-        if accept == dist._JSON_ACCEPT:  # pyright: ignore[reportPrivateUsage]
+        if accept == dist._JSON_ACCEPT:
             raise urllib.error.URLError("no json support")
-        raise dist._NotFoundError  # pyright: ignore[reportPrivateUsage]
+        raise dist._NotFoundError
 
     monkeypatch.setattr(dist, "_get", fake_get)
-    dist.list_versions.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    dist.list_versions.body(c)
     assert "no releases found" in capsys.readouterr().out
 
 
 def test_normalize_project_name():
-    assert dist._normalize("Repo_Tasks.Extra") == "repo-tasks-extra"  # pyright: ignore[reportPrivateUsage]
+    assert dist._normalize("Repo_Tasks.Extra") == "repo-tasks-extra"
 
 
 def test_version_from_filename_wheel():
-    assert dist._version_from_filename("repo_tasks-1.2.3-py3-none-any.whl", "repo-tasks") == "1.2.3"  # pyright: ignore[reportPrivateUsage]
+    assert dist._version_from_filename("repo_tasks-1.2.3-py3-none-any.whl", "repo-tasks") == "1.2.3"
 
 
 def test_version_from_filename_sdist():
-    assert dist._version_from_filename("repo_tasks-1.2.3.tar.gz", "repo-tasks") == "1.2.3"  # pyright: ignore[reportPrivateUsage]
+    assert dist._version_from_filename("repo_tasks-1.2.3.tar.gz", "repo-tasks") == "1.2.3"
 
 
 def test_version_from_filename_unrecognized_extension():
-    assert dist._version_from_filename("repo_tasks-1.2.3.exe", "repo-tasks") is None  # pyright: ignore[reportPrivateUsage]
+    assert dist._version_from_filename("repo_tasks-1.2.3.exe", "repo-tasks") is None

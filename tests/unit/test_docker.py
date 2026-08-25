@@ -29,7 +29,7 @@ def _stub(monkeypatch, image=None, version="1.2.3"):
 
 def test_build_default_tag_from_current_version(c, monkeypatch):
     _stub(monkeypatch)
-    docker.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.build.body(c)
     c.run.assert_called_once_with(
         "docker build -t ghcr.io/org/sample-service:1.2.3 -f examples/sample-service/Dockerfile "
         "examples/sample-service",
@@ -39,7 +39,7 @@ def test_build_default_tag_from_current_version(c, monkeypatch):
 
 def test_build_tag_override(c, monkeypatch):
     _stub(monkeypatch)
-    docker.build.body(c, tag="dev")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.build.body(c, tag="dev")
     c.run.assert_called_once_with(
         "docker build -t ghcr.io/org/sample-service:dev -f examples/sample-service/Dockerfile examples/sample-service",
         echo=True,
@@ -48,7 +48,7 @@ def test_build_tag_override(c, monkeypatch):
 
 def test_build_with_platforms_uses_buildx_and_pushes(c, monkeypatch):
     _stub(monkeypatch)
-    docker.build.body(c, platforms="linux/amd64,linux/arm64")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.build.body(c, platforms="linux/amd64,linux/arm64")
     c.run.assert_called_once_with(
         "docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/org/sample-service:1.2.3 "
         "-f examples/sample-service/Dockerfile examples/sample-service --push",
@@ -58,19 +58,19 @@ def test_build_with_platforms_uses_buildx_and_pushes(c, monkeypatch):
 
 def test_push_default_tag_from_current_version(c, monkeypatch):
     _stub(monkeypatch)
-    docker.push.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.push.body(c)
     c.run.assert_called_once_with("docker push ghcr.io/org/sample-service:1.2.3", echo=True)
 
 
 def test_push_tag_override(c, monkeypatch):
     _stub(monkeypatch)
-    docker.push.body(c, tag="dev")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.push.body(c, tag="dev")
     c.run.assert_called_once_with("docker push ghcr.io/org/sample-service:dev", echo=True)
 
 
 def test_release_builds_tags_and_pushes_version_and_latest(c, monkeypatch):
     _stub(monkeypatch)
-    docker.release.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docker.release.body(c)
     assert c.run.call_args_list == [
         (
             (
@@ -88,7 +88,7 @@ def test_release_builds_tags_and_pushes_version_and_latest(c, monkeypatch):
 def test_resolve_image_raises_when_project_not_found(c, monkeypatch):
     _stub(monkeypatch)
     with pytest.raises(ValueError, match="nonexistent"):
-        docker.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        docker.build.body(c, project="nonexistent")
 
 
 @pytest.mark.parametrize("task_name", ["build", "push", "release"])
@@ -103,4 +103,4 @@ def test_explicit_project_still_errors_with_zero_images(c, monkeypatch):
     # Absence no-ops; a --project naming nothing is ambiguity, and stays an error.
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
     with pytest.raises(ValueError, match="nonexistent"):
-        docker.build.body(c, project="nonexistent")  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+        docker.build.body(c, project="nonexistent")

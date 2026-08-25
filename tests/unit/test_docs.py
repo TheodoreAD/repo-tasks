@@ -6,7 +6,7 @@ from repo_tasks import docs
 
 def test_clean_noop_when_site_dir_missing(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(docs, "_SITE_DIR", tmp_cwd / "site")
-    docs.clean.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docs.clean.body(c)
     assert "nothing to clean" in capsys.readouterr().out
 
 
@@ -15,15 +15,15 @@ def test_clean_removes_site_dir(c, tmp_path, monkeypatch):
     site_dir.mkdir()
     (site_dir / "index.html").write_text("hi")
     monkeypatch.setattr(docs, "_SITE_DIR", site_dir)
-    docs.clean.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docs.clean.body(c)
     assert not site_dir.exists()
 
 
 def test_build_runs_zensical_strict(c):
-    docs.build.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docs.build.body(c)
     c.run.assert_called_once_with("zensical build --strict", echo=True)
 
 
 def test_serve_runs_zensical_serve(c):
-    docs.serve.body(c)  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    docs.serve.body(c)
     c.run.assert_called_once_with("zensical serve", echo=True)

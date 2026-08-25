@@ -9,7 +9,7 @@ instead; that is the intended split, not an oversight. See contributing/test-tie
 from pathlib import Path
 
 import pytest
-from invoke import MockContext
+from invoke.context import MockContext
 
 
 @pytest.fixture(autouse=True)

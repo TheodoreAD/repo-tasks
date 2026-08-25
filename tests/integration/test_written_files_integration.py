@@ -14,12 +14,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from invoke import MockContext, Result
+from invoke.context import MockContext
+from invoke.runners import Result
 
 from repo_tasks import configs, selfinstall
 
 _PYPROJECT_HEAD = '[project]\nname = "x"\nversion = "0.1.0"\n\n[dependency-groups]\n'
-_CONFIGS_DIR = Path(configs._source_dir(None))  # pyright: ignore[reportPrivateUsage]
+_CONFIGS_DIR = Path(configs._source_dir(None))
 
 
 @pytest.fixture
@@ -32,8 +33,8 @@ def scratch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_stamp_script_is_shfmt_clean(scratch: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
-    ls_remote = f"git ls-remote --tags --refs --sort=-v:refname {selfinstall._REPO_URL} 'v*'"  # pyright: ignore[reportPrivateUsage]
-    selfinstall.stamp.body(MockContext(run={ls_remote: Result(stdout="refs/tags/v1.2.3\n", exited=0)}))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    ls_remote = f"git ls-remote --tags --refs --sort=-v:refname {selfinstall._REPO_URL} 'v*'"
+    selfinstall.stamp.body(MockContext(run={ls_remote: Result(stdout="refs/tags/v1.2.3\n", exited=0)}))
     result = subprocess.run(["shfmt", "-d", "bootstrap-repo-tasks.sh"], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout
 
@@ -41,6 +42,6 @@ def test_stamp_script_is_shfmt_clean(scratch: Path, monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize("empty_array", ["dev = []", "dev = [\n]"])
 def test_ensure_deps_output_is_dprint_clean(scratch: Path, empty_array: str):
     (scratch / "pyproject.toml").write_text(f"{_PYPROJECT_HEAD}{empty_array}\n")
-    configs.ensure_deps.body(MockContext(run=Result(exited=1)))  # pyright: ignore[reportAny, reportFunctionMemberAccess]
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
     result = subprocess.run(["dprint", "check", "pyproject.toml"], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

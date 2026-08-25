@@ -23,7 +23,7 @@ import pytest
 from testcontainers.core.container import DockerContainer
 
 from repo_tasks import agents
-from repo_tasks.selfinstall import _INSTALL_CMD  # pyright: ignore[reportPrivateUsage]
+from repo_tasks.selfinstall import _INSTALL_CMD
 
 _HOME = "/home/tester"
 _REPO = f"{_HOME}/repo-tasks"
@@ -93,12 +93,12 @@ def test_claude_hook_wires_clean_home(installed_repo_tasks: DockerContainer):
     exit_code, output = _run(installed_repo_tasks, f"cat {project}/.claude/settings.json")
     assert exit_code == 0, output
     settings = cast(
-        agents._ClaudeSettings,  # pyright: ignore[reportPrivateUsage]
+        agents._ClaudeSettings,
         json.loads(output),
     )
     assert settings.get("env", {}).get("CLAUDE_ENV_FILE") == env_file
     bash_group = next(g for g in settings.get("hooks", {}).get("PreToolUse", []) if g["matcher"] == "Bash")
-    expected_command = agents._direnv_hook_command(Path(env_file))  # pyright: ignore[reportPrivateUsage]
+    expected_command = agents._direnv_hook_command(Path(env_file))
     assert bash_group["hooks"][0]["command"] == expected_command
 
     exit_code, output = _run(installed_repo_tasks, f"test -f {env_file}")
