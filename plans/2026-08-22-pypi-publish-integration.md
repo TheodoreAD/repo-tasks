@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 ## Context
@@ -114,3 +114,8 @@ neither index has a pending publisher registered, and the `pypi` environment doe
   unclaimed). Each of these is a manual, human-supervised, one-time step — never automated, and
   never triggered by an agent without explicit confirmation immediately beforehand, given the
   irreversibility above.]
+- [UNVERIFIED: `publish.yml`'s rc gating (a `vX.Y.ZrcN` tag runs the TestPyPI job and skips the
+  `pypi` job via `!contains(github.ref_name, 'rc')`) — landed 2026-08-25 from the now-retired
+  `plans/2026-08-25-prerelease-versions.md`, checked by actionlint only. The first
+  `inv gitflow.release-candidate` push after this rollout is the real test; confirm the `pypi` job
+  shows as skipped, not failed, in that run.]

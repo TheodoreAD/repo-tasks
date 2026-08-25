@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 updated: 2026-08-25
 ---
 
@@ -173,11 +173,42 @@ the assumption they document is exactly what changes. `release-flow.md` gains th
 
 ## Verification
 
-- Unit: every `next_version` transition equals `bump-my-version show new_version --increment` on the
-  same generated config; `semver()` output for `1.1.0rc1` and `1.1.0` matches what `helm lint` and
-  `docker tag` accept.
-- Integration: a real bump `1.0.0 → 1.1.0rc1 → 1.1.0rc2 → 1.1.0` over a throwaway repo with a
-  `Chart.yaml`, asserting the four file forms after each step and that `uv lock --check` passes.
-- Integration: `version.set-dev` on a tag-at-distance repo writes the expected PEP 440 and SemVer
-  forms and refuses on a dirty tree.
-- The dogfood `sample-service` group goes through one full rc cycle in local mode.
+Landed 2026-08-25 in five commits (`version:`, `gitflow:`, `docker, helm, dist:`, `workflows:`,
+docs). What was actually proven:
+
+- `tests/unit`: `Version` round-trips every accepted PEP 440 shape and spells SemVer; all ten
+  `next_version` transitions and four refusals; the generated config declares `pre_l`/`pre_n` and
+  per-file `serialize`; `bump` maps parts and states `--new-version` for `--no-rc`; `set_dev`
+  rewrites pyproject/lock/chart in place, keeps the anchored dependency alone, refuses a dirty tree
+  and an absent search string; gitflow's rc1 start, straight-to-final hotfix, `--rc` opt-in,
+  `release-candidate` (bump + tag + push, refusals), rc drop before finish in both modes; docker
+  SemVer tags and no `latest` for rc/dev; helm `.tgz` naming; dist's dev-build publish refusal.
+- `tests/integration/test_version_integration.py`: the real cycle
+  `1.0.0 → 1.1.0rc1 → rc2 → rc3 → 1.1.0 → 1.1.1` with pyproject (PEP 440) and Chart.yaml (SemVer)
+  asserted after each step, one commit and one tag per step, and `show --increment` equal to
+  `next_version` before every rc-scheme bump; `set_dev` on a tree two commits past `v1.0.0` writing
+  `1.0.1.dev2+g<sha>` to pyproject and `uv.lock` with `uv lock --check` still passing and nothing
+  committed; `set_dev` exactly at a tag leaving the tree untouched.
+- [UNVERIFIED: a `release-candidate` tag actually triggering `publish.yml` end to end — the
+  workflow's first real run is `plans/2026-08-22-pypi-publish-integration.md`'s rollout, and the rc
+  gating rides on it.]
+- [UNVERIFIED: the dogfood `sample-service` group through a full rc cycle against a real remote —
+  the gitflow half is unit-tested against exact command strings only, same as the rest of
+  `gitflow.py`; `plans/2026-08-19-gitflow-test-repo-twin.md` is where that gets exercised.]
+
+## Migrated to
+
+- `contributing/versioning.md` — "One version, three spellings" (the constraints, the rc cycle, dev
+  builds, both `[DECISION:` tags and all three `[PITFALL:` tags), the rewritten "Why `next_version`
+  is hand-rolled".
+- `contributing/release-flow.md` — "The release-candidate cycle".
+- `contributing/release-workflows.md` — "Release candidates reach TestPyPI only".
+- `README.md` — the user-facing paragraph on spellings, `--part`, `--no-rc`, `--dev`.
+- `plans/2026-08-25-release-without-release-branch.md` — the follow-on design.
+- The two `[UNVERIFIED:` items above move to the plans they name (see below) before this file is
+  deleted.
+- Code contracts and the spike transcripts: dropped — the tests above are the record now.
+
+Not migrated: the prior-art list and the format table — the constraints they established are
+restated in `versioning.md` with their consequences; the table's "resolver behavior" column is the
+"opt-in for every consumer" paragraph there.

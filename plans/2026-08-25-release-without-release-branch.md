@@ -8,11 +8,12 @@ updated: 2026-08-25
 ## Context
 
 `gitflow.py` implements nvie's flow canonically: every release is a `release/X.Y.Z` branch off
-`develop`, bumped on the branch, PR'd into `main`, tagged, synced back. With
-`plans/2026-08-25-prerelease-versions.md` the rc cycle also lives on that branch. That is the right
-default for a team that stages releases, and the wrong amount of ceremony for a team that ships
-`develop` (or `main`) whenever it is green — trunk-based or GitHub-flow shaped teams, or a gitflow
-team for whom most releases are "cut what's there, no stabilization needed".
+`develop`, bumped on the branch, PR'd into `main`, tagged, synced back. The rc cycle also lives on
+that branch ([`contributing/release-flow.md`](../contributing/release-flow.md), "The
+release-candidate cycle", landed 2026-08-25). That is the right default for a team that stages
+releases, and the wrong amount of ceremony for a team that ships `develop` (or `main`) whenever it
+is green — trunk-based or GitHub-flow shaped teams, or a gitflow team for whom most releases are
+"cut what's there, no stabilization needed".
 
 Raised 2026-08-25 while settling where the rc cycle sits: keep the canonical shape as the default,
 and explore this separately rather than fold a second mode into `release_start`.

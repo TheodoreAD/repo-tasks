@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-23
+updated: 2026-08-25
 ---
 
 ## Context
@@ -16,6 +16,13 @@ GitHub host`).
 [UNVERIFIED: `gh pr create` itself has never run against a real GitHub-linked repo — in either the
 `*_finish` or the `*_finalize` path, nor the hotfix-redirect variant of the second PR. Everything
 around it is confirmed; this one call is the gap, and closing it is this plan's entire purpose.]
+
+[UNVERIFIED: the release-candidate cycle (`release_start` → rc1, `release-candidate` tagging and
+pushing `vX.Y.0rcN` on the branch, `release_finish` dropping the rc, `*_finalize` tagging the final)
+against a real remote — landed 2026-08-25 from the now-retired
+`plans/2026-08-25-prerelease-versions.md`, unit-tested against exact command strings only, like the
+rest of `gitflow.py`. The twin is where it gets driven for real; the `gh pr view` merge guard and
+the `git tag --list` guard belong to the same run.]
 
 [DECISION: a **permanent** test-repo twin, not a throwaway repo created and deleted per run.
 Repeated create/delete cycles risk GitHub's own soft-deletion and rename-cooldown quirks becoming
