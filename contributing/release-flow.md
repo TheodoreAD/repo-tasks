@@ -56,8 +56,9 @@ A real PR needs human review before it merges, so `*_finish` cannot complete syn
 | `release_finish()` / `hotfix_finish()`     | push branch, open PR against `main`, stop. **No tag yet, no develop merge yet.**                             |
 | `release_finalize()` / `hotfix_finalize()` | run _after_ a human merged that PR, from the same branch.                                                    |
 
-`*_finalize` does: `git fetch origin main` → `git checkout main` → `git merge --ff-only origin/main`
-→ tag the now-updated tip → push the tag → branch `sync/<tag>` off that same updated `main` → open a
+`*_finalize` does: confirm the PR is `MERGED` (`gh pr view`, see "Known bad states") →
+`git fetch origin main` → `git checkout main` → `git merge --ff-only origin/main` → tag the
+now-updated tip → push the tag → branch `sync/<tag>` off that same updated `main` → open a
 **second** PR into `develop` (or, for a hotfix, an open `release/*` — same redirect rule as local
 mode, checked independently here).
 
@@ -103,12 +104,60 @@ Recover the way a human running real `git-flow` would: resolve the conflict keep
 branch's own, higher version**, then finish the remaining steps (branch deletion and so on) by hand.
 There is no "resume this task" mechanism — the task does not track where it stopped.
 
-### Everything else
+### Abandoning a release or hotfix branch
 
-Recovery procedures for the other reachable bad states — an abandoned release branch, a tag pushed
-to the wrong commit, `*_finalize` run before the PR actually merged, a `sync/<tag>` PR closed
-without merging — are **not documented yet**. See
-`plans/2026-08-23-contributing-docs-completion.md`.
+The cheap one, by construction: branch-then-bump means `develop`/`main` never received anything.
+Delete the branch (`git branch -D release/<v>`, plus `git push origin --delete release/<v>` and
+closing its PR if `*_finish` already ran). The version number was never tagged, so it stays
+available and the next `release_start` computes it again.
+
+### `*_finalize` run before the PR merged
+
+Refused by `_require_merged_pr`: `*_finalize` asks `gh pr view <branch> --json state` first and
+stops unless it reports `MERGED`, before fetching or touching `main`. The task is guarded because
+the failure was silent, not loud — `git merge --ff-only origin/main` succeeds trivially whenever
+local and remote `main` already agree, so an early `_finalize` used to tag the _old_ tip and push
+that tag, which is the next state below. The guard reads the PR's state rather than checking
+ancestry because a squash or rebase merge leaves no ancestry for `git merge-base --is-ancestor` to
+find; `gh` is already a PR-mode requirement, so it costs nothing new.
+
+[PITFALL: this guard did not exist until 2026-08-25. On a repo where `*_finalize` ran early before
+that, look for a tag pointing at a commit that is not the merge — `git log -1 <tag>` — and treat it
+as the wrong-commit case.]
+
+### A tag on the wrong commit
+
+Moving a tag is only clean while nobody else has it. Locally: `git tag -d <tag>`,
+`git push origin :refs/tags/<tag>`, re-tag the right commit, push again. Every clone that already
+fetched keeps the old one — git does not update a tag that moved on the remote without
+`--force`/`--prune-tags` — so on a shared repo tell people, or expect stale tags.
+
+**If a tag-triggered publish already ran, the version is gone, not the tag.** `publish.yml` fires on
+`v*`; a wrong tag that reached PyPI has burned that version number permanently (a PyPI release can
+be deleted but its number can never be re-uploaded). The recovery there is not moving the tag but
+shipping the next patch version with the right content, and leaving the wrong tag in place so the
+history says what actually happened. GHCR image tags and OCI chart versions _can_ be overwritten,
+but a consumer that already pulled by tag will not notice.
+
+### `sync/<tag>` PR closed without merging
+
+`main` is tagged and released; `develop` still carries the pre-release version. Nothing breaks
+immediately — which is the problem: the next `release_start` computes its version from `develop`'s
+stale number and lands on one `main` already shipped. `_require_tag_absent` catches that at start
+time (`git tag --list v<next>` non-empty) and refuses before cutting a branch, naming the missing
+sync PR. It reads the _local_ tag list: on the machine that ran `*_finalize` the tag is there; on
+another clone it is there once that clone has fetched `main` since the release (git auto-follows
+tags into fetched history), so a stale clone that skipped fetching can still get past it.
+
+Recovery is re-creating what `*_finalize` did: `git checkout -b sync/<tag> <tag>`, push it, open a
+PR into `develop` (or into the open `release/*` branch for a hotfix — the redirect rule applies to
+the retry as much as to the original). There is no task for this on purpose: the merge itself is the
+PR stage a team cannot automate, and the two git commands are the entire retry.
+
+[DECISION: both guards read state that already exists (`gh`'s PR state, the local tag list) instead
+of tracking flow progress in a file. The tool stays stateless — `<support>` is passed explicitly at
+every step for the same reason — and a guard that reads reality cannot drift from it the way a
+marker file can.]
 
 ## `support/*`: long-lived maintenance lines
 
