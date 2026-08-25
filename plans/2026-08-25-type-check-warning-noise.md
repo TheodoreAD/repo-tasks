@@ -192,8 +192,12 @@ With tiers 1–3 a green run prints the summary line and one warning. `--level e
 `failOnWarnings` are no longer needed to make the output fit; the acceptance test is now met by the
 code rather than by hiding output.
 
-- [DEFERRED: flip `failOnWarnings` to `true` once `power-user-linux-setup` is also at ~0, so the
-  count can't silently climb back. Blocked on the rollout below.]
+- [DEFERRED: flip `failOnWarnings` to `true` so the count can't silently climb back. Unblocked
+  2026-08-25 — `power-user-linux-setup` landed at 5 warnings (§Rollout) — but two of those are
+  structural and would have to be resolved or per-file-suppressed first: the `reportImportCycles`
+  chains a Collection-building `tasks/__init__.py` always trips (already downgraded, not silenced,
+  in the shared config), and `reportMissingTypeStubs` for `repo_tasks` itself, which is this repo's
+  to fix — add `src/repo_tasks/py.typed`.]
 
 ## Files touched
 
@@ -213,13 +217,40 @@ code rather than by hiding output.
 - The stub is exercised, not just present: `reportUnnecessaryTypeIgnoreComment` fired on every
   `task.body(...)` ignore in tests once the stub resolved, which is the type checker confirming
   `Task.body` is now typed.
+- Same in the first consumer: `power-user-linux-setup` at `0 errors, 5 warnings`, 316 unit tests,
+  gate output in one tool result (2026-08-25, see §Rollout).
 
 ## Rollout
 
-- [DEFERRED: `power-user-linux-setup` — `configs.pull` for the tier-2 config, `configs.ensure-deps`
-  for `invoke-stubs`, then the same annotation pass over `tasks/` (`c: Context`, parameters; imports
-  stay `from invoke import ...`). Its own residue after that is real: `tasks/allowlist.py` alone
-  carried 580 warnings and `reportMissingTypeArgument` ×109 across `tasks/`.]
+- `power-user-linux-setup` landed 2026-08-25 (commits `c688be1`, `395dc3d`, `27a0b1f`): **4,434 → 5
+  warnings, 0 errors**, 316 unit tests, gate output in one tool result. Per step: the config pull
+  alone took it to 2,367 (tests/ 2,030 → 30), `invoke-stubs` to 2,287, the annotation pass to 5. Its
+  residue was real, and the fix was not `dict[str, Any]` (that only trades `Unknown*` warnings for
+  `reportAny` errors) but TypedDicts for every file the repo reads — setup.toml's
+  `PackageConfig`/`SetupConfig` (all documented fields, `total=False`), identity.toml,
+  overrides.toml, the `~/.claude/settings.json` slice it writes, and allowlist's tools/cache/rules/
+  verdict shapes measured against the tracked JSON — with one `cast` at each loader
+  (`util.load_toml`/`load_json` surface `object`, never `Any`). Real findings on the way, as §3
+  predicted: 40 test sites passing `None` as `c`, an apt-repo `post_install` loop that would have
+  iterated a string, a `KeyError` path in the archive installer, a "private" `phases._probe` used
+  cross-module. The 5 left: 4 `reportImportCycles` chains (structural, see §5) and `repo_tasks`
+  lacking `py.typed`.
+- [PITFALL: a `total=False` TypedDict is not subscriptable — `cfg["dest"]` is
+  `reportTypedDictNotRequiredAccess` (error) even where the method guarantees the key. Pyright
+  narrows on `in`, including an `or`-chain (`if "dest" not in cfg or "repo" not in cfg: raise ...`),
+  and that guard is a better failure than the bare `KeyError` it replaces, so
+  `power-user-linux-setup` spells one per method-specific installer (`util.missing_fields`). Only
+  literal keys keep their field type: `cfg.get(target)` with `target` a loop variable, even over a
+  `Literal[...]`-typed tuple, resolves to `Any` — spell the lookups out per field instead.]
+- [PITFALL: an editable install resolved through a `.pth` (uv/hatch) makes pyright treat the
+  project's own package as a _library_ — every test file importing `tasks` reported
+  `reportMissingTypeStubs` (17 of the tests-tier residue). The package needs its own `py.typed`
+  marker, exactly as a published one would. Same cause as the `repo_tasks` warning above.]
+- [PITFALL: `configs.pull` prints "pulled" for every file even when it wrote nothing. Seen live: the
+  consumer's installed `repo_tasks` was the pre-plan commit, so the first pull "pulled" the old
+  config unchanged and only `uv lock --upgrade-package repo-tasks` + `uv sync` (the consumer had no
+  `deps.lock`/`venv.sync` wired) made the next pull real. `configs.diff` first, or a
+  "pulled"/"unchanged" distinction in the task's output, would have shown it.]
 - `scaffoldapy` is unaffected (verified 2026-08-25): both its own `tasks.py` and `template/tasks.py`
   import `from repo_tasks import ns` only — no `from invoke import ...`, no `pyright: ignore` beyond
   the deliberate `reportMissingImports` on that line. `basedpyright` on the repo: 0 errors, 1
