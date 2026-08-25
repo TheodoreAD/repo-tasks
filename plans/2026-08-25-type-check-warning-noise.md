@@ -192,12 +192,14 @@ With tiers 1–3 a green run prints the summary line and one warning. `--level e
 `failOnWarnings` are no longer needed to make the output fit; the acceptance test is now met by the
 code rather than by hiding output.
 
-- [DEFERRED: flip `failOnWarnings` to `true` so the count can't silently climb back. Unblocked
-  2026-08-25 — `power-user-linux-setup` landed at 5 warnings (§Rollout) — but two of those are
-  structural and would have to be resolved or per-file-suppressed first: the `reportImportCycles`
-  chains a Collection-building `tasks/__init__.py` always trips (already downgraded, not silenced,
-  in the shared config), and `reportMissingTypeStubs` for `repo_tasks` itself, which is this repo's
-  to fix — add `src/repo_tasks/py.typed`.]
+- [DECISION: `failOnWarnings: true` family-wide (2026-08-25), once both repos were at zero. The last
+  warnings were structural, not defects, and each is suppressed at its one site with a comment
+  rather than by lowering a rule for everyone: `src/repo_tasks/py.typed` (this package was the
+  `reportMissingTypeStubs` in every consumer), a line-level ignore on the sample-service fixture's
+  `log_message` (`typing.override` is 3.12+, the fixture declares 3.11 with no dependencies), and a
+  file-level `# pyright: reportImportCycles=false` on `power-user-linux-setup`'s `tasks/__init__.py`
+  (the Collection-building pattern the shared config's own comment describes). The rules themselves
+  stay at their levels.]
 
 ## Files touched
 

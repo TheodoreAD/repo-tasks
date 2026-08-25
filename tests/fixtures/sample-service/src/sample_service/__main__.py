@@ -34,7 +34,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         _ = self.wfile.write(body)
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002 — the stdlib's own name
+    # No `@override`: `typing.override` is 3.12+, this fixture declares >=3.11 and has no dependencies
+    # to pull `typing_extensions` from. Suppressed per line so the shared config's
+    # `failOnWarnings` can stay on.
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002 — the stdlib's own name  # pyright: ignore[reportImplicitOverride]
         """Log to stdout rather than stderr, so a container's logs aren't all error-stream."""
         print(f"{self.address_string()} - {format % args}")
 
