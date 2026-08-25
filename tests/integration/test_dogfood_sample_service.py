@@ -24,8 +24,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from invoke.config import Config
-from invoke.context import Context
+from invoke import Config, Context
 
 from repo_tasks import docker as docker_tasks
 from repo_tasks import helm as helm_tasks

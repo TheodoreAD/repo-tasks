@@ -3,9 +3,7 @@
 
 import re
 
-from invoke.context import Context
-from invoke.exceptions import Exit
-from invoke.tasks import task
+from invoke import Context, Exit, task
 
 # Underscored to stay out of gitflow's CLI namespace, not out of sibling modules.
 from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]

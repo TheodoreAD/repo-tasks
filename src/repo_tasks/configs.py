@@ -19,9 +19,7 @@ from importlib import resources
 from pathlib import Path
 from typing import cast
 
-from invoke.context import Context
-from invoke.exceptions import Exit
-from invoke.tasks import task
+from invoke import Context, Exit, task
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", ".editorconfig"]
 

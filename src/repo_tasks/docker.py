@@ -3,8 +3,7 @@ from projects.discover_docker_images (repo-tasks.toml's [[docker]] entries, or t
 Dockerfile-at-root default) — never hardcoded here, so the task logic stays identical across every
 consumer repo even though image names/registries legitimately differ per repo."""
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 from .projects import discover_docker_images
 from .version import current_version

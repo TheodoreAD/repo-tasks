@@ -2,9 +2,7 @@
 MockContext — the only real logic here is flag-to-flag command construction."""
 
 import pytest
-from invoke.context import MockContext
-from invoke.exceptions import Exit
-from invoke.runners import Result
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import deps
 

@@ -1,8 +1,7 @@
 """Tests for repo_tasks.venv: asserts the exact command string each task builds via invoke's
 MockContext, plus `delete`'s real filesystem exists-check/rmtree behavior against tmp_path."""
 
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import venv
 

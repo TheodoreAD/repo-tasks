@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 from typing import TypedDict, cast
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 
 def _claude_env_cache_dir() -> Path:

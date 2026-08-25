@@ -2,8 +2,7 @@
 via MockContext (matching tests/test_gitflow.py's dict-keyed style for the git ls-remote call),
 plus the stamped-file read/write roundtrip via tmp_path, network-free throughout."""
 
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import selfinstall
 

@@ -7,8 +7,7 @@ never written or overridden here."""
 
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 from .projects import discover_helm_charts
 from .version import current_version

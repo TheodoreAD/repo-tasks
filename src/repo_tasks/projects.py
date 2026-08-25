@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from invoke.context import Context
+from invoke import Context
 
 _REPO_TASKS_TOML = Path("repo-tasks.toml")
 

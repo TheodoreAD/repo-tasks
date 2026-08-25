@@ -19,8 +19,7 @@ standalone, independent of `inv` being on PATH or any local `tasks.py` existing 
 
 from importlib.metadata import version as _pkg_version
 
-from invoke.collection import Collection
-from invoke.program import Program
+from invoke import Collection, Program
 
 from . import configs, selfinstall
 

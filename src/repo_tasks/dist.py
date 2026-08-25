@@ -12,8 +12,7 @@ import urllib.request
 from pathlib import Path
 from typing import cast
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 from .projects import discover_python_projects
 

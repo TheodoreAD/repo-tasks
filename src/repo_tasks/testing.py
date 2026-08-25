@@ -16,9 +16,7 @@ an explicit path that does not exist is a hard exit-4 usage error, not a warning
 
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.exceptions import Exit
-from invoke.tasks import task
+from invoke import Context, Exit, task
 
 _INTEGRATION_DIR = Path("tests/integration")
 

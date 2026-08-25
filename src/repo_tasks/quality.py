@@ -6,9 +6,7 @@ Running tests is not this module's job — that lives in testing.py, under its o
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
 with no prerequisites beyond the dev dependency group."""
 
-from invoke.collection import Collection
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Collection, Context, task
 
 from .testing import unit
 

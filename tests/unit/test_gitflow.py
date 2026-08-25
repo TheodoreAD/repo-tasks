@@ -9,8 +9,7 @@ actually running bump-my-version."""
 import re
 
 import pytest
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import gitflow
 

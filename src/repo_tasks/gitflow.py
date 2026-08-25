@@ -18,8 +18,7 @@ or, per nvie, into any release branch that's still open, if this is a hotfix.
 Every command that stops short of "the whole flow is done" — a PR was opened, a guard clause
 tripped — prints exactly what to run next, so nobody has to read this file to find out."""
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
 # namespace, not out of sibling modules.

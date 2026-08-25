@@ -2,8 +2,7 @@
 entrypoint that survives this package's own internal module reshuffling. Owns no logic of its
 own, same allowance dev_env.py already has for the same reason."""
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 from .configs import pull as configs_pull
 from .dev_env import setup as dev_env_setup

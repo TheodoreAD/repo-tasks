@@ -2,8 +2,7 @@
 
 import shutil
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 
 def _command_exists(name: str) -> bool:

@@ -6,8 +6,7 @@ import os
 import shutil
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 _VENV_DIR = Path(".venv")
 

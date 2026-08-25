@@ -8,9 +8,7 @@ describes."""
 from pathlib import Path
 
 import pytest
-from invoke.context import MockContext
-from invoke.exceptions import Exit
-from invoke.runners import Result
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import testing
 

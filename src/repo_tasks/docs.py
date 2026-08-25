@@ -5,8 +5,7 @@ itself isn't a dependency of this package."""
 import shutil
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 _SITE_DIR = Path("site")
 

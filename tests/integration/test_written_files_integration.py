@@ -14,8 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import configs, selfinstall
 

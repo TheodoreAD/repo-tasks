@@ -5,10 +5,7 @@ import difflib
 from pathlib import Path
 from typing import cast
 
-from invoke.collection import Collection
-from invoke.context import Context
-from invoke.exceptions import Exit
-from invoke.tasks import task
+from invoke import Collection, Context, Exit, task
 
 from repo_tasks import ns
 from repo_tasks.configs import _CONFIG_FILES  # pyright: ignore[reportPrivateUsage] — this repo's own dev task
@@ -67,7 +64,6 @@ def promote(c: Context, file: str | None = None, apply: bool = False):
 # other direction of `configs.pull` and reads as one subject with two verbs. It stays out of the
 # package itself (see configs.py) — this is repo-tasks' own tasks.py, so the task exists only here.
 #
-# Two separate pyright accommodations, both pre-existing in kind: invoke types
-# Collection.collections loosely (hence the cast), and its @task decorator has no type stub, so
-# pyright sees the plain undecorated function where add_task wants a Task (hence the ignore).
-cast(Collection, ns.collections["configs"]).add_task(promote, name="promote")  # pyright: ignore[reportArgumentType]
+# One pyright accommodation: invoke types Collection.collections loosely, hence the cast. (`promote`
+# itself is a properly typed Task thanks to invoke-stubs — see the quality dependency group.)
+cast(Collection, ns.collections["configs"]).add_task(promote, name="promote")

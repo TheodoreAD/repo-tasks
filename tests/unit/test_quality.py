@@ -3,8 +3,7 @@ builds via invoke's MockContext, plus dedicated coverage for _sh_files — the
 one piece of real logic, and what makes the mandatory `check`/`fix` composite
 safe to run unconditionally on a repo with no shell scripts."""
 
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import quality
 

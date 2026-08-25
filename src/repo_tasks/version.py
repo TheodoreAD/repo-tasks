@@ -7,8 +7,7 @@ of time, only resolved from projects.py/repo-tasks.toml at call time."""
 import tempfile
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 from .projects import HelmChart, PythonProject, discover_helm_charts, discover_python_projects
 

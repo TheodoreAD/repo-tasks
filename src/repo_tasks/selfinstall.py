@@ -14,8 +14,7 @@ import re
 from importlib.metadata import version as _installed_version
 from pathlib import Path
 
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Context, task
 
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")

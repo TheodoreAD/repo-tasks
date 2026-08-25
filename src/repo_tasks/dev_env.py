@@ -2,9 +2,7 @@
 together into the one command to run after cloning. Owns no logic of its own — each concern's
 real implementation lives in its own module (venv.py, direnv.py, agents.py)."""
 
-from invoke.collection import Collection
-from invoke.context import Context
-from invoke.tasks import task
+from invoke import Collection, Context, task
 
 from .agents import wire_claude_hook
 from .direnv import allow

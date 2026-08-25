@@ -1,7 +1,6 @@
 """Tests for repo_tasks.direnv: allow's idempotent direnv-present/absent branches."""
 
-from invoke.context import MockContext
-from invoke.runners import Result
+from invoke import MockContext, Result
 
 from repo_tasks import direnv
 
