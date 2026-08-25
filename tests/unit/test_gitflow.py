@@ -33,6 +33,22 @@ def _ok(*commands):
     return {c: Result(exited=0) for c in commands}
 
 
+def _pr_state_command(branch):
+    return f"gh pr view {branch} --json state --jq .state"
+
+
+def _pr_state(branch: str, state: str | None = "MERGED"):
+    """`gh` answers the head branch's PR state; `exited=1` (no `state`) is gh's own "no pull
+    requests found" — the shape `_require_merged_pr` sees when *_finish never ran."""
+    if state is None:
+        return {_pr_state_command(branch): Result(exited=1)}
+    return {_pr_state_command(branch): Result(stdout=f"{state}\n", exited=0)}
+
+
+def _tag_list(tag, exists=False):
+    return {f"git tag --list {tag}": Result(stdout=f"{tag}\n" if exists else "", exited=0)}
+
+
 # ---------------------------------------------------------------------------
 # feature
 # ---------------------------------------------------------------------------
@@ -81,16 +97,28 @@ def test_release_start_branches_off_develop_before_bumping(c):
     gitflow.release_start.body(c, bump="minor")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout develop"
-    assert call_strings[1] == "git checkout -b release/0.2.0"
-    assert "--config-file" in call_strings[2]
+    assert call_strings[1] == "git tag --list v0.2.0"
+    assert call_strings[2] == "git checkout -b release/0.2.0"
+    assert "--config-file" in call_strings[3]
 
 
 def test_hotfix_start_branches_off_main_before_bumping(c):
     gitflow.hotfix_start.body(c, bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout main"
-    assert call_strings[1] == "git checkout -b hotfix/0.1.1"
-    assert "--config-file" in call_strings[2]
+    assert call_strings[1] == "git tag --list v0.1.1"
+    assert call_strings[2] == "git checkout -b hotfix/0.1.1"
+    assert "--config-file" in call_strings[3]
+
+
+def test_start_raises_before_branching_when_the_versions_tag_already_exists():
+    """develop still carrying the pre-release version — a sync/<tag> PR closed unmerged — makes
+    the arithmetic land on a version main already shipped. Refused before any branch is cut."""
+    c = MockContext(run={**_ok("git checkout develop"), **_tag_list("v0.2.0", exists=True)})
+    with pytest.raises(ValueError, match=re.escape("v0.2.0 already exists")):
+        gitflow.release_start.body(c, bump="minor")
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert not any(s.startswith("git checkout -b") for s in call_strings)
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +278,7 @@ def _finalize_context(current_branch, tag, open_release_branch=None):
     return MockContext(
         run={
             **_rev_parse(current_branch),
+            **_pr_state(current_branch),
             "git fetch origin main": Result(exited=0),
             "git checkout main": Result(exited=0),
             "git merge --ff-only origin/main": Result(exited=0),
@@ -269,6 +298,7 @@ def test_release_finalize_fetches_tags_and_opens_a_develop_pr(capsys):
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings == [
         "git rev-parse --abbrev-ref HEAD",
+        _pr_state_command("release/0.2.0"),
         "git fetch origin main",
         "git checkout main",
         "git merge --ff-only origin/main",
@@ -306,6 +336,17 @@ def test_finalize_raises_when_not_on_expected_branch_kind():
         gitflow.release_finalize.body(c)
 
 
+@pytest.mark.parametrize("state", ["OPEN", "CLOSED", None])
+def test_finalize_refuses_an_unmerged_pr_before_touching_main(state):
+    """`git merge --ff-only origin/main` succeeds trivially when nothing merged, so without this
+    guard the tag would land on the old tip and be pushed — the wrong-commit tag state."""
+    c = MockContext(run={**_rev_parse("release/0.2.0"), **_pr_state("release/0.2.0", state)})
+    with pytest.raises(ValueError, match="not merged yet"):
+        gitflow.release_finalize.body(c)
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert not any(s.startswith("git ") and s != "git rev-parse --abbrev-ref HEAD" for s in call_strings)
+
+
 # ---------------------------------------------------------------------------
 # support_start — start only, no finish/merge-back; matches nvie's own git-flow tool's scope
 # ---------------------------------------------------------------------------
@@ -332,8 +373,9 @@ def test_support_hotfix_start_branches_off_the_support_branch_before_bumping(c):
     gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout support/1.4.x"
-    assert call_strings[1] == "git checkout -b support-hotfix/1.4.x/0.1.1"
-    assert "--config-file" in call_strings[2]
+    assert call_strings[1] == "git tag --list v0.1.1"
+    assert call_strings[2] == "git checkout -b support-hotfix/1.4.x/0.1.1"
+    assert "--config-file" in call_strings[3]
 
 
 def test_support_hotfix_finish_pr_mode_opens_a_pr_against_the_support_branch(capsys):
@@ -397,6 +439,7 @@ def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
     c = MockContext(
         run={
             **_rev_parse("support-hotfix/1.4.x/0.1.1"),
+            **_pr_state("support-hotfix/1.4.x/0.1.1"),
             "git fetch origin support/1.4.x": Result(exited=0),
             "git checkout support/1.4.x": Result(exited=0),
             "git merge --ff-only origin/support/1.4.x": Result(exited=0),
@@ -408,6 +451,7 @@ def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings == [
         "git rev-parse --abbrev-ref HEAD",
+        _pr_state_command("support-hotfix/1.4.x/0.1.1"),
         "git fetch origin support/1.4.x",
         "git checkout support/1.4.x",
         "git merge --ff-only origin/support/1.4.x",

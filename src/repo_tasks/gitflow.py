@@ -51,6 +51,38 @@ def _open_pr(c: Context, branch: str, base: str, title: str, body: str):
     return result.stdout.strip()
 
 
+def _require_merged_pr(c: Context, branch: str, base: str):
+    """Refuse to finalize until the PR from `branch` into `base` has actually merged. Without this
+    the finalize sequence fails open: `git merge --ff-only origin/main` succeeds trivially when
+    local and remote main are already equal, so the tag lands on the *old* tip and gets pushed —
+    a wrong-commit tag, which is the one release state that can't be cleanly undone once anything
+    (a consumer, a tag-triggered publish workflow) has seen it. The PR's state is the only signal
+    that survives every merge strategy: a squash or rebase merge leaves no ancestry between the
+    branch and main for `git merge-base` to find."""
+    result = c.run(f"gh pr view {branch} --json state --jq .state", hide=True, warn=True)
+    state = result.stdout.strip() if result.ok else "no PR found"
+    if state != "MERGED":
+        raise ValueError(
+            f"the PR from {branch} into {base} is not merged yet (gh reports: {state}) — merge it on GitHub first, "
+            "then re-run this; if it was never opened, run the matching *-finish task"
+        )
+
+
+def _require_tag_absent(c: Context, tag: str):
+    """A release/hotfix about to be named after a version whose tag already exists means the base
+    branch never received that version — almost always a `sync/<tag>` PR closed without merging,
+    so develop still carries the pre-release version and the arithmetic lands on a number main
+    already shipped. Catching it here, before any branch is cut, beats the alternative: nothing
+    else notices until `git tag` fails inside *_finalize, after the PR has already been reviewed
+    and merged."""
+    existing = c.run(f"git tag --list {tag}", hide=True).stdout.strip()
+    if existing:
+        raise ValueError(
+            f"tag {tag} already exists, so the version this branch would carry has already shipped — the base branch "
+            f"is behind main. Merge (or recreate) the sync/{tag} PR into it first, then re-run this"
+        )
+
+
 @task
 def feature_start(c: Context, name: str):
     """Branch feature/<name> off develop."""
@@ -79,7 +111,9 @@ def feature_finish(c: Context, name: str, local: bool = False):
 
 def _start(c: Context, kind: str, base: str, bump: str, group: str | None):
     c.run(f"git checkout {base}", echo=True)
-    branch = f"{kind}/{next_version(current_version(c, group=group), bump)}"
+    version = next_version(current_version(c, group=group), bump)
+    _require_tag_absent(c, f"v{version}")
+    branch = f"{kind}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
     version_bump(c, bump, group=group, tag=False)
     return branch
@@ -179,6 +213,7 @@ def _finalize(c: Context, kind: str):
         )
     tag = f"v{branch.removeprefix(prefix)}"
 
+    _require_merged_pr(c, branch, "main")
     c.run("git fetch origin main", echo=True)
     c.run("git checkout main", echo=True)
     c.run("git merge --ff-only origin/main", echo=True)
@@ -237,7 +272,9 @@ def support_start(c: Context, version: str, base: str):
 def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     target = f"support/{support}"
     c.run(f"git checkout {target}", echo=True)
-    branch = f"support-hotfix/{support}/{next_version(current_version(c, group=group), bump)}"
+    version = next_version(current_version(c, group=group), bump)
+    _require_tag_absent(c, f"v{version}")
+    branch = f"support-hotfix/{support}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
     version_bump(c, bump, group=group, tag=False)
     return branch
@@ -298,9 +335,10 @@ def support_hotfix_finalize(c: Context, support: str):
     support/<support> and tags the new tip. No second PR — unlike release/hotfix finalize, a
     support patch never carries into develop. PR mode only — local mode's support_hotfix_finish
     already does all of this in one step."""
-    _, tag = _support_hotfix_branch_and_tag(c, support)
+    branch, tag = _support_hotfix_branch_and_tag(c, support)
     target = f"support/{support}"
 
+    _require_merged_pr(c, branch, target)
     c.run(f"git fetch origin {target}", echo=True)
     c.run(f"git checkout {target}", echo=True)
     c.run(f"git merge --ff-only origin/{target}", echo=True)
