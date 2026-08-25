@@ -123,17 +123,28 @@ Two deliberate narrowings, commented in the stub: `Task.pre`/`.post` attributes 
   goes through the inline `invoke/__init__.py`, whose own `from .tasks import task` resolves to the
   inline `tasks.py`; a probe (2026-08-25) shows the decorated function as `(...) -> Unknown` and
   `task` as invoke's inline `(...) -> ((...) -> Unknown)`. Only `from invoke.tasks import task`
-  picks up the stub — which the `reportPrivateImportUsage` warning already steers every consumer
-  toward. Covering the package form would need a full `typings/invoke/__init__.pyi` re-declaring the
-  whole surface; not worth it while the submodule import is the recommended form anyway.]
-- [DEFERRED: shipping the stub to consumers. Pilot only, local to `repo-tasks` for now. Options when
-  it has proven out: (a) `typings/invoke/` materialized into each consumer's root by
-  `configs.ensure` from a canonical copy in `src/repo_tasks/configs/` — same mechanism as
-  `ruff.toml`, visible in the consumer tree; (b) a PEP 561 `invoke-stubs` distribution (partial,
-  `py.typed` = `partial`) in the `repo-tasks-quality` group — zero files in consumers and reusable
-  by anyone, but a second thing to version and publish (typeshed's `types-invoke` was retired when
-  invoke went inline, so the name is free). Until one lands, a consumer running `configs.pull` gets
-  the tier-2 config but not the stub, so its `@task` sites still warn.]
+  picks up the stub. Adding a `typings/invoke/__init__.pyi` with `as`-form re-exports does not fix
+  it either: `stubPath` has no partial-package semantics, so the moment the stub directory has an
+  `__init__.pyi` it shadows the whole package and every un-stubbed sibling (`.context`, `.runners`)
+  becomes `"Context" is unknown import symbol` (probe, 2026-08-25).]
+- [DECISION: the stub ships as a PEP 561 partial stub distribution (`invoke-stubs`, `py.typed`
+  containing `partial`), not via `stubPath`. Verified 2026-08-25 with a throwaway `invoke-stubs/`
+  dropped into this venv's site-packages: `from invoke import Context, MockContext, Result, task` —
+  the idiomatic form every invoke tutorial uses — resolves with no `reportPrivateImportUsage`, the
+  decorated task as `Task[(c: Context, name: str) -> int]`, and `Context.run`/`MockContext` falling
+  through to invoke's inline types. That is the one mechanism that gives consumers the idiomatic
+  import back _and_ clears the `__init__` re-export warning, because the stub's own `__init__.pyi`
+  uses the `as X` form invoke's doesn't. `stubPath` is fine for the pilot but forces every consumer
+  onto `from invoke.tasks import task`. (typeshed's `types-invoke` was retired when invoke went
+  inline, so the name is free.)]
+- [DEFERRED: build the `invoke-stubs` distribution and add it to the `repo-tasks-quality` group;
+  then delete `typings/` here and revert the submodule-import churn if the idiomatic form is
+  preferred. Publishing need not mean PyPI: a `packages/invoke-stubs/` subdirectory of this repo
+  referenced as a git direct reference in the group (`invoke-stubs @ git+...#subdirectory=...`) is
+  the same git-as-artifact-store shape the `*-polite-mcp` family uses — weigh against the
+  `plans/2026-08-22-pypi-publish-integration.md` flow, which would make it a normal PyPI release.
+  Until it lands, a consumer running `configs.pull` gets the tier-2 config but not the stub, so its
+  `@task` sites still warn.]
 - [DEFERRED: offer the signature upstream to pyinvoke — the stub's `ParamSpec` overloads for
   `task()` plus `__all__` in `__init__.py`. `main` is unchanged as of 2026-08-25. Delete the local
   stub once a released invoke carries it.]
