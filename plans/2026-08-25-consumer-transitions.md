@@ -119,7 +119,25 @@ Rough, in order of payoff per effort:
   repo with neither file kind: exit 0, silent — the no-op contract survives the preflight.
 - `inv quality.precommit` here: 0 errors, 0 warnings, 294 unit tests.
 
-[UNVERIFIED: nothing has been swept yet. `power-user-linux-setup` and `scaffoldapy` still run
-whatever `main` was before these three commits, and the preflight has never been exercised from a
-consumer's own CI — only locally. The sweep in `contributing/consumer-sweep.md` is the next step,
-and item 4 is what would have made it unnecessary.]
+Both consumers were then swept for real, against the global tool moved to `68c56bf` (this repo's
+`main`), which makes the run below evidence about `main` and not only about whatever the machine
+happened to have installed:
+
+| repo                     | `configs.diff` | own gate                        | generated repos |
+| ------------------------ | -------------- | ------------------------------- | --------------- |
+| `power-user-linux-setup` | up to date     | 0 errors, 0 warnings, 353 tests | n/a             |
+| `scaffoldapy`            | up to date     | 0 errors, 0 warnings, 27 tests  | 10/10 e2e, 78s  |
+
+Neither had drifted and neither working tree changed — expected, since these three commits touched
+task code rather than the manifest or the shipped configs, so there was nothing to re-snapshot. What
+the sweep establishes is the other direction: the preflight and the widened `diff` do not break
+either consumer, including the ten generated repos that are the only thing testing scaffoldapy's
+second gate.
+
+Walking it also corrected the sweep doc: `inv repo-tasks.update` is a single global step, not part
+of the per-consumer loop, and `scaffoldapy`'s sweep is not finished at `quality.precommit` —
+`test.integration` is the half that covers what it generates.
+
+[UNVERIFIED: the preflight has still never fired from a consumer's own CI, only locally — no
+consumer has yet had a dev group behind the manifest since it landed. The first family-wide manifest
+change after this is the real test.]

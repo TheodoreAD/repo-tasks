@@ -44,10 +44,16 @@ After changing any of: the `repo-tasks-quality` manifest in `pyproject.toml`, an
 
 ## The sweep
 
-In each consumer's own checkout, in this order:
+Once, from anywhere — the tool install is global, not per-repo, so this is not part of the
+per-consumer loop:
 
 ```shell
-inv repo-tasks.update       # move the global tool install forward to what you just pushed
+inv repo-tasks.update       # move the global uv tool install forward to what you just pushed
+```
+
+Then in each consumer's own checkout:
+
+```shell
 repo-tasks configs.diff     # what this consumer has drifted from — both configs and dev group
 repo-tasks configs.ensure-deps
 inv deps.lock               # re-resolve uv.lock; review the diff
@@ -57,9 +63,15 @@ inv quality.precommit       # the gate, against the new tool and the new configs
 ```
 
 `configs.diff` is first for a reason: it reports both halves of the drift (stale config files _and_
-`dependency-groups.dev` entries the manifest has grown), so it tells you which of the steps below it
-this particular consumer actually needs. `ensure-deps` is additive and idempotent — it never touches
-an entry already present — so running it when nothing is missing costs nothing.
+`dependency-groups.dev` entries the manifest has grown), so it tells you which of the four steps
+between it and the gate this particular consumer actually needs — often none, when the change was to
+task code rather than to the manifest or the shipped configs. Run the gate regardless; that is what
+says the new tool works here. `ensure-deps` is additive and idempotent — it never touches an entry
+already present — so running it when nothing is missing costs nothing.
+
+In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `inv test.integration`
+(~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
+pitfall below.
 
 [PITFALL: `configs.pull` prints "pulled" for every file whether or not it wrote anything. Seen live
 2026-08-25: a consumer's installed `repo_tasks` was still the pre-change commit, so the first pull
