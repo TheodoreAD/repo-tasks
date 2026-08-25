@@ -98,10 +98,11 @@ removed by making the code satisfy it where cheap and by scoping the rules where
   and is what Traut recommends over disabling `reportUnknown*`. Offer it upstream to pyinvoke as
   well (`task() -> Callable[[Callable[P, R]], Task[Callable[P, R]]]`, plus `__all__` in
   `__init__.py`).
-- Decide `reportUnusedCallResult` for the whole family: a dropped `c.run()` `Result` is the normal
-  invoke idiom, and requiring `_ = c.run(...)` everywhere is churn with no bug class behind it.
-  Leaning `none` globally (pyright `strict` itself leaves it off; only basedpyright `recommended`
-  turns it on).
+- [DECISION: `reportUnusedCallResult` is `none` family-wide (2026-08-25, landed in the shared
+  `pyrightconfig.json` with the rationale as a comment). A dropped `c.run()` `Result` is the invoke
+  idiom, `_ = c.run(...)` everywhere is churn with no bug class behind it, ruff B018 covers the
+  bare-expression case, and pyright's own `strict` leaves the rule off — only basedpyright
+  `recommended` turns it on.]
 
 ### Tier 2 — `tests/` (this repo's and every consumer's): keep the bug-finding rules, drop the annotation-discipline rules
 
@@ -118,10 +119,13 @@ legitimately violate:
 - `reportUnusedParameter` — a fixture requested for its side effect (`tmp_cwd`) is "not accessed" by
   design.
 
-Annotating built-in fixtures (`monkeypatch: pytest.MonkeyPatch`, `tmp_path: Path`,
-`capsys:
-pytest.CaptureFixture[str]`) stays _encouraged_ — it gives real completion and catches
-misuse — but not _required_, which is the tier boundary.
+Annotating built-in fixtures (`monkeypatch: pytest.MonkeyPatch`, `tmp_path: Path`, and pytest's
+`CaptureFixture[str]` for `capsys`) stays _encouraged_ — it gives real completion and catches misuse
+— but not _required_, which is the tier boundary.
+
+[DECISION: `reportUnknownMemberType` is in the tests-tier `none` list (2026-08-25) — Tier 1 types
+the helpers tests call, so keeping it there would only re-impose fixture-annotation discipline on
+every consumer's tests.]
 
 ### Tier 3 — test fixture repos (`tests/fixtures/*`, the gitflow twin, scaffold outputs)
 
@@ -137,14 +141,14 @@ fits in a Bash tool result untruncated.
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: `reportUnusedCallResult` — `none` globally, or keep and write
-  `_ = c.run(...)` / `c.run(...).ok` throughout? Global `none` is the recommendation above.]
-- [NEEDS CLARIFICATION: the `@task` stub — local `typings/` partial stub shipped with
-  `configs.ensure` to every consumer, or wait on an upstream pyinvoke PR (slow: `task()`'s signature
-  is unchanged on `main`)? Local first, upstream as a follow-up, is the recommendation.]
-- [NEEDS CLARIFICATION: Tier 2's rule list — is dropping `reportUnknownMemberType` in tests too
-  broad (it also covers our own untyped helpers used from tests), or acceptable given Tier 1 makes
-  those helpers typed?]
+- [NEEDS CLARIFICATION: where the `@task` stub lives. (a) `typings/invoke/` materialized into each
+  consumer's root by `configs.ensure` from a canonical copy in `src/repo_tasks/configs/` — pyright's
+  default `stubPath`, visible in the consumer tree, same mechanism as `ruff.toml`. (b) A PEP 561
+  `invoke-stubs` distribution (partial, `py.typed` = `partial`) in the `repo-tasks-quality` group —
+  zero files in consumers and reusable by anyone, but a second thing to version and publish
+  (typeshed's `types-invoke` was retired when invoke went inline, so the name is free). Pyright's
+  resolution order (`stubPath` → `-stubs` packages → inline `py.typed`) makes either work; (a) as
+  the pilot, (b) once it has proven out, is the recommendation.]
 - [NEEDS CLARIFICATION: after Tier 1 lands, flip `failOnWarnings` to `true` so the count can't
   regress silently, with the remaining warnings fixed or explicitly downgraded first?]
 
