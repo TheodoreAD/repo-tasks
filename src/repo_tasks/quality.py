@@ -8,6 +8,7 @@ with no prerequisites beyond the dev dependency group."""
 
 from invoke import Collection, Context, task
 
+from .configs import require_tool
 from .testing import unit
 
 
@@ -31,18 +32,22 @@ def _workflow_files(c: Context):
 @task
 def lint_check(c: Context):
     """Run ruff's linter (no fixes)."""
+    require_tool("ruff")
     c.run("ruff check .", echo=True)
 
 
 @task
 def lint_apply(c: Context):
     """Run ruff's linter and apply auto-fixes."""
+    require_tool("ruff")
     c.run("ruff check --fix .", echo=True)
 
 
 @task
 def format_check(c: Context):
     """Check formatting (ruff format, dprint) without writing changes."""
+    require_tool("ruff")
+    require_tool("dprint")
     c.run("ruff format --check .", echo=True)
     c.run("dprint check --config-discovery=ignore-descendants", echo=True)
 
@@ -50,6 +55,8 @@ def format_check(c: Context):
 @task
 def format_apply(c: Context):
     """Apply formatting: ruff format, then dprint fmt."""
+    require_tool("ruff")
+    require_tool("dprint")
     c.run("ruff format .", echo=True)
     c.run("dprint fmt --config-discovery=ignore-descendants", echo=True)
 
@@ -57,6 +64,7 @@ def format_apply(c: Context):
 @task
 def type_check(c: Context):
     """Run basedpyright's type checker."""
+    require_tool("basedpyright")
     c.run("basedpyright", echo=True)
 
 
@@ -69,6 +77,10 @@ def shell_check(c: Context):
     """
     files = _sh_files(c)
     if files:
+        # Inside the branch, never above it: preflighting unconditionally would turn "this repo has
+        # no shell scripts" into a hard failure and cost the no-op contract the docstring promises.
+        # Same in every file-gated step below.
+        require_tool("shellcheck")
         c.run(f"shellcheck {' '.join(files)}", echo=True)
 
 
@@ -78,6 +90,7 @@ def shell_format_check(c: Context):
     cleanly on a repo with no shell scripts."""
     files = _sh_files(c)
     if files:
+        require_tool("shfmt")
         c.run(f"shfmt -d {' '.join(files)}", echo=True)
 
 
@@ -87,6 +100,7 @@ def shell_format_apply(c: Context):
     no shell scripts."""
     files = _sh_files(c)
     if files:
+        require_tool("shfmt")
         c.run(f"shfmt -w {' '.join(files)}", echo=True)
 
 
@@ -96,6 +110,7 @@ def workflow_check(c: Context):
     cleanly on a repo with no workflows, so it is safe in every consumer's `check`."""
     files = _workflow_files(c)
     if files:
+        require_tool("actionlint")
         c.run(f"actionlint {' '.join(files)}", echo=True)
 
 

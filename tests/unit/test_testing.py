@@ -5,6 +5,7 @@ The `c` fixture from conftest is deliberately not used where a specific exit cod
 those cases need `MockContext(run=Result(exited=...))`, which is the split that fixture's docstring
 describes."""
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,16 @@ def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
     testing.workflows.body(c)
     assert "nothing to do" in capsys.readouterr().out
     c.run.assert_not_called()
+
+
+def test_unit_preflights_pytest_itself(monkeypatch):
+    # `unit` runs inside quality.check, so a dev group behind the repo-tasks-quality manifest hits
+    # this the same way it hits quality.py's tools — and gets the same fix rather than exit 127.
+    monkeypatch.setattr(shutil, "which", lambda tool: None)
+    c = MockContext(run=Result(exited=0))
+    with pytest.raises(Exit):
+        testing.unit.body(c)
+    c.run.assert_not_called()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_integration_dir_constant_matches_the_repos_own_layout():

@@ -4,6 +4,7 @@ installed-package source, exercised via the default no-source-override path) plu
 (configs.pull --source local:<path>, then configs-promote) actually relies on."""
 
 import re
+import shutil
 
 import pytest
 from invoke import Exit, MockContext, Result
@@ -77,6 +78,33 @@ def test_diff_never_writes(c, tmp_cwd):
     with pytest.raises(Exit):
         configs.diff.body(c, source=None)
     assert list(tmp_cwd.iterdir()) == []
+
+
+def test_every_gate_tool_maps_to_a_real_manifest_entry():
+    # The mapping is hand-written (four of the seven distributions are named differently from the
+    # binary they install), so a manifest rename would otherwise leave `require_tool` naming a
+    # package that no longer exists — precisely when the message matters most.
+    manifest = {configs._bare_name(dep) for dep in configs._quality_deps()}
+    for tool, distribution in configs._GATE_TOOL_DISTRIBUTIONS.items():
+        assert distribution in manifest, tool
+
+
+def test_require_tool_returns_silently_when_the_binary_is_present(monkeypatch, capsys):
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    configs.require_tool("actionlint")
+    assert capsys.readouterr().out == ""
+
+
+def test_require_tool_exits_naming_the_distribution_and_the_fix(monkeypatch, capsys):
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(Exit) as exc_info:
+        configs.require_tool("shfmt")
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "shfmt not found on PATH" in out
+    assert "shfmt-py" in out  # the entry to add, which the binary name does not give you
+    assert "configs.ensure-deps" in out
+    assert "inv deps.lock" in out
 
 
 def test_ensure_deps_creates_pyproject_when_missing(tmp_path, monkeypatch):

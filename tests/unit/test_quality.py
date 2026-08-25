@@ -1,11 +1,24 @@
 """Tests for repo_tasks.quality: asserts the exact command string each task
 builds via invoke's MockContext, plus dedicated coverage for _sh_files — the
 one piece of real logic, and what makes the mandatory `check`/`fix` composite
-safe to run unconditionally on a repo with no shell scripts."""
+safe to run unconditionally on a repo with no shell scripts.
 
-from invoke import MockContext, Result
+The command-string tests run against the real `shutil.which`, so they also assert that this repo's
+own environment has every gate binary — which is the preflight's whole premise. The preflight's own
+behaviour is covered in test_configs.py, where it lives; the tests here pin the wiring."""
+
+import shutil
+from collections.abc import Callable
+
+import pytest
+from invoke import Context, Exit, MockContext, Result, Task
 
 from repo_tasks import quality
+
+# Every gate step under test here takes only the Context, so one alias covers the parametrized
+# cases below — `Task` is generic over its body's signature in invoke-stubs. A plain assignment,
+# not a `type` statement: this package supports 3.11, where that syntax does not exist.
+GateStep = Task[Callable[[Context], None]]
 
 _WORKFLOW_LISTING = (
     "git ls-files --cached --others --exclude-standard -- '.github/workflows/*.yml' '.github/workflows/*.yaml'"
@@ -152,3 +165,39 @@ def test_shell_format_apply_runs_shfmt_when_files_found():
         ("shfmt -w ./a.sh",),
         {"echo": True},
     )
+
+
+@pytest.mark.parametrize(
+    "step",
+    [quality.lint_check, quality.lint_apply, quality.format_check, quality.format_apply, quality.type_check],
+)
+def test_unconditional_steps_preflight_their_binary(c, monkeypatch, step: GateStep):
+    # Exit, not the shell's exit 127 from a command that was never runnable — with the missing
+    # entry and the command that adds it in the message (see test_configs.py for the text).
+    monkeypatch.setattr(shutil, "which", lambda tool: None)
+    with pytest.raises(Exit):
+        step.body(c)
+    c.run.assert_not_called()
+
+
+_SH_LISTING = "git ls-files --cached --others --exclude-standard -- '*.sh'"
+
+
+@pytest.mark.parametrize(
+    ("step", "listing", "found"),
+    [
+        (quality.shell_check, _SH_LISTING, "./a.sh\n"),
+        (quality.shell_format_check, _SH_LISTING, "./a.sh\n"),
+        (quality.shell_format_apply, _SH_LISTING, "./a.sh\n"),
+        (quality.workflow_check, _WORKFLOW_LISTING, ".github/workflows/ci.yml\n"),
+    ],
+)
+def test_file_gated_steps_preflight_only_once_they_have_files(monkeypatch, step: GateStep, listing: str, found: str):
+    monkeypatch.setattr(shutil, "which", lambda tool: None)
+
+    # No files: still a clean no-op. The preflight must not cost these steps the
+    # safe-to-run-in-any-consumer contract their docstrings promise.
+    step.body(MockContext(run=Result(stdout="", exited=0)))
+
+    with pytest.raises(Exit):
+        step.body(MockContext(run={listing: Result(stdout=found, exited=0)}))

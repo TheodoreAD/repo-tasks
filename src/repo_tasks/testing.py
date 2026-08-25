@@ -18,6 +18,8 @@ from pathlib import Path
 
 from invoke import Context, Exit, task
 
+from .configs import require_tool
+
 _INTEGRATION_DIR = Path("tests/integration")
 
 _NO_INTEGRATION = f"no {_INTEGRATION_DIR} directory — nothing to do"
@@ -33,6 +35,9 @@ _NO_TESTS_COLLECTED = 5
 
 
 def _pytest(c: Context, args: str = "") -> None:
+    # `unit` runs inside quality.check, so a dev group behind the repo-tasks-quality manifest
+    # reaches this the same way it reaches the tools in quality.py — same preflight, same fix.
+    require_tool("pytest")
     command = f"pytest {args}".strip()
     result = c.run(command, echo=True, warn=True)
     if not result.ok and result.exited != _NO_TESTS_COLLECTED:

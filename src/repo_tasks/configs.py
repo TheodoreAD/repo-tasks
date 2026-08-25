@@ -8,10 +8,17 @@ default, or from `--source git:<url>`/`local:<path>` to stage a candidate from e
 The reverse direction — promoting a repo's own tuned root config into the shipped baseline — is
 `configs.promote` in repo-tasks' own `tasks.py`, not exported here: every consumer's `check`
 still runs unconditionally against whatever `pull` last wrote, no per-repo `configs.local.toml`
-override exists today (see plans/2026-08-14-python-repo-scaffolding.md §D)."""
+override exists today (see plans/2026-08-14-python-repo-scaffolding.md §D).
+
+This module also owns the other half of what a consumer snapshots: the `repo-tasks-quality`
+dependency manifest. `ensure_deps` splices it in, and `require_tool` — imported by the gate steps
+in `quality.py`/`testing.py` — turns a binary that manifest should have provided into the command
+that fixes its absence. Both read the same packaged `pyproject.toml`, so there is one manifest and
+no second list to keep in step."""
 
 import difflib
 import re
+import shutil
 import subprocess
 import tempfile
 import tomllib
@@ -20,6 +27,8 @@ from pathlib import Path
 from typing import cast
 
 from invoke import Context, Exit, task
+
+from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", ".editorconfig"]
 
@@ -56,6 +65,47 @@ def _source_dir(source: str | None) -> Path:
     if source.startswith("local:"):
         return Path(source.removeprefix("local:")).expanduser()
     raise ValueError(f"--source must start with 'git:' or 'local:', got {source!r}")
+
+
+# Every binary a gate step shells out to, mapped to the `repo-tasks-quality` entry providing it.
+# Spelled out rather than derived: four of the seven distributions are named differently from the
+# tool they install (`shfmt-py` -> `shfmt`), and the whole point of the message is to name the
+# entry a consumer has to add. test_configs.py asserts every value is really in the manifest.
+_GATE_TOOL_DISTRIBUTIONS = {
+    "actionlint": "actionlint-py",
+    "basedpyright": "basedpyright",
+    "dprint": "dprint-py",
+    "pytest": "pytest",
+    "ruff": "ruff",
+    "shellcheck": "shellcheck-py",
+    "shfmt": "shfmt-py",
+}
+
+_DEV_GROUP_FIX = (
+    "repo-tasks configs.ensure-deps  # splice in whatever repo-tasks-quality has grown since",
+    "inv deps.lock                   # re-resolve uv.lock, then review the diff",
+    "inv venv.sync",
+)
+
+
+def require_tool(tool: str) -> None:
+    """Preflight a gate step's binary, stopping with the command that fixes it instead of leaving
+    the caller the shell's bare exit 127.
+
+    The failure this exists for, measured 2026-08-24: `quality.workflow_check` and its `actionlint`
+    entry landed together, every consumer's dev group was a snapshot from before the entry existed,
+    and CI failed with `actionlint: command not found` on every push for a day with nothing linking
+    the message back to the drift that caused it."""
+    if shutil.which(tool) is not None:
+        return
+    distribution = _GATE_TOOL_DISTRIBUTIONS.get(tool, tool)
+    print(
+        f"[configs] {tool} not found on PATH — {distribution} is not installed in this project's "
+        "environment. repo-tasks ships it in the repo-tasks-quality manifest, so either this "
+        "project's dependency-groups.dev is behind that manifest or .venv is out of sync with the lock."
+    )
+    _next_steps(*_DEV_GROUP_FIX)
+    raise Exit(code=1)
 
 
 @task(help={"source": _SOURCE_HELP})
