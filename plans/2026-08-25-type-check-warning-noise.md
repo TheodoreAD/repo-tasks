@@ -253,9 +253,10 @@ code rather than by hiding output.
   config unchanged and only `uv lock --upgrade-package repo-tasks` + `uv sync` (the consumer had no
   `deps.lock`/`venv.sync` wired) made the next pull real. `configs.diff` first, or a
   "pulled"/"unchanged" distinction in the task's output, would have shown it.]
-- `scaffoldapy` is unaffected (verified 2026-08-25): both its own `tasks.py` and `template/tasks.py`
-  import `from repo_tasks import ns` only — no `from invoke import ...`, no `pyright: ignore` beyond
-  the deliberate `reportMissingImports` on that line. `basedpyright` on the repo: 0 errors, 1
-  warning (`reportUnknownVariableType` on `ns`, the pre-existing consequence of `repo_tasks` not
-  being a project dependency there). Its `pyrightconfig.json` predates the tiered rules; it picks
-  them up on its next `configs.pull`, which changes nothing for those files.
+- `scaffoldapy` was **not** unaffected — corrected 2026-08-25 evening. The check above ran
+  `basedpyright` on scaffoldapy's own tree; the repos it _generates_ pull `failOnWarnings: true` at
+  generation, and the template's code carried twelve warnings across four files (`tasks.py`'s `ns`,
+  untyped `diskcache` calls, two unannotated attributes, three implicit overrides) — all ten e2e
+  combinations failed the moment the global tool reached `09321ae`. Fixed template-side in
+  scaffoldapy `2e29f2b`; the lesson (a generator has two gates, and only its e2e tests the second)
+  is in `plans/2026-08-25-consumer-transitions.md`.
