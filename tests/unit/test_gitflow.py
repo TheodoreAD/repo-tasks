@@ -93,22 +93,97 @@ def test_feature_finish_local_merges_directly(c):
 # ---------------------------------------------------------------------------
 
 
-def test_release_start_branches_off_develop_before_bumping(c):
+def test_release_start_branches_off_develop_before_bumping_to_rc1(c):
     gitflow.release_start.body(c, bump="minor")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout develop"
-    assert call_strings[1] == "git tag --list v0.2.0"
+    assert call_strings[1] == "git tag --list v0.2.0"  # the final version's tag, which is the branch's name
     assert call_strings[2] == "git checkout -b release/0.2.0"
-    assert "--config-file" in call_strings[3]
+    # rc1 is bump-my-version's own arithmetic for `minor` under the rc scheme — no --new-version.
+    assert call_strings[3].startswith("bump-my-version bump minor --config-file ")
+    assert "--new-version" not in call_strings[3]
 
 
-def test_hotfix_start_branches_off_main_before_bumping(c):
+def test_hotfix_start_branches_off_main_and_bumps_straight_to_final(c):
     gitflow.hotfix_start.body(c, bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout main"
     assert call_strings[1] == "git tag --list v0.1.1"
     assert call_strings[2] == "git checkout -b hotfix/0.1.1"
-    assert "--config-file" in call_strings[3]
+    assert call_strings[3].startswith("bump-my-version bump patch --config-file ")
+    assert call_strings[3].endswith(" --new-version 0.1.1")
+
+
+def test_hotfix_start_rc_opts_into_the_candidate_cycle(c, capsys):
+    gitflow.hotfix_start.body(c, bump="patch", rc=True)
+    call_strings = [call[0][0] for call in c.run.call_args_list]
+    assert call_strings[2] == "git checkout -b hotfix/0.1.1"  # still named after the final
+    assert "--new-version" not in call_strings[3]
+    assert "release-candidate" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# release_candidate — rcN -> rcN+1, tagged and pushed on the branch itself
+# ---------------------------------------------------------------------------
+
+
+def _candidate_context(branch, current, next_tag):
+    return MockContext(
+        run={
+            **_rev_parse(branch),
+            **_tag_list(next_tag),
+            **_ok(f"git push origin {branch} {next_tag}"),
+        }
+    )
+
+
+def test_release_candidate_bumps_rc_tags_and_pushes(monkeypatch, capsys):
+    c = _candidate_context("release/0.2.0", "0.2.0rc1", "v0.2.0rc2")
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc1")
+    bumps = []
+    monkeypatch.setattr(
+        gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append((part, tag))
+    )
+    gitflow.release_candidate.body(c)
+    assert bumps == [("rc", True)]
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert call_strings == [
+        "git rev-parse --abbrev-ref HEAD",
+        "git tag --list v0.2.0rc2",
+        "git push origin release/0.2.0 v0.2.0rc2",
+    ]
+    out = capsys.readouterr().out
+    assert "v0.2.0rc2 pushed" in out
+    assert "inv gitflow.release-finish" in out
+
+
+def test_release_candidate_works_on_a_hotfix_branch_that_opted_in(monkeypatch, capsys):
+    c = _candidate_context("hotfix/0.1.1", "0.1.1rc1", "v0.1.1rc2")
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.1.1rc1")
+    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: None)
+    gitflow.release_candidate.body(c)
+    assert "inv gitflow.hotfix-finish" in capsys.readouterr().out
+
+
+def test_release_candidate_refuses_off_a_release_or_hotfix_branch():
+    c = MockContext(run=_rev_parse("develop"))
+    with pytest.raises(ValueError, match="release/\\* or hotfix/\\*"):
+        gitflow.release_candidate.body(c)
+
+
+def test_release_candidate_refuses_when_the_next_rc_tag_exists(monkeypatch):
+    c = MockContext(run={**_rev_parse("release/0.2.0"), **_tag_list("v0.2.0rc2", exists=True)})
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc1")
+    with pytest.raises(ValueError, match=re.escape("v0.2.0rc2 already exists")):
+        gitflow.release_candidate.body(c)
+
+
+def test_release_candidate_refuses_a_final_version(monkeypatch):
+    # A hotfix that went straight to final has no candidate to advance.
+    c = MockContext(run=_rev_parse("hotfix/0.1.1"))
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.1.1")
+    with pytest.raises(ValueError, match="final version"):
+        gitflow.release_candidate.body(c)
 
 
 def test_start_raises_before_branching_when_the_versions_tag_already_exists():
@@ -168,6 +243,44 @@ def test_finish_pr_mode_raises_when_not_on_expected_branch_kind():
     c = MockContext(run=_rev_parse("main"))
     with pytest.raises(ValueError, match="release/"):
         gitflow.release_finish.body(c)
+
+
+def test_release_finish_drops_the_rc_before_opening_the_pr(monkeypatch):
+    """The version main receives is the final one the branch was named after — one more bump
+    commit on the branch, before the push that makes the PR."""
+    c = MockContext(
+        run={
+            **_rev_parse("release/0.2.0"),
+            **_ok("git push -u origin release/0.2.0"),
+            **_gh_pr("main", "release/0.2.0", "Release 0.2.0", "Merging release/0.2.0 into main."),
+        }
+    )
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc3")
+    events = []
+    monkeypatch.setattr(
+        gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: events.append(("bump", part, tag))
+    )
+    gitflow.release_finish.body(c)
+    assert events == [("bump", "final", False)]
+
+
+def test_release_finish_local_drops_the_rc_before_merging(monkeypatch):
+    c = _local_finish_context("release/0.2.0")
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc1")
+    bumps = []
+    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
+    gitflow.release_finish.body(c, local=True)
+    assert bumps == ["final"]
+    assert c.run.call_args_list[1][0][0] == "git checkout main"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_hotfix_finish_has_nothing_to_drop_without_an_rc(monkeypatch):
+    c = _local_finish_context("hotfix/0.1.1")
+    monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.1.1")
+    bumps = []
+    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
+    gitflow.hotfix_finish.body(c, local=True)
+    assert bumps == []
 
 
 # ---------------------------------------------------------------------------

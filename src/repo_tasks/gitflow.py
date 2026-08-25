@@ -20,10 +20,11 @@ tripped — prints exactly what to run next, so nobody has to read this file to 
 
 from invoke import Context, task
 
+from .version import Version, current_version, next_version
+
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
 # namespace, not out of sibling modules.
 from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
-from .version import current_version, next_version
 
 
 def _current_branch(c: Context):
@@ -109,33 +110,91 @@ def feature_finish(c: Context, name: str, local: bool = False):
     )
 
 
-def _start(c: Context, kind: str, base: str, bump: str, group: str | None):
+def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: bool):
     c.run(f"git checkout {base}", echo=True)
-    version = next_version(current_version(c, group=group), bump)
+    # The branch is named after the *final* version it will ship, whether or not the bump lands
+    # on rc1 first — the rc cycle happens on the branch, the name is what main gets.
+    version = next_version(current_version(c, group=group), bump, rc=False)
     _require_tag_absent(c, f"v{version}")
     branch = f"{kind}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
-    version_bump(c, bump, group=group, tag=False)
+    version_bump(c, bump, group=group, tag=False, rc=rc)
     return branch
 
 
-@task
+@task(
+    help={
+        "bump": "major, minor, or patch",
+        "group": "Version group to release (default: the repo's own root project)",
+    }
+)
 def release_start(c: Context, bump: str, group: str | None = None):
-    """Branch release/<version> off develop, then bump the version on the release branch (no tag
-    yet)."""
-    branch = _start(c, "release", "develop", bump, group)
-    _next_steps(f"When ready to ship: inv gitflow.release-finish (from the {branch} branch)")
+    """Branch release/<version> off develop, then bump the version on the release branch to its
+    first release candidate (`X.Y.0rc1`, no tag yet). `release-candidate` tags candidates from
+    there; `release-finish` drops the rc when the release ships."""
+    branch = _start(c, "release", "develop", bump, group, rc=True)
+    _next_steps(
+        f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)",
+        f"When ready to ship: inv gitflow.release-finish (from the {branch} branch)",
+    )
 
 
-@task
-def hotfix_start(c: Context, bump: str, group: str | None = None):
+@task(
+    help={
+        "bump": "major, minor, or patch",
+        "group": "Version group to patch (default: the repo's own root project)",
+        "rc": "Bump to rc1 and run a candidate cycle instead of going straight to the final version",
+    }
+)
+def hotfix_start(c: Context, bump: str, group: str | None = None, rc: bool = False):
     """Branch hotfix/<version> off main, then bump the version on the hotfix branch (no tag
-    yet)."""
-    branch = _start(c, "hotfix", "main", bump, group)
-    _next_steps(f"When ready to ship: inv gitflow.hotfix-finish (from the {branch} branch)")
+    yet). Straight to the final version by default — a hotfix ships as soon as it is reviewed;
+    --rc opts into the same candidate cycle a release gets."""
+    branch = _start(c, "hotfix", "main", bump, group, rc=rc)
+    steps = [f"When ready to ship: inv gitflow.hotfix-finish (from the {branch} branch)"]
+    if rc:
+        steps.insert(0, f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)")
+    _next_steps(*steps)
 
 
-def _local_finish(c: Context, kind: str, push: bool):
+def _release_branch(c: Context):
+    """The current release/* or hotfix/* branch, or a raise naming what was expected — the
+    candidate cycle runs on either, since a hotfix can opt into it."""
+    branch = _current_branch(c)
+    if not branch.startswith(("release/", "hotfix/")):
+        raise ValueError(
+            f"not on a release/* or hotfix/* branch (currently on {branch!r}) — candidates are cut from the branch "
+            "that will ship"
+        )
+    return branch
+
+
+@task(help={"group": "Version group to bump (default: the repo's own root project)"})
+def release_candidate(c: Context, group: str | None = None):
+    """Cut the next release candidate on the current release/hotfix branch: bump `rcN` to
+    `rcN+1`, tag `vX.Y.ZrcN+1` on the branch, and push branch and tag — so the tag-triggered
+    workflows build and publish staging artifacts. The first candidate is `release-start`'s own
+    rc1; this is every one after it."""
+    branch = _release_branch(c)
+    tag = f"v{next_version(current_version(c, group=group), 'rc')}"
+    _require_tag_absent(c, tag)
+    version_bump(c, "rc", group=group, tag=True)
+    c.run(f"git push origin {branch} {tag}", echo=True)
+    _next_steps(
+        f"{tag} pushed — the tag-triggered workflows build it; deploy that to staging.",
+        f"Another round: inv gitflow.release-candidate; ready to ship: inv gitflow.{branch.split('/', 1)[0]}-finish",
+    )
+
+
+def _drop_rc(c: Context, group: str | None):
+    """Bump a release candidate to its final version before the branch merges into main — the
+    version main receives is the one the branch was named after. A branch that never had an rc
+    (a hotfix by default) has nothing to drop."""
+    if Version.parse(current_version(c, group=group)).rc is not None:
+        version_bump(c, "final", group=group, tag=False)
+
+
+def _local_finish(c: Context, kind: str, push: bool, group: str | None):
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -144,6 +203,7 @@ def _local_finish(c: Context, kind: str, push: bool):
             "finish first"
         )
     tag = f"v{branch.removeprefix(prefix)}"
+    _drop_rc(c, group)
 
     c.run("git checkout main", echo=True)
     c.run(f"git merge --no-ff {branch}", echo=True)
@@ -164,7 +224,7 @@ def _local_finish(c: Context, kind: str, push: bool):
         c.run(f"git push origin {tag}", echo=True)
 
 
-def _pr_finish(c: Context, kind: str):
+def _pr_finish(c: Context, kind: str, group: str | None):
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -173,6 +233,7 @@ def _pr_finish(c: Context, kind: str):
             "finish first"
         )
     version = branch.removeprefix(prefix)
+    _drop_rc(c, group)
     url = _open_pr(c, branch, "main", f"{kind.capitalize()} {version}", f"Merging {branch} into main.")
     _next_steps(
         f"PR opened: {url}",
@@ -180,27 +241,35 @@ def _pr_finish(c: Context, kind: str):
     )
 
 
-@task
-def release_finish(c: Context, push: bool = False, local: bool = False):
-    """PR mode (default): opens a PR merging the release branch into main and stops — run
+_FINISH_HELP = {
+    "push": "(--local only) also push branches and tag to the remote",
+    "local": "Direct merge instead of a PR — a single-person repo or fast local testing",
+    "group": "Version group being released (default: the repo's own root project)",
+}
+
+
+@task(help=_FINISH_HELP)
+def release_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
+    """Drop the release candidate (`X.Y.0rcN` → `X.Y.0`, one more commit on the branch), then —
+    PR mode (default) — open a PR merging the release branch into main and stop; run
     release_finalize once it's merged. --local does the old direct merge+tag+develop-merge+delete
     in one step; push (--local only) additionally pushes branches + tag to the remote."""
     if local:
-        _local_finish(c, "release", push)
+        _local_finish(c, "release", push, group)
         return
-    _pr_finish(c, "release")
+    _pr_finish(c, "release", group)
 
 
-@task
-def hotfix_finish(c: Context, push: bool = False, local: bool = False):
-    """PR mode (default): opens a PR merging the hotfix branch into main and stops — run
-    hotfix_finalize once it's merged. --local does the old direct merge+tag+develop-or-release-
-    merge+delete in one step; push (--local only) additionally pushes branches + tag to the
-    remote."""
+@task(help=_FINISH_HELP)
+def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
+    """Drop the release candidate if the hotfix ran one (`--rc`), then — PR mode (default) — open
+    a PR merging the hotfix branch into main and stop; run hotfix_finalize once it's merged.
+    --local does the old direct merge+tag+develop-or-release-merge+delete in one step; push
+    (--local only) additionally pushes branches + tag to the remote."""
     if local:
-        _local_finish(c, "hotfix", push)
+        _local_finish(c, "hotfix", push, group)
         return
-    _pr_finish(c, "hotfix")
+    _pr_finish(c, "hotfix", group)
 
 
 def _finalize(c: Context, kind: str):
@@ -272,19 +341,20 @@ def support_start(c: Context, version: str, base: str):
 def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     target = f"support/{support}"
     c.run(f"git checkout {target}", echo=True)
-    version = next_version(current_version(c, group=group), bump)
+    version = next_version(current_version(c, group=group), bump, rc=False)
     _require_tag_absent(c, f"v{version}")
     branch = f"support-hotfix/{support}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
-    version_bump(c, bump, group=group, tag=False)
+    version_bump(c, bump, group=group, tag=False, rc=False)
     return branch
 
 
 @task
 def support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     """Branch a patch off support/<support> to fix something on that maintenance line, then bump
-    the version on the patch branch (no tag yet). support/* is protected exactly like main — it
-    produces artifacts that ship to prod — so patching it goes through the same start/finish/
+    the version on the patch branch straight to its final value (no tag yet, no candidate cycle —
+    a support patch is the narrowest change there is). support/* is protected exactly like main —
+    it produces artifacts that ship to prod — so patching it goes through the same start/finish/
     finalize shape as a regular hotfix, just targeting the support branch instead of main. Never
     touches develop or the release-branch redirect rule: those exist to keep an active mainline
     release in sync, which has nothing to do with an already-diverged support line."""
