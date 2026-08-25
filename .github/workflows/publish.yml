@@ -11,11 +11,16 @@ name: publish
 # Both indexes need a one-time "pending publisher" registered by hand for
 # TheodoreAD/repo-tasks + this filename (and, for pypi.org, the `pypi` environment) before the
 # first run can succeed — that setup lives outside this repo by design.
+#
+# Release candidates (`vX.Y.ZrcN`, tagged on the release branch by `inv gitflow.release-candidate`)
+# reach TestPyPI only: the real-index job is skipped for any tag carrying `rc`, so a candidate is
+# never one approval click away from pypi.org. A final tag runs both.
 on:
   workflow_dispatch:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
 
 permissions:
   contents: read
@@ -32,6 +37,7 @@ jobs:
 
   pypi:
     needs: testpypi
+    if: ${{ !contains(github.ref_name, 'rc') }}
     runs-on: ubuntu-latest
     environment: pypi
     steps:
