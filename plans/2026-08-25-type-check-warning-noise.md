@@ -220,7 +220,9 @@ code rather than by hiding output.
   for `invoke-stubs`, then the same annotation pass over `tasks/` (`c: Context`, parameters; imports
   stay `from invoke import ...`). Its own residue after that is real: `tasks/allowlist.py` alone
   carried 580 warnings and `reportMissingTypeArgument` ×109 across `tasks/`.]
-- [UNVERIFIED: no other consumer's test suite depends on the `reportPrivateUsage` warning-as-error
-  behavior or on `from invoke import ...` re-exports being tolerated — `scaffoldapy`'s template
-  `tasks.py` imports `from repo_tasks import ns` only, so it should be unaffected; check its
-  generated output once the config ships.]
+- `scaffoldapy` is unaffected (verified 2026-08-25): both its own `tasks.py` and `template/tasks.py`
+  import `from repo_tasks import ns` only — no `from invoke import ...`, no `pyright: ignore` beyond
+  the deliberate `reportMissingImports` on that line. `basedpyright` on the repo: 0 errors, 1
+  warning (`reportUnknownVariableType` on `ns`, the pre-existing consequence of `repo_tasks` not
+  being a project dependency there). Its `pyrightconfig.json` predates the tiered rules; it picks
+  them up on its next `configs.pull`, which changes nothing for those files.
