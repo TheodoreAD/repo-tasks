@@ -684,6 +684,11 @@ wheels = [
 ]
 
 [[package]]
+name = "invoke-stubs"
+version = "0.1.0"
+source = { git = "https://github.com/TheodoreAD/invoke-stubs#ad052ca2c5eed29775399f697cf58ed85281855c" }
+
+[[package]]
 name = "itsdangerous"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1128,6 +1133,7 @@ dev = [
     { name = "devpi-client" },
     { name = "devpi-server" },
     { name = "dprint-py" },
+    { name = "invoke-stubs" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },
@@ -1139,6 +1145,7 @@ repo-tasks-quality = [
     { name = "actionlint-py" },
     { name = "basedpyright" },
     { name = "dprint-py" },
+    { name = "invoke-stubs" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },
@@ -1160,6 +1167,7 @@ dev = [
     { name = "devpi-client", specifier = ">=7.3.0" },
     { name = "devpi-server", specifier = ">=6.20.3" },
     { name = "dprint-py" },
+    { name = "invoke-stubs", git = "https://github.com/TheodoreAD/invoke-stubs" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },
@@ -1171,6 +1179,7 @@ repo-tasks-quality = [
     { name = "actionlint-py" },
     { name = "basedpyright", specifier = ">=1.39.10" },
     { name = "dprint-py" },
+    { name = "invoke-stubs", git = "https://github.com/TheodoreAD/invoke-stubs" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "shellcheck-py" },

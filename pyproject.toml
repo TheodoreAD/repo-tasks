@@ -14,6 +14,10 @@ repo-tasks = "repo_tasks.cli:program.run"
 # read as "the quality tier" and get folded into dev like everything else was.
 repo-tasks-quality = [
   "basedpyright>=1.39.10",
+  # Partial stubs so `@task` keeps the decorated function's signature and `from invoke import task`
+  # is a public re-export to the type checker — see plans/2026-08-25-type-check-warning-noise.md.
+  # Git-sourced like repo-tasks itself; drop once a released invoke carries the same signatures.
+  "invoke-stubs @ git+https://github.com/TheodoreAD/invoke-stubs",
   "pytest",
   "ruff",
   "shellcheck-py",
