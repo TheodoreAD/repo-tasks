@@ -3,9 +3,12 @@
 
 import re
 
-from invoke import Exit, task
+from invoke.context import Context
+from invoke.exceptions import Exit
+from invoke.tasks import task
 
-from .gitflow import _next_steps
+# Underscored to stay out of gitflow's CLI namespace, not out of sibling modules.
+from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
 
 # The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
 # records the member's `source = { editable = "<old path>" }` and uv reads that stale entry before
@@ -22,7 +25,7 @@ _MOVED_MEMBER_RE = re.compile(r"Failed to generate package metadata for `(?P<nam
         "package": "Upgrade one package deliberately (--upgrade-package)",
     }
 )
-def lock(c, upgrade=False, package=None):
+def lock(c: Context, upgrade: bool = False, package: str | None = None):
     """Write/update uv.lock. The only task in this package that ever runs `uv lock`."""
     cmd = "uv lock"
     if upgrade:
@@ -43,13 +46,13 @@ def lock(c, upgrade=False, package=None):
 
 
 @task
-def check(c):
+def check(c: Context):
     """Check uv.lock is up-to-date with pyproject.toml, read-only, no .venv needed."""
     c.run("uv lock --check", echo=True)
 
 
 @task(help={"outdated": "Show the latest available version of each installed package"})
-def list(c, outdated=False):  # noqa: A001 — this is the CLI task name (`inv deps.list`), matches uv's own `list` verb
+def list(c: Context, outdated: bool = False):  # noqa: A001 — this is the CLI task name (`inv deps.list`), matches uv's own `list` verb
     """List what's actually installed in .venv (uv pip list)."""
     cmd = "uv pip list"
     if outdated:
@@ -58,7 +61,7 @@ def list(c, outdated=False):  # noqa: A001 — this is the CLI task name (`inv d
 
 
 @task(help={"outdated": "Show the latest available version of each package in the tree"})
-def tree(c, outdated=False):
+def tree(c: Context, outdated: bool = False):
     """Show the full resolved dependency tree from uv.lock (uv tree)."""
     cmd = "uv tree"
     if outdated:
@@ -67,7 +70,7 @@ def tree(c, outdated=False):
 
 
 @task(help={"output": "Output path for the exported requirements file", "no_dev": "Skip the dev dependency group"})
-def export(c, output="requirements.txt", no_dev=False):
+def export(c: Context, output: str = "requirements.txt", no_dev: bool = False):
     """Export uv.lock to a pinned requirements.txt (--locked, non-editable) for non-uv-aware
     consumers — SBOM/vulnerability scanners, plain-pip CI steps."""
     cmd = "uv export --format requirements.txt --locked --no-editable"

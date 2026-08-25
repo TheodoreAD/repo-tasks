@@ -17,8 +17,11 @@ import tempfile
 import tomllib
 from importlib import resources
 from pathlib import Path
+from typing import cast
 
-from invoke import Exit, task
+from invoke.context import Context
+from invoke.exceptions import Exit
+from invoke.tasks import task
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", ".editorconfig"]
 
@@ -58,7 +61,7 @@ def _source_dir(source: str | None) -> Path:
 
 
 @task(help={"source": _SOURCE_HELP})
-def pull(c, source=None):
+def pull(c: Context, source: str | None = None):
     """Materialize ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/.editorconfig from the
     canonical source into this repo's root, verbatim. Overwrites unconditionally."""
     src_dir = _source_dir(source)
@@ -68,7 +71,7 @@ def pull(c, source=None):
 
 
 @task(help={"source": _SOURCE_HELP})
-def diff(c, source=None):
+def diff(c: Context, source: str | None = None):
     """Show what `configs.pull` would change, without writing anything. Exits nonzero if
     anything differs."""
     src_dir = _source_dir(source)
@@ -94,7 +97,7 @@ def diff(c, source=None):
     raise Exit(code=1)
 
 
-def _own_pyproject_data() -> dict:
+def _own_pyproject_data() -> dict[str, object]:
     """The real pyproject.toml this repo_tasks install came from — force-included as package data
     for a real (non-editable) install (see [tool.hatch.build.targets.wheel.force-include]), but an
     editable dev install (this repo's own dev loop) never runs that build step, so fall back to the
@@ -111,7 +114,8 @@ def _quality_deps() -> list[str]:
     """The exact version-constrained dependency strings repo-tasks itself uses and tests its
     quality tooling against (dependency-groups.quality) — the single source of truth `ensure_deps`
     injects into a consumer, never a second hand-maintained list."""
-    return _own_pyproject_data()["dependency-groups"]["repo-tasks-quality"]
+    groups = cast(dict[str, object], _own_pyproject_data()["dependency-groups"])
+    return cast(list[str], groups["repo-tasks-quality"])
 
 
 def _bare_name(spec: str) -> str:
@@ -119,7 +123,7 @@ def _bare_name(spec: str) -> str:
     return match.group(0).lower() if match else spec.lower()
 
 
-def _derive_project_name(c) -> str:
+def _derive_project_name(c: Context) -> str:
     """git remote's repo name, falling back to the current directory's name if there's no remote
     (or no git repo at all) — normalized to a valid project name."""
     result = c.run("git config --get remote.origin.url", hide=True, warn=True)
@@ -131,7 +135,7 @@ def _derive_project_name(c) -> str:
 
 
 @task
-def ensure_deps(c):
+def ensure_deps(c: Context):
     """Ensure this project's pyproject.toml declares every quality-tooling dependency repo-tasks
     needs (sourced from repo-tasks' own dependency-groups.quality — never a second,
     separately-maintained list) — creates a minimal pyproject.toml first if none exists. Additive

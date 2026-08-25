@@ -2,7 +2,8 @@
 
 import shutil
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 
 def _command_exists(name: str) -> bool:
@@ -10,7 +11,7 @@ def _command_exists(name: str) -> bool:
 
 
 @task
-def allow(c):
+def allow(c: Context):
     """Run `direnv allow` if direnv is installed; no-ops with a message otherwise."""
     if _command_exists("direnv"):
         c.run("direnv allow", echo=True)

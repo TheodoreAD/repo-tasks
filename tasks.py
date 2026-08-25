@@ -5,10 +5,13 @@ import difflib
 from pathlib import Path
 from typing import cast
 
-from invoke import Collection, Exit, task
+from invoke.collection import Collection
+from invoke.context import Context
+from invoke.exceptions import Exit
+from invoke.tasks import task
 
 from repo_tasks import ns
-from repo_tasks.configs import _CONFIG_FILES
+from repo_tasks.configs import _CONFIG_FILES  # pyright: ignore[reportPrivateUsage] — this repo's own dev task
 
 __all__ = ["ns"]
 
@@ -19,7 +22,7 @@ __all__ = ["ns"]
         "apply": "Write root -> package for --file (default: print-only diff of every file)",
     }
 )
-def promote(c, file=None, apply=False):
+def promote(c: Context, file: str | None = None, apply: bool = False):
     """Diff this repo's own root config files against src/repo_tasks/configs/* (the shipped
     baseline) — print-only by default; `--apply --file <name>` writes that one file root ->
     package once a root-level tuning is ready to ship to every consumer. Never more than the file

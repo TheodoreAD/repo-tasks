@@ -4,7 +4,7 @@ ready-made root Collection with every module already nested under its own name, 
 `tasks.py` only ever needs `from repo_tasks import ns` — no per-repo `add_collection` boilerplate,
 and no consumer-side change needed when a new module (helm, ...) ships here."""
 
-from invoke import Collection
+from invoke.collection import Collection
 
 from . import (
     agents,

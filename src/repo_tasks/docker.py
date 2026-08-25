@@ -3,7 +3,8 @@ from projects.discover_docker_images (repo-tasks.toml's [[docker]] entries, or t
 Dockerfile-at-root default) — never hardcoded here, so the task logic stays identical across every
 consumer repo even though image names/registries legitimately differ per repo."""
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 from .projects import discover_docker_images
 from .version import current_version
@@ -11,7 +12,7 @@ from .version import current_version
 _NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
 
 
-def _resolve_image(c, project):
+def _resolve_image(c: Context, project: str | None):
     """The image to act on, or None when the repo has no images at all — tasks no-op cleanly on
     None (an imageless repo is a normal state, so a composite can wire these unconditionally), but
     an explicit --project naming nothing is an error, never a guess. Same shape as helm.py."""
@@ -32,7 +33,7 @@ def _resolve_image(c, project):
         "docker buildx, which pushes as part of build itself (no separate push step for this path)",
     }
 )
-def build(c, project=None, tag=None, platforms=None):
+def build(c: Context, project: str | None = None, tag: str | None = None, platforms: str | None = None):
     """Build a docker image (docker build, or docker buildx build --push when platforms is
     given — buildx can't --load a multi-platform result into local docker images). No-ops cleanly
     in a repo with no images."""
@@ -55,7 +56,7 @@ def build(c, project=None, tag=None, platforms=None):
         "tag": "Tag override (default: the image's group's current version)",
     }
 )
-def push(c, project=None, tag=None):
+def push(c: Context, project: str | None = None, tag: str | None = None):
     """Push a docker image (docker push). Single-arch path only — a multi-platform build already
     pushed as part of build itself. No-ops cleanly in a repo with no images."""
     image = _resolve_image(c, project)
@@ -67,7 +68,7 @@ def push(c, project=None, tag=None):
 
 
 @task(help={"project": "Image to release (default: the sole/first discovered image)"})
-def release(c, project=None):
+def release(c: Context, project: str | None = None):
     """Build and push an image tagged with its group's current version, plus latest. No-ops
     cleanly, as one unit, in a repo with no images."""
     image = _resolve_image(c, project)

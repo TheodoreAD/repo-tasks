@@ -6,7 +6,8 @@ import os
 import shutil
 from pathlib import Path
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 _VENV_DIR = Path(".venv")
 
@@ -32,7 +33,13 @@ def _register_github_path(bin_dir: Path) -> None:
         "no_install_project": "Sync only third-party dependencies, skipping the local project entirely",
     }
 )
-def sync(c, project=None, no_editable=False, no_dev=False, no_install_project=False):
+def sync(
+    c: Context,
+    project: str | None = None,
+    no_editable: bool = False,
+    no_dev: bool = False,
+    no_install_project: bool = False,
+):
     """Sync .venv from uv.lock (uv sync --locked). Fails loudly on a stale or missing lock
     instead of silently rewriting it — run `inv deps.lock` first if that happens.
 
@@ -53,12 +60,12 @@ def sync(c, project=None, no_editable=False, no_dev=False, no_install_project=Fa
 
 
 @task(pre=[sync])
-def create(c):
+def create(c: Context):
     """Create/refresh .venv from uv.lock — the first-time-after-clone entrypoint."""
 
 
 @task
-def delete(c):
+def delete(c: Context):
     """Remove .venv."""
     if not _VENV_DIR.exists():
         print("[venv.delete] .venv not present — nothing to clean")
@@ -68,7 +75,7 @@ def delete(c):
 
 
 @task(help={"wheel": "Path (or glob) to the already-built wheel to install"})
-def install_wheel(c, wheel="dist/*.whl"):
+def install_wheel(c: Context, wheel: str = "dist/*.whl"):
     """Install an already-built wheel into .venv with --no-deps. Pairs with a deps-only sync
     (venv.sync --no-install-project): adds only the project package on top, never re-resolving or
     touching any dependency that sync already installed."""

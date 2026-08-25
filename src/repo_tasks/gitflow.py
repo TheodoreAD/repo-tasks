@@ -18,17 +18,20 @@ or, per nvie, into any release branch that's still open, if this is a hotfix.
 Every command that stops short of "the whole flow is done" — a PR was opened, a guard clause
 tripped — prints exactly what to run next, so nobody has to read this file to find out."""
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
-from .version import _bump as version_bump
+# `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
+# namespace, not out of sibling modules.
+from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
 from .version import current_version, next_version
 
 
-def _current_branch(c):
+def _current_branch(c: Context):
     return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
 
 
-def _open_release_branch(c):
+def _open_release_branch(c: Context):
     names = c.run("git for-each-ref --format='%(refname:short)' refs/heads/release/*", hide=True).stdout.split()
     if len(names) > 1:
         raise ValueError(
@@ -37,27 +40,27 @@ def _open_release_branch(c):
     return names[0] if names else None
 
 
-def _next_steps(*lines):
+def _next_steps(*lines: str):
     print("\nNext steps:")
     for line in lines:
         print(f"  - {line}")
 
 
-def _open_pr(c, branch, base, title, body):
+def _open_pr(c: Context, branch: str, base: str, title: str, body: str):
     c.run(f"git push -u origin {branch}", echo=True)
     result = c.run(f'gh pr create --base {base} --head {branch} --title "{title}" --body "{body}"', echo=True)
     return result.stdout.strip()
 
 
 @task
-def feature_start(c, name):
+def feature_start(c: Context, name: str):
     """Branch feature/<name> off develop."""
     c.run(f"git checkout -b feature/{name} develop", echo=True)
     _next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
 
 
 @task
-def feature_finish(c, name, local=False):
+def feature_finish(c: Context, name: str, local: bool = False):
     """Merge feature/<name> back into develop. PR mode (default): opens a PR instead of merging
     directly — a protected develop branch rejects a direct push. --local keeps the old
     direct-merge-and-delete behavior, for a single-person repo or fast local testing."""
@@ -75,7 +78,7 @@ def feature_finish(c, name, local=False):
     )
 
 
-def _start(c, kind, base, bump, group):
+def _start(c: Context, kind: str, base: str, bump: str, group: str | None):
     c.run(f"git checkout {base}", echo=True)
     branch = f"{kind}/{next_version(current_version(c, group=group), bump)}"
     c.run(f"git checkout -b {branch}", echo=True)
@@ -84,7 +87,7 @@ def _start(c, kind, base, bump, group):
 
 
 @task
-def release_start(c, bump, group=None):
+def release_start(c: Context, bump: str, group: str | None = None):
     """Branch release/<version> off develop, then bump the version on the release branch (no tag
     yet)."""
     branch = _start(c, "release", "develop", bump, group)
@@ -92,14 +95,14 @@ def release_start(c, bump, group=None):
 
 
 @task
-def hotfix_start(c, bump, group=None):
+def hotfix_start(c: Context, bump: str, group: str | None = None):
     """Branch hotfix/<version> off main, then bump the version on the hotfix branch (no tag
     yet)."""
     branch = _start(c, "hotfix", "main", bump, group)
     _next_steps(f"When ready to ship: inv gitflow.hotfix-finish (from the {branch} branch)")
 
 
-def _local_finish(c, kind, push):
+def _local_finish(c: Context, kind: str, push: bool):
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -128,7 +131,7 @@ def _local_finish(c, kind, push):
         c.run(f"git push origin {tag}", echo=True)
 
 
-def _pr_finish(c, kind):
+def _pr_finish(c: Context, kind: str):
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -145,7 +148,7 @@ def _pr_finish(c, kind):
 
 
 @task
-def release_finish(c, push=False, local=False):
+def release_finish(c: Context, push: bool = False, local: bool = False):
     """PR mode (default): opens a PR merging the release branch into main and stops — run
     release_finalize once it's merged. --local does the old direct merge+tag+develop-merge+delete
     in one step; push (--local only) additionally pushes branches + tag to the remote."""
@@ -156,7 +159,7 @@ def release_finish(c, push=False, local=False):
 
 
 @task
-def hotfix_finish(c, push=False, local=False):
+def hotfix_finish(c: Context, push: bool = False, local: bool = False):
     """PR mode (default): opens a PR merging the hotfix branch into main and stops — run
     hotfix_finalize once it's merged. --local does the old direct merge+tag+develop-or-release-
     merge+delete in one step; push (--local only) additionally pushes branches + tag to the
@@ -167,7 +170,7 @@ def hotfix_finish(c, push=False, local=False):
     _pr_finish(c, "hotfix")
 
 
-def _finalize(c, kind):
+def _finalize(c: Context, kind: str):
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -199,7 +202,7 @@ def _finalize(c, kind):
 
 
 @task
-def release_finalize(c):
+def release_finalize(c: Context):
     """Run once the PR from release_finish has been merged on GitHub: fetches and tags main, then
     opens a second PR carrying the release into develop. PR mode only — local mode's
     release_finish already does all of this in one step."""
@@ -207,7 +210,7 @@ def release_finalize(c):
 
 
 @task
-def hotfix_finalize(c):
+def hotfix_finalize(c: Context):
     """Run once the PR from hotfix_finish has been merged on GitHub: fetches and tags main, then
     opens a second PR carrying the hotfix into develop — or into an open release/* branch instead,
     per nvie, if one exists. PR mode only — local mode's hotfix_finish already does all of this in
@@ -216,7 +219,7 @@ def hotfix_finalize(c):
 
 
 @task
-def support_start(c, version, base):
+def support_start(c: Context, version: str, base: str):
     """Branch support/<version> off <base> (a commit on main — a tag, SHA, or old release branch),
     for maintaining an old release line in parallel with ongoing development. Matches nvie's own
     git-flow tool's scope for this exactly (its README: "For support branches, the <base> arg must
@@ -232,7 +235,7 @@ def support_start(c, version, base):
     )
 
 
-def _support_hotfix_start(c, support, bump, group=None):
+def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     target = f"support/{support}"
     c.run(f"git checkout {target}", echo=True)
     branch = f"support-hotfix/{support}/{next_version(current_version(c, group=group), bump)}"
@@ -242,7 +245,7 @@ def _support_hotfix_start(c, support, bump, group=None):
 
 
 @task
-def support_hotfix_start(c, support, bump, group=None):
+def support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     """Branch a patch off support/<support> to fix something on that maintenance line, then bump
     the version on the patch branch (no tag yet). support/* is protected exactly like main — it
     produces artifacts that ship to prod — so patching it goes through the same start/finish/
@@ -253,7 +256,7 @@ def support_hotfix_start(c, support, bump, group=None):
     _next_steps(f"When ready to ship: inv gitflow.support-hotfix-finish --support={support} (from the {branch} branch)")
 
 
-def _support_hotfix_branch_and_tag(c, support):
+def _support_hotfix_branch_and_tag(c: Context, support: str):
     branch = _current_branch(c)
     prefix = f"support-hotfix/{support}/"
     if not branch.startswith(prefix):
@@ -265,7 +268,7 @@ def _support_hotfix_branch_and_tag(c, support):
 
 
 @task
-def support_hotfix_finish(c, support, push=False, local=False):
+def support_hotfix_finish(c: Context, support: str, push: bool = False, local: bool = False):
     """PR mode (default): opens a PR merging the patch branch into support/<support> and stops —
     run support_hotfix_finalize once it's merged. --local does the old direct merge+tag+delete in
     one step; push (--local only) additionally pushes the support branch + tag."""
@@ -291,7 +294,7 @@ def support_hotfix_finish(c, support, push=False, local=False):
 
 
 @task
-def support_hotfix_finalize(c, support):
+def support_hotfix_finalize(c: Context, support: str):
     """Run once the PR from support_hotfix_finish has been merged on GitHub: fetches
     support/<support> and tags the new tip. No second PR — unlike release/hotfix finalize, a
     support patch never carries into develop. PR mode only — local mode's support_hotfix_finish

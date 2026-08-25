@@ -6,12 +6,14 @@ Running tests is not this module's job — that lives in testing.py, under its o
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
 with no prerequisites beyond the dev dependency group."""
 
-from invoke import Collection, task
+from invoke.collection import Collection
+from invoke.context import Context
+from invoke.tasks import task
 
 from .testing import unit
 
 
-def _tracked_files(c, *patterns: str):
+def _tracked_files(c: Context, *patterns: str):
     """Files matching the git pathspecs — tracked or untracked-but-not-ignored, so a script written
     a moment ago is checked before it is ever `git add`ed. An empty list on any git failure (not a
     repo at all), which every caller treats as "nothing to do"."""
@@ -20,48 +22,48 @@ def _tracked_files(c, *patterns: str):
     return result.stdout.split() if result.ok else []
 
 
-def _sh_files(c):
+def _sh_files(c: Context):
     return _tracked_files(c, "*.sh")
 
 
-def _workflow_files(c):
+def _workflow_files(c: Context):
     return _tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
 
 
 @task
-def lint_check(c):
+def lint_check(c: Context):
     """Run ruff's linter (no fixes)."""
     c.run("ruff check .", echo=True)
 
 
 @task
-def lint_apply(c):
+def lint_apply(c: Context):
     """Run ruff's linter and apply auto-fixes."""
     c.run("ruff check --fix .", echo=True)
 
 
 @task
-def format_check(c):
+def format_check(c: Context):
     """Check formatting (ruff format, dprint) without writing changes."""
     c.run("ruff format --check .", echo=True)
     c.run("dprint check --config-discovery=ignore-descendants", echo=True)
 
 
 @task
-def format_apply(c):
+def format_apply(c: Context):
     """Apply formatting: ruff format, then dprint fmt."""
     c.run("ruff format .", echo=True)
     c.run("dprint fmt --config-discovery=ignore-descendants", echo=True)
 
 
 @task
-def type_check(c):
+def type_check(c: Context):
     """Run basedpyright's type checker."""
     c.run("basedpyright", echo=True)
 
 
 @task
-def shell_check(c):
+def shell_check(c: Context):
     """Run shellcheck against every *.sh file in the repo.
 
     No-ops cleanly on a repo with no shell scripts, so this is safe to run
@@ -73,7 +75,7 @@ def shell_check(c):
 
 
 @task
-def shell_format_check(c):
+def shell_format_check(c: Context):
     """Check shell script formatting (shfmt) without writing changes. No-ops
     cleanly on a repo with no shell scripts."""
     files = _sh_files(c)
@@ -82,7 +84,7 @@ def shell_format_check(c):
 
 
 @task
-def shell_format_apply(c):
+def shell_format_apply(c: Context):
     """Apply shell script formatting (shfmt). No-ops cleanly on a repo with
     no shell scripts."""
     files = _sh_files(c)
@@ -91,7 +93,7 @@ def shell_format_apply(c):
 
 
 @task
-def workflow_check(c):
+def workflow_check(c: Context):
     """Run actionlint against every GitHub Actions workflow file (.github/workflows/*.yml). No-ops
     cleanly on a repo with no workflows, so it is safe in every consumer's `check`."""
     files = _workflow_files(c)
@@ -100,12 +102,12 @@ def workflow_check(c):
 
 
 @task(pre=[lint_apply, format_apply, shell_format_apply])
-def fix(c):
+def fix(c: Context):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
 @task(pre=[lint_check, format_check, type_check, shell_check, shell_format_check, workflow_check, unit])
-def check(c):
+def check(c: Context):
     """CI-style gate: every check, no changes written. Shell formatting is checked here as well
     as linted — python has always had both `format_check` and a formatter in the gate, and shell
     without the check half meant drift was only ever surfaced by `fix` mutating the file (a
@@ -113,7 +115,7 @@ def check(c):
 
 
 @task(pre=[fix, check])
-def precommit(c):
+def precommit(c: Context):
     """Fix, then check — the one command to run before considering a change
     done, with no need to know or invoke the individual tools."""
 

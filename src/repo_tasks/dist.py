@@ -12,7 +12,8 @@ import urllib.request
 from pathlib import Path
 from typing import cast
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 from .projects import discover_python_projects
 
@@ -90,7 +91,7 @@ def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
 _NO_PROJECTS = "no python project (no pyproject.toml [project] table and no workspace members) — nothing to do"
 
 
-def _resolve_project(c, project):
+def _resolve_project(c: Context, project: str | None):
     """The python project to act on: the named one, or the repo's own (root-first ordering in
     projects.py) when no --project narrows it down — or None when the repo has no python project
     at all, which tasks no-op cleanly on. An explicit --project naming nothing is an error, never
@@ -105,7 +106,7 @@ def _resolve_project(c, project):
 
 
 @task
-def clean(c):
+def clean(c: Context):
     """Remove the built dist/ directory."""
     if not _DIST_DIR.exists():
         print("[dist.clean] dist/ not present — nothing to clean")
@@ -121,7 +122,7 @@ def clean(c):
         "sdist": "Build sdist+wheel instead of wheel-only",
     },
 )
-def build(c, project=None, sdist=False):
+def build(c: Context, project: str | None = None, sdist: bool = False):
     """Build a wheel (default) or sdist+wheel pair (uv build), always into a freshly-cleaned
     dist/ — a stale wheel from a previous version can never survive into a fresh build.
 
@@ -143,7 +144,7 @@ def build(c, project=None, sdist=False):
         "dry_run": "Pass --dry-run through to uv publish — safe to run against a real index",
     },
 )
-def publish(c, project=None, index=None, dry_run=False):
+def publish(c: Context, project: str | None = None, index: str | None = None, dry_run: bool = False):
     """Publish dist/* to a package index (uv publish). Always cleans and builds fresh first —
     publish never ships stale state.
 
@@ -170,7 +171,7 @@ def publish(c, project=None, index=None, dry_run=False):
         "index": "Package index base URL to query (default: PyPI)",
     }
 )
-def list_versions(c, project=None, index=None):
+def list_versions(c: Context, project: str | None = None, index: str | None = None):
     """List a project's published versions from a package index — PEP 691 JSON Simple API,
     falling back to the PEP 503 HTML file listing if the index doesn't serve the JSON media
     type. Works unmodified against PyPI, TestPyPI, or any private PEP 503/691-compliant index.

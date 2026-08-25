@@ -16,7 +16,9 @@ an explicit path that does not exist is a hard exit-4 usage error, not a warning
 
 from pathlib import Path
 
-from invoke import Exit, task
+from invoke.context import Context
+from invoke.exceptions import Exit
+from invoke.tasks import task
 
 _INTEGRATION_DIR = Path("tests/integration")
 
@@ -32,14 +34,14 @@ _NO_WORKFLOWS = f"no {_WORKFLOWS_DIR} directory — nothing to do"
 _NO_TESTS_COLLECTED = 5
 
 
-def _pytest(c, args: str = "") -> None:
+def _pytest(c: Context, args: str = "") -> None:
     command = f"pytest {args}".strip()
     result = c.run(command, echo=True, warn=True)
     if not result.ok and result.exited != _NO_TESTS_COLLECTED:
         raise Exit(code=result.exited)
 
 
-def _integration(c, args: str, label: str) -> None:
+def _integration(c: Context, args: str, label: str) -> None:
     """Run part of the integration tier, or no-op cleanly when the repo has no such tier. The
     existence check is not decoration: unlike `unit`, these targets name a path, and pytest exits
     4 (usage error) on a path that isn't there."""
@@ -50,7 +52,7 @@ def _integration(c, args: str, label: str) -> None:
 
 
 @task
-def unit(c):
+def unit(c: Context):
     """Run the unit tier — no Docker, no network, nothing outside tmp_path. The one test task in
     `quality.check`/`precommit`. Falls back to searching from the working directory (with pytest's
     own warning) in a repo whose tests aren't split into tests/unit."""
@@ -58,14 +60,14 @@ def unit(c):
 
 
 @task
-def integration(c):
+def integration(c: Context):
     """Run the whole integration tier against real local services (Docker, a package index). Needs
     a reachable Docker daemon; no-ops cleanly in a repo with no tests/integration directory."""
     _integration(c, "", "integration")
 
 
 @task
-def smoke(c):
+def smoke(c: Context):
     """Run the fast, happy-path slice of the integration tier (`-m smoke`) — enough to know the
     system is wired up at all. No-ops cleanly with no integration tier, and is not an error when
     nothing is marked yet."""
@@ -73,7 +75,7 @@ def smoke(c):
 
 
 @task
-def regression(c):
+def regression(c: Context):
     """Run everything in the integration tier that isn't smoke (`-m "not smoke"`) — the broad,
     slower half. No-ops cleanly with no integration tier."""
     _integration(c, '-m "not smoke"', "regression")
@@ -86,7 +88,7 @@ def regression(c):
         "dry-run": "Print the plan without running any container (act -n)",
     }
 )
-def workflows(c, job=None, event="push", dry_run=False):
+def workflows(c: Context, job: str | None = None, event: str = "push", dry_run: bool = False):
     """Run the repo's GitHub Actions workflows locally with act (nektos/act), in Docker containers
     standing in for the hosted runners. Needs a reachable Docker daemon; no-ops cleanly in a repo
     with no .github/workflows directory. Not a tier and not in any gate: it re-runs the gate the
@@ -103,5 +105,5 @@ def workflows(c, job=None, event="push", dry_run=False):
 
 
 @task(pre=[unit, integration])
-def all(c):  # noqa: A001 — shadows the builtin, but `inv test.all` is the name that reads right
+def all(c: Context):  # noqa: A001 — shadows the builtin, but `inv test.all` is the name that reads right
     """Run every tier: the unit tests, then the whole integration tier."""

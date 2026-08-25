@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from typing import TypedDict, cast
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 
 def _claude_env_cache_dir() -> Path:
@@ -44,7 +45,7 @@ def _direnv_hook_command(env_file: Path) -> str:
 
 
 @task(help={"dir": "Project directory to wire the hook for (default: current directory)"})
-def wire_claude_hook(c, dir="."):  # noqa: A002
+def wire_claude_hook(c: Context, dir: str = "."):  # noqa: A002
     """Wire Claude Code's Bash tool to auto-activate this project's direnv environment on every
     call, by writing <dir>/.claude/settings.json with env.CLAUDE_ENV_FILE and a PreToolUse/Bash
     hook that refreshes it from `direnv export zsh` before each command.

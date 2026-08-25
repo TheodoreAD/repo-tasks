@@ -5,13 +5,14 @@ itself isn't a dependency of this package."""
 import shutil
 from pathlib import Path
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 _SITE_DIR = Path("site")
 
 
 @task
-def clean(c):
+def clean(c: Context):
     """Remove the built docs site (site/)."""
     if not _SITE_DIR.exists():
         print("[docs.clean] site/ not present — nothing to clean")
@@ -21,12 +22,12 @@ def clean(c):
 
 
 @task(pre=[clean])
-def build(c):
+def build(c: Context):
     """Build the docs site with zensical in strict mode (fails on any warning)."""
     c.run("zensical build --strict", echo=True)
 
 
 @task
-def serve(c):
+def serve(c: Context):
     """Serve the docs site locally with live reload (zensical serve)."""
     c.run("zensical serve", echo=True)

@@ -2,7 +2,9 @@
 together into the one command to run after cloning. Owns no logic of its own — each concern's
 real implementation lives in its own module (venv.py, direnv.py, agents.py)."""
 
-from invoke import Collection, task
+from invoke.collection import Collection
+from invoke.context import Context
+from invoke.tasks import task
 
 from .agents import wire_claude_hook
 from .direnv import allow
@@ -10,7 +12,7 @@ from .venv import create
 
 
 @task(pre=[create, allow, wire_claude_hook])
-def setup(c):
+def setup(c: Context):
     """Run once after cloning: create/refresh .venv, let direnv auto-activate it, and wire
     Claude Code's Bash tool to auto-activate it too. The one command to run before anything else."""
 

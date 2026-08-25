@@ -14,7 +14,8 @@ import re
 from importlib.metadata import version as _installed_version
 from pathlib import Path
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")
@@ -40,7 +41,7 @@ command -v uv > /dev/null 2>&1 || {{
 """
 
 
-def _remote_tags(c) -> list[str]:
+def _remote_tags(c: Context) -> list[str]:
     """Every `vX.Y.Z` tag on the upstream repo, newest first — empty if it has none yet
     (repo-tasks itself, pre-first-release, is exactly this case today)."""
     result = c.run(f"git ls-remote --tags --refs --sort=-v:refname {_REPO_URL} 'v*'", hide=True, warn=True)
@@ -49,7 +50,7 @@ def _remote_tags(c) -> list[str]:
     return [ref.rsplit("refs/tags/", 1)[-1] for ref in result.stdout.strip().splitlines()]
 
 
-def _latest_tag(c) -> str | None:
+def _latest_tag(c: Context) -> str | None:
     tags = _remote_tags(c)
     return tags[0] if tags else None
 
@@ -65,7 +66,7 @@ def _stamped_version() -> str | None:
 
 
 @task
-def update(c):
+def update(c: Context):
     """Move the global daily-driver repo-tasks uv tool install forward to the latest tagged
     release (falls back to the default branch with a warning if no release has been tagged
     yet)."""
@@ -79,7 +80,7 @@ def update(c):
 
 
 @task
-def status(c):
+def status(c: Context):
     """Compare the globally-installed repo-tasks version against what this repo was last
     `configure`d against — drift detection, read-only."""
     installed = _installed_version("repo-tasks")
@@ -107,14 +108,14 @@ def status(c):
 
 
 @task
-def version(c):
+def version(c: Context):
     """Print the repo-tasks version currently active (whatever `inv` process is executing this,
     typically the global daily-driver install)."""
     print(_installed_version("repo-tasks"))
 
 
 @task
-def stamp(c):
+def stamp(c: Context):
     """Regenerate bootstrap-repo-tasks.sh, pinning the repo-tasks version active right now. Runs
     as part of `inv configure` — see the generated script's own header for why a human shouldn't
     run it directly. Falls back to an unpinned install if `v{installed version}` isn't an actual

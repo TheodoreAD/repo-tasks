@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from invoke.context import Context
+
 _REPO_TASKS_TOML = Path("repo-tasks.toml")
 
 
@@ -67,7 +69,7 @@ def _workspace_member_dirs(data: dict[str, object]) -> list[Path]:
     return sorted(included - excluded)
 
 
-def discover_python_projects(c) -> list[PythonProject]:
+def discover_python_projects(c: Context) -> list[PythonProject]:
     """Resolve every python project in the consumer repo, the root's own first. `c` is unused —
     kept in the signature for symmetry with the other two discover functions.
 
@@ -107,7 +109,7 @@ def _load_repo_tasks_toml() -> dict[str, object]:
     return _load_toml(_REPO_TASKS_TOML)
 
 
-def discover_docker_images(c) -> list[DockerImage]:
+def discover_docker_images(c: Context) -> list[DockerImage]:
     """Resolve every docker image this repo builds.
 
     Explicit config (`repo-tasks.toml`'s `[[docker]]` entries) always wins when present. With no
@@ -140,7 +142,7 @@ def discover_docker_images(c) -> list[DockerImage]:
     return [DockerImage(name=name, path=Path(), dockerfile=dockerfile, image=name, group=name)]
 
 
-def discover_helm_charts(c) -> list[HelmChart]:
+def discover_helm_charts(c: Context) -> list[HelmChart]:
     """Resolve every helm chart this repo ships — `repo-tasks.toml`'s `[[helm]]` entries only,
     an empty list otherwise. No zero-config fallback, unlike `discover_docker_images`: a chart
     has no single canonical root location the way a `Dockerfile` does, and a pushable chart needs

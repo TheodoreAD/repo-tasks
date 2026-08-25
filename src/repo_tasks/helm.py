@@ -7,7 +7,8 @@ never written or overridden here."""
 
 from pathlib import Path
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
 from .projects import discover_helm_charts
 from .version import current_version
@@ -17,7 +18,7 @@ _CHART_DIST_DIR = Path("dist/helm")
 _NO_CHARTS = "no repo-tasks.toml [[helm]] entries — nothing to do"
 
 
-def _resolve_chart(c, project):
+def _resolve_chart(c: Context, project: str | None):
     """The chart to act on, or None when the repo has no charts at all — tasks no-op cleanly on
     None (a chartless repo is a normal state), but an explicit --project naming nothing is an
     error, never a guess."""
@@ -31,7 +32,7 @@ def _resolve_chart(c, project):
 
 
 @task(help={"project": "Chart to lint (default: the sole/first discovered chart)"})
-def lint(c, project=None):
+def lint(c: Context, project: str | None = None):
     """Run helm lint against a chart. No-ops cleanly in a repo with no [[helm]] entries."""
     chart = _resolve_chart(c, project)
     if chart is None:
@@ -41,7 +42,7 @@ def lint(c, project=None):
 
 
 @task(help={"project": "Chart to package (default: the sole/first discovered chart)"})
-def package(c, project=None):
+def package(c: Context, project: str | None = None):
     """Package a chart into dist/helm/ (helm package). The .tgz's name and version come from
     Chart.yaml itself — version.py's group bump is what writes those fields."""
     chart = _resolve_chart(c, project)
@@ -58,7 +59,7 @@ def package(c, project=None):
         "plain_http": "Talk plain HTTP to the registry — for a local/dev registry serving no TLS",
     }
 )
-def push(c, project=None, registry=None, plain_http=False):
+def push(c: Context, project: str | None = None, registry: str | None = None, plain_http: bool = False):
     """Push a packaged chart to an OCI registry (helm push). Pushes
     dist/helm/<name>-<group version>.tgz — run package first; a missing .tgz (not packaged, or
     Chart.yaml's version disagreeing with the group's) fails loudly rather than pushing the

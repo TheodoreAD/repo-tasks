@@ -7,12 +7,13 @@ of time, only resolved from projects.py/repo-tasks.toml at call time."""
 import tempfile
 from pathlib import Path
 
-from invoke import task
+from invoke.context import Context
+from invoke.tasks import task
 
-from .projects import discover_helm_charts, discover_python_projects
+from .projects import HelmChart, PythonProject, discover_helm_charts, discover_python_projects
 
 
-def _resolve_project(c, group):
+def _resolve_project(c: Context, group: str | None):
     """The python project whose `[project].version` is the group's version. Absence is an error
     here, not a no-op like `dist.py`/`docker.py`/`helm.py`: nothing else can supply a version, so a
     bump has nothing to write and a `current_version` query has nothing to answer — say so, rather
@@ -27,12 +28,12 @@ def _resolve_project(c, group):
     return python_projects[0]
 
 
-def current_version(c, group=None):
+def current_version(c: Context, group: str | None = None):
     """The current version of one group's project, resolved via projects.py."""
     return _resolve_project(c, group).version
 
 
-def next_version(current, part):
+def next_version(current: str, part: str):
     """The version `bump` would produce for `part`, computed without writing or committing
     anything. Safe to hand-roll here (rather than shell out to bump-my-version to compute it):
     our generated config never customizes parse/serialize, so every version this repo ever bumps
@@ -50,7 +51,9 @@ def next_version(current, part):
     raise ValueError(f"unknown version part {part!r}")
 
 
-def _bumpversion_config(project, charts, tag, lock_path=None) -> str:
+def _bumpversion_config(
+    project: PythonProject, charts: list[HelmChart], tag: bool, lock_path: Path | None = None
+) -> str:
     pyproject_path = project.path / "pyproject.toml"
     tag_config = 'tag = true\ntag_name = "v{new_version}"' if tag else "tag = false"
     # uv.lock embeds the project's own version, and `uv sync --locked` rejects a lock whose copy
@@ -104,7 +107,7 @@ replace = 'appVersion: "{{new_version}}"'
     return config
 
 
-def _bump(c, part, group=None, tag=True):
+def _bump(c: Context, part: str, group: str | None = None, tag: bool = True):
     project = _resolve_project(c, group)
     charts = [chart for chart in discover_helm_charts(c) if chart.group == project.name]
     # The workspace root's lock, never `project.path / "uv.lock"`: a workspace member has no lock
@@ -124,7 +127,7 @@ def _bump(c, part, group=None, tag=True):
 
 
 @task
-def bump(c, part, group=None, tag=True):
+def bump(c: Context, part: str, group: str | None = None, tag: bool = True):
     """Bump one version group (major/minor/patch): writes the new version into every file that
     group's projects live in and commits. Tags `vX.Y.Z` unless `tag=False` — gitflow.py's
     release_start/hotfix_start pass tag=False since the tag belongs on main at finish time, not on
