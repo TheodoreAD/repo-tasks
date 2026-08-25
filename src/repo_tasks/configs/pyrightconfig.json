@@ -43,6 +43,15 @@
   "reportMissingTypeArgument": "warning",
   "reportImplicitStringConcatenation": "none",
 
+  // Off, not `recommended`'s warning: once `c` is typed it fires on every `c.run(...)` whose
+  // `Result` is dropped, and dropping it is the invoke idiom — a failing command raises
+  // `UnexpectedExit`, so the return value carries nothing a caller has to consume. `_ = c.run(...)`
+  // on most lines of every task is ceremony with no bug class behind it; the case the rule exists
+  // for (a bare `s.strip()` whose value was meant to be used) is ruff's B018. pyright's own `strict`
+  // profile leaves this rule off too — only basedpyright's `recommended` turns it on. See
+  // plans/2026-08-25-type-check-warning-noise.md.
+  "reportUnusedCallResult": "none",
+
   // downgrade, not silenced: a package `__init__.py` that imports every submodule to build an
   // invoke `Collection` (this file's own shape, and any consumer's `tasks/__init__.py` doing the
   // same) can trip this when a submodule also does `from . import <sibling>` — Python resolves it
