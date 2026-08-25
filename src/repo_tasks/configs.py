@@ -11,10 +11,10 @@ still runs unconditionally against whatever `pull` last wrote, no per-repo `conf
 override exists today (see plans/2026-08-14-python-repo-scaffolding.md §D).
 
 This module also owns the other half of what a consumer snapshots: the `repo-tasks-quality`
-dependency manifest. `ensure_deps` splices it in, and `require_tool` — imported by the gate steps
-in `quality.py`/`testing.py` — turns a binary that manifest should have provided into the command
-that fixes its absence. Both read the same packaged `pyproject.toml`, so there is one manifest and
-no second list to keep in step."""
+dependency manifest. `ensure_deps` splices it in, `diff` reports what a consumer has fallen behind
+on, and `require_tool` — imported by the gate steps in `quality.py`/`testing.py` — turns a missing
+binary into the command that fixes it. All three read the same packaged `pyproject.toml`, so there
+is one manifest and no second list to keep in step."""
 
 import difflib
 import re
@@ -65,6 +65,69 @@ def _source_dir(source: str | None) -> Path:
     if source.startswith("local:"):
         return Path(source.removeprefix("local:")).expanduser()
     raise ValueError(f"--source must start with 'git:' or 'local:', got {source!r}")
+
+
+def _own_pyproject_data() -> dict[str, object]:
+    """The real pyproject.toml this repo_tasks install came from — force-included as package data
+    for a real (non-editable) install (see [tool.hatch.build.targets.wheel.force-include]), but an
+    editable dev install (this repo's own dev loop) never runs that build step, so fall back to the
+    literal source-tree file two levels up from the installed package (src/repo_tasks/../.. is the
+    repo root) in that case."""
+    packaged = resources.files("repo_tasks") / "pyproject.toml"
+    if packaged.is_file():
+        return tomllib.loads(packaged.read_text())
+    fallback = Path(str(resources.files("repo_tasks"))).parent.parent / "pyproject.toml"
+    return tomllib.loads(fallback.read_text())
+
+
+def _quality_deps() -> list[str]:
+    """The exact version-constrained dependency strings repo-tasks itself uses and tests its
+    quality tooling against (dependency-groups.quality) — the single source of truth `ensure_deps`
+    injects into a consumer, never a second hand-maintained list."""
+    groups = cast(dict[str, object], _own_pyproject_data()["dependency-groups"])
+    return cast(list[str], groups["repo-tasks-quality"])
+
+
+def _bare_name(spec: str) -> str:
+    match = _BARE_NAME_RE.match(spec)
+    return match.group(0).lower() if match else spec.lower()
+
+
+def _declared_dev_names(path: Path) -> set[str]:
+    """Bare package names this project's own `dependency-groups.dev` resolves to, following
+    `include-group` references. Read with tomllib rather than `ensure_deps`' `_DEV_ARRAY_RE`, which
+    exists only because that task has to splice text back into the file: a regex over the array
+    would see repo-tasks' own `dev = [{ include-group = "repo-tasks-quality" }, ...]` as declaring
+    nothing and report the whole manifest as missing in the very repo that owns it."""
+    groups = cast(dict[str, list[object]], tomllib.loads(path.read_text()).get("dependency-groups", {}))
+    names: set[str] = set()
+    seen: set[str] = set()
+
+    def walk(group: str) -> None:
+        if group in seen:  # a cyclic include-group would otherwise recurse forever
+            return
+        seen.add(group)
+        for entry in groups.get(group, []):
+            if isinstance(entry, str):
+                names.add(_bare_name(entry))
+            elif isinstance(entry, dict):
+                included = cast(dict[str, object], entry).get("include-group")
+                if isinstance(included, str):
+                    walk(included)
+
+    walk("dev")
+    return names
+
+
+def _missing_quality_deps() -> list[str]:
+    """`repo-tasks-quality` entries this project's dev group does not declare — the drift that
+    makes an additive change here a breaking change there. `ensure_deps` is one-shot and nothing
+    re-runs it, so a consumer's group is a snapshot from whenever it was last bootstrapped while
+    the gate reading it is live (see plans/2026-08-25-consumer-transitions.md)."""
+    canonical = _quality_deps()
+    pyproject_path = Path("pyproject.toml")
+    declared = _declared_dev_names(pyproject_path) if pyproject_path.exists() else set[str]()
+    return [_bare_name(dep) for dep in canonical if _bare_name(dep) not in declared]
 
 
 # Every binary a gate step shells out to, mapped to the `repo-tasks-quality` entry providing it.
@@ -118,10 +181,7 @@ def pull(c: Context, source: str | None = None):
         print(f"[configs.pull] {name} pulled")
 
 
-@task(help={"source": _SOURCE_HELP})
-def diff(c: Context, source: str | None = None):
-    """Show what `configs.pull` would change, without writing anything. Exits nonzero if
-    anything differs."""
+def _diff_config_files(source: str | None) -> bool:
     src_dir = _source_dir(source)
     changed = False
     for name in _CONFIG_FILES:
@@ -139,36 +199,33 @@ def diff(c: Context, source: str | None = None):
             tofile=f"{name} (pulled)",
         )
         print("".join(lines))
-    if not changed:
+    return changed
+
+
+@task(help={"source": _SOURCE_HELP})
+def diff(c: Context, source: str | None = None):
+    """Show what `configs.pull` would change, plus any repo-tasks-quality entry this project's
+    dependency-groups.dev has fallen behind on, without writing anything. Exits nonzero if
+    anything differs.
+
+    Both halves in one command deliberately: a consumer snapshots the shipped config files and the
+    dependency manifest at the same moment and drifts from both the same way, so the check that
+    already reports a stale pyrightconfig.json is the one place a stale dev group should surface
+    too — rather than being discovered from a gate step's exit 127 hours later in CI."""
+    changed = _diff_config_files(source)
+    missing = _missing_quality_deps()
+    if missing:
+        print(f"[configs.diff] dependency-groups.dev is missing: {', '.join(missing)}")
+    if not changed and not missing:
         print("[configs.diff] up to date")
         return
+    steps: list[str] = []
+    if changed:
+        steps.append("inv configs.pull                # overwrite the drifted files with the canonical copies")
+    if missing:
+        steps.extend(_DEV_GROUP_FIX)
+    _next_steps(*steps)
     raise Exit(code=1)
-
-
-def _own_pyproject_data() -> dict[str, object]:
-    """The real pyproject.toml this repo_tasks install came from — force-included as package data
-    for a real (non-editable) install (see [tool.hatch.build.targets.wheel.force-include]), but an
-    editable dev install (this repo's own dev loop) never runs that build step, so fall back to the
-    literal source-tree file two levels up from the installed package (src/repo_tasks/../.. is the
-    repo root) in that case."""
-    packaged = resources.files("repo_tasks") / "pyproject.toml"
-    if packaged.is_file():
-        return tomllib.loads(packaged.read_text())
-    fallback = Path(str(resources.files("repo_tasks"))).parent.parent / "pyproject.toml"
-    return tomllib.loads(fallback.read_text())
-
-
-def _quality_deps() -> list[str]:
-    """The exact version-constrained dependency strings repo-tasks itself uses and tests its
-    quality tooling against (dependency-groups.quality) — the single source of truth `ensure_deps`
-    injects into a consumer, never a second hand-maintained list."""
-    groups = cast(dict[str, object], _own_pyproject_data()["dependency-groups"])
-    return cast(list[str], groups["repo-tasks-quality"])
-
-
-def _bare_name(spec: str) -> str:
-    match = _BARE_NAME_RE.match(spec)
-    return match.group(0).lower() if match else spec.lower()
 
 
 def _derive_project_name(c: Context) -> str:

@@ -5,11 +5,14 @@ installed-package source, exercised via the default no-source-override path) plu
 
 import re
 import shutil
+from pathlib import Path
 
 import pytest
 from invoke import Exit, MockContext, Result
 
 from repo_tasks import configs
+
+_MINIMAL_PYPROJECT = '[project]\nname = "x"\nversion = "0.1.0"\n\n[dependency-groups]\n'
 
 
 def test_pull_materializes_every_file_verbatim_from_installed_package(c, tmp_cwd):
@@ -58,13 +61,22 @@ def test_source_dir_rejects_unknown_prefix():
         configs._source_dir("bogus:whatever")
 
 
+def _write_up_to_date_dev_group(tmp_cwd):
+    """A pyproject declaring the whole canonical manifest, so `diff`'s dev-group half is clean and
+    a test can isolate the config-file half."""
+    deps = "".join(f'  "{dep}",\n' for dep in configs._quality_deps())
+    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n")
+
+
 def test_diff_reports_up_to_date_when_matching(c, tmp_cwd, capsys):
     configs.pull.body(c, source=None)
+    _write_up_to_date_dev_group(tmp_cwd)
     configs.diff.body(c, source=None)
     assert "up to date" in capsys.readouterr().out
 
 
 def test_diff_exits_nonzero_and_prints_unified_diff_when_differing(c, tmp_cwd, capsys):
+    _write_up_to_date_dev_group(tmp_cwd)
     (tmp_cwd / "ruff.toml").write_text("stale content\n")
     with pytest.raises(Exit) as exc_info:
         configs.diff.body(c, source=None)
@@ -72,12 +84,60 @@ def test_diff_exits_nonzero_and_prints_unified_diff_when_differing(c, tmp_cwd, c
     out = capsys.readouterr().out
     assert "ruff.toml differs" in out
     assert "-stale content" in out
+    assert "inv configs.pull" in out  # the fix, not just the finding
 
 
 def test_diff_never_writes(c, tmp_cwd):
     with pytest.raises(Exit):
         configs.diff.body(c, source=None)
     assert list(tmp_cwd.iterdir()) == []
+
+
+def test_diff_reports_dev_group_drift_with_configs_already_up_to_date(c, tmp_cwd, capsys):
+    # The incident shape: every shipped config file matches, and the only drift is an entry the
+    # manifest grew after this consumer was bootstrapped. Without this half, `diff` says "up to
+    # date" and the gate still dies on exit 127.
+    configs.pull.body(c, source=None)
+    kept = [d for d in configs._quality_deps() if configs._bare_name(d) != "actionlint-py"]
+    deps = "".join(f'  "{dep}",\n' for dep in kept)
+    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n")
+    with pytest.raises(Exit) as exc_info:
+        configs.diff.body(c, source=None)
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "dependency-groups.dev is missing: actionlint-py" in out
+    assert "configs.ensure-deps" in out
+    assert "inv configs.pull" not in out  # config files matched — don't hand out an unrelated fix
+
+
+def test_declared_dev_names_follows_include_group(tmp_cwd):
+    # repo-tasks' own shape: dev reaches the manifest through an include-group, never by listing
+    # the entries. A check that missed this would report the whole manifest missing in this repo.
+    (tmp_cwd / "pyproject.toml").write_text(
+        f'{_MINIMAL_PYPROJECT}repo-tasks-quality = [\n  "ruff",\n]\n'
+        'dev = [\n  { include-group = "repo-tasks-quality" },\n  "pytest",\n]\n'
+    )
+    assert configs._declared_dev_names(tmp_cwd / "pyproject.toml") == {"ruff", "pytest"}
+
+
+def test_declared_dev_names_survives_a_cyclic_include_group(tmp_cwd):
+    (tmp_cwd / "pyproject.toml").write_text(
+        f'{_MINIMAL_PYPROJECT}dev = [\n  {{ include-group = "other" }},\n]\n'
+        'other = [\n  { include-group = "dev" },\n  "ruff",\n]\n'
+    )
+    assert configs._declared_dev_names(tmp_cwd / "pyproject.toml") == {"ruff"}
+
+
+def test_this_repos_own_dev_group_satisfies_the_manifest_it_publishes():
+    # Dogfooding, asserted rather than assumed: repo-tasks reaches its own manifest through an
+    # include-group, and if that ever stopped resolving, `inv configs.diff` here would report drift
+    # against itself. Read-only and by path, so the tier's no-chdir-outside-tmp_path contract holds.
+    own = Path(__file__).parent.parent.parent / "pyproject.toml"
+    assert {configs._bare_name(dep) for dep in configs._quality_deps()} <= configs._declared_dev_names(own)
+
+
+def test_missing_quality_deps_reports_everything_when_there_is_no_pyproject(tmp_cwd):
+    assert configs._missing_quality_deps() == [configs._bare_name(d) for d in configs._quality_deps()]
 
 
 def test_every_gate_tool_maps_to_a_real_manifest_entry():
