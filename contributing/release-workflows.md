@@ -32,6 +32,15 @@ settings on github.com, needed only once something outside the account has to pu
 2026-08-24: `ghcr.io/theodoread/sample-service` answered 401 to an anonymous tag listing right after
 its first push from a public repo.
 
+## Release candidates reach TestPyPI only
+
+`publish.yml` triggers on both `vX.Y.Z` and `vX.Y.ZrcN` tags — the latter is what
+`inv gitflow.release-candidate` pushes from the release branch
+([`release-flow.md`](release-flow.md#the-release-candidate-cycle)). The TestPyPI job runs for
+either; the real-index job is skipped for any tag containing `rc`, so a candidate is never one
+approval click away from pypi.org, where a version number can never be reused. `docker.release`
+gates itself the same way: an rc or dev build is pushed under its own tag and never as `latest`.
+
 ## Why `docker-release.yml` is dispatched by hand
 
 A registry push is a real external side effect, so the workflow is `workflow_dispatch`-only

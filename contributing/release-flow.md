@@ -50,11 +50,11 @@ GitHub only. No GitLab/Merge Requests support, deliberately.
 
 A real PR needs human review before it merges, so `*_finish` cannot complete synchronously:
 
-| task                                       | does                                                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `feature_finish(name)`                     | push branch, open PR against `develop`, stop. Nothing further — a feature has no version or tag to finalize. |
-| `release_finish()` / `hotfix_finish()`     | push branch, open PR against `main`, stop. **No tag yet, no develop merge yet.**                             |
-| `release_finalize()` / `hotfix_finalize()` | run _after_ a human merged that PR, from the same branch.                                                    |
+| task                                       | does                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `feature_finish(name)`                     | push branch, open PR against `develop`, stop. Nothing further — a feature has no version or tag to finalize.  |
+| `release_finish()` / `hotfix_finish()`     | drop the rc if there is one, push branch, open PR against `main`, stop. **No tag yet, no develop merge yet.** |
+| `release_finalize()` / `hotfix_finalize()` | run _after_ a human merged that PR, from the same branch.                                                     |
 
 `*_finalize` does: confirm the PR is `MERGED` (`gh pr view`, see "Known bad states") →
 `git fetch origin main` → `git checkout main` → `git merge --ff-only origin/main` → tag the
@@ -80,6 +80,29 @@ Any command that stops short of "the whole flow is done" — because a PR needs 
 guard clause tripped — prints the next command via a private `_next_steps(*lines)` helper, rather
 than leaving the caller to read source. This is a general convention, not a gitflow-local one; see
 [`task-module-conventions.md`](task-module-conventions.md#stop-loudly-and-say-what-to-run-next).
+
+## The release-candidate cycle
+
+A release is staged before it ships, and staging needs a real artifact with a real version. The
+cycle lives on the release branch, nvie's canonical shape with one addition — a tag per candidate:
+
+1. `release_start --bump minor` cuts `release/X.Y.0` and bumps to `X.Y.0rc1` (no tag). The branch is
+   named after the _final_ version it will ship, from the start.
+2. `release-candidate`, as many times as staging needs: bumps `rcN` → `rcN+1`, tags `vX.Y.0rcN+1`
+   **on the release branch**, pushes branch and tag. The tag is what the tag-triggered workflows
+   build from (`publish.yml` sends an rc to TestPyPI only, never the real index). The first
+   candidate is `release_start`'s own rc1 — tag it by hand if it should be built, or cut rc2.
+3. `release_finish` bumps to the final `X.Y.0` as its first step (one more commit on the branch),
+   then proceeds as before. `main` receives the final version and `*_finalize` tags it `vX.Y.0`.
+
+A hotfix goes straight to its final version by default — it ships as soon as it is reviewed — and
+`hotfix_start --rc` opts into the same cycle; `release-candidate` accepts a `hotfix/*` branch for
+that. A support patch never has a candidate. The rc tags stay on the branch's history, which after
+the sync merge is reachable from `develop` too; `_require_tag_absent` checks each candidate's tag
+before cutting it, the same guard as the final's.
+
+Teams that do not want a release branch for every release are a separate design —
+`plans/2026-08-25-release-without-release-branch.md`.
 
 ## The hotfix redirect
 

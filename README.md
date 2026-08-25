@@ -202,6 +202,16 @@ service's image, the chart that deploys it, and the python project they're built
 `group`, so `inv version.bump --group <name>` moves all three in one commit and one tag. See
 [`contributing/versioning.md`](contributing/versioning.md) for what may share a group and why.
 
+One version, spelled per artifact: `pyproject.toml` holds PEP 440 (`1.1.0rc2`), `Chart.yaml` and the
+docker tag hold SemVer (`1.1.0-rc.2`), and nothing converts one string into another — the parts are
+the source of truth. `inv version.bump --part major|minor|patch` lands on `rc1` (`--no-rc` goes
+straight to the final), `--part rc` cuts the next candidate, `--part final` drops it; the gitflow
+tasks drive that cycle on the release branch (`inv gitflow.release-candidate` tags and pushes a
+candidate for staging). A dev build — `inv dist.build --dev`, `inv docker.build --dev`,
+`inv helm.package --dev` — rewrites the working tree's version from git (`1.0.1.dev3+g1a2b3c` /
+`1.0.1-dev.3.g1a2b3c`) without committing, refuses a dirty tree, and never receives `latest` or a
+PyPI upload.
+
 `tests/fixtures/sample-service/` is this repo's own worked example of all of it — a stdlib-only HTTP
 service that is simultaneously a workspace member, the `[[docker]]` image built by a multi-stage
 Dockerfile following the venv/deps recipe above, and the `[[helm]]` chart that deploys it, all under

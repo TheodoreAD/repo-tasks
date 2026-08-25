@@ -53,24 +53,80 @@ Tag names follow from the group:
   precedent (confirmed working via bump-my-version's own `tag_name` templating, not just
   commitizen's).
 
-## One version, three formats
+## One version, three spellings
 
-A single logical version is **not one string** across the three artifact kinds this repo releases:
+A single logical version is **not one string** across the three artifact kinds this repo releases.
+The parts are the source of truth — `version.py`'s `Version`: `major.minor.patch`, an optional `rc`
+number, and for dev builds only a `dev` distance and `commit` — and each kind renders them its own
+way:
 
-| artifact     | format                                                  | written by                                     |
-| ------------ | ------------------------------------------------------- | ---------------------------------------------- |
-| python       | PEP 440, in `pyproject.toml`'s `[project].version`      | `version.py`                                   |
-| docker image | tag on the image ref                                    | `docker.py`, from the resolved group's version |
-| helm chart   | SemVer 2, `Chart.yaml`'s `version` **and** `appVersion` | `version.py`, as part of the group bump        |
+| artifact     | spelling                                                                                       | written by                              |
+| ------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
+| python       | PEP 440 in `pyproject.toml`/`uv.lock`: `1.1.0`, `1.1.0rc2`, `1.0.1.dev3+g1a2b3c`               | `version.py`                            |
+| helm chart   | SemVer 2 in `Chart.yaml`'s `version` **and** `appVersion`: `1.1.0-rc.2`, `1.0.1-dev.3.g1a2b3c` | `version.py`, as part of the group bump |
+| docker image | the SemVer spelling as the tag: `1.1.0-rc.2`, `1.0.1-dev.3.g1a2b3c`                            | `docker.py`, from `Version.semver()`    |
 
-For plain `X.Y.Z` releases all three agree, which is why the current implementation gets away with
-treating them as one string. They diverge as soon as pre-release versions enter the picture — PEP
-440 spells a release candidate `1.0.0rc1` while SemVer 2 requires `1.0.0-rc1`, and Docker tags
-forbid `+` outright so SemVer build metadata cannot round-trip.
+Nothing translates one string into another. `pyproject.toml`'s PEP 440 form is what
+`current_version` returns; `docker.py`/`helm.py` parse it back to parts and ask for `semver()`, and
+`dist.py` uses it as-is. The three spellings are the lossless subset of PEP 440 ↔ SemVer (one
+pre-release segment, one dev segment) — `post`, epochs, and alpha/beta are rejected by
+`Version.parse` by name, because no file in a repo on these tasks should ever hold one.
 
-**This repo has no pre-release/dev-version convention yet, and `version.py` currently assumes the
-three formats agree.** The design for rc and dev builds across all three is
-`plans/2026-08-25-prerelease-versions.md`.
+Three constraints shaped the spellings, all verified 2026-08-25:
+
+- A Docker tag is `[\w][\w.-]{0,127}` — no `+`, so SemVer build metadata cannot round-trip into an
+  image tag. The commit hash of a dev build therefore rides _inside_ the pre-release identifiers
+  (`-dev.3.g1a2b3c`), and the chart uses the same spelling so `appVersion` equals the image tag.
+- PyPI rejects local versions (`+g1a2b3c`) outright, while a private index (devpi) accepts them —
+  exactly the split a dev build wants. `dist.publish` refuses a dev build without a named index.
+- Ordering agrees where it matters: `dev.N < rc.N < final` in both schemes.
+
+Pre-releases are opt-in for every consumer by each ecosystem's own rules — pip/uv skip them unless
+asked, `helm install` skips them without `--devel`, and `docker.release` never tags an rc or dev
+build `latest`.
+
+### The rc cycle
+
+`release_start` bumps to `X.Y.0rc1`; `gitflow.release-candidate` bumps `rcN` → `rcN+1` and tags
+`vX.Y.0rcN+1` on the release branch; `release_finish` drops the rc (`X.Y.0`) before the branch
+merges. The branch is named after the final version throughout, and that is the tag `main` receives.
+A hotfix goes straight to its final version by default (`--rc` opts into the cycle); a support patch
+always does. See [`release-flow.md`](release-flow.md#the-release-candidate-cycle).
+
+In bump-my-version terms the scheme is two extra parts, `pre_l` (`rc` | `final`, `final` optional so
+it serializes to nothing) and `pre_n` (first value `1`), with `serialize` overridden per
+`Chart.yaml` file entry to the SemVer form — the generated config carries all of it.
+
+[PITFALL: with `pre_l` in the scheme, _every_ `major`/`minor`/`patch` bump lands on `rc1` —
+`bump patch` from `1.1.0` gives `1.1.1rc1`, never `1.1.1` (confirmed against bump-my-version 1.5.1).
+The straight-to-final path (`bump --no-rc`, what a hotfix uses) states the version outright with
+`--new-version` instead of relying on the part arithmetic; two bumps (`patch` then `pre_l`) would
+make two commits.]
+
+### Dev builds
+
+`version.set-dev` (behind `dist.build --dev`, `docker.build --dev`, `helm.package --dev`) writes a
+git-derived version into the working tree — `pyproject.toml`, `uv.lock`, every chart in the group —
+and never commits: the next patch of the nearest final tag (or the next candidate of a nearest rc
+tag), then the commit distance and short hash. It refuses a dirty tree, so the undo is always the
+`git restore` it prints; a CI checkout is clean by construction.
+
+[DECISION: a working-tree write, not dynamic versioning (`hatch-vcs`/`uv-dynamic-versioning`). The
+build backend deriving the version at build time would take the field away from `version.py`'s
+single-writer ownership, cannot write `Chart.yaml`, and would leave `uv.lock` embedding a value the
+backend no longer owns. (2026-08-25)]
+
+[DECISION: [dunamai](https://github.com/mtkennerly/dunamai) computes the git-derived parts (`base`,
+`stage`, `revision`, `distance`, `commit`) rather than a hand-rolled `git describe` parser; the
+serializers are ours. dunamai's own SemVer style spells the bumped stage `-pre.N`, not `-dev.N`, and
+its metadata has no `g` prefix — and a static `--format` cannot express "stage present or absent"
+(`{base}-{stage}.{revision}.dev.{distance}` renders `1.0.1-..dev.2` when there is none). So the
+API's parts feed `Version`, never a dunamai format string. (2026-08-25)]
+
+[PITFALL: a dev version has no bump-my-version spelling — its `parse` would reject the `.devN+g…`
+tail — so `set_dev` applies the same search/replace pairs the generated config is built from
+directly, in Python. The file entries are kept as data (`_FileEntry`) for exactly that reason: one
+file set, rendered two ways, so a chart or lock entry can never drift between the two paths.]
 
 ## Single writer
 
@@ -138,14 +194,19 @@ bump time.
 
 ### Why `next_version` is hand-rolled
 
-`next_version(current, part)` is plain arithmetic with no subprocess, rather than shelling out to
-`bump-my-version show --increment`. Safe specifically because the config `version.py` generates
-never customizes bump-my-version's `parse`/`serialize` — every version this repo bumps is the tool's
-own default `major.minor.patch` scheme, so there is no scheme this could diverge from. The actual
+`next_version(current, part, rc=True)` is plain arithmetic with no subprocess, rather than shelling
+out to `bump-my-version show --increment`. `gitflow.py` needs it to name a release/hotfix branch
+_before_ the bump commit exists. The generated config does customize `parse`/`serialize` (the rc
+scheme above), so the arithmetic is not safe by construction the way it was for bare `X.Y.Z` — it is
+safe because `tests/integration/test_version_integration.py` drives every transition
+(`major`/`minor`/`patch` → `rc1`, `rc` → `rc+1`, `final`) through
+`bump-my-version show new_version --increment <part>` on the very config `version.py` generates and
+asserts equality before each real bump. A scheme divergence fails a test, not a release. The actual
 file-writing and committing stays 100% owned by bump-my-version.
 
-If a future change ever customizes `parse`/`serialize` (a pre-release scheme would), this assumption
-breaks and `next_version` must change with it.
+[DECISION: keep the hand-rolled copy and pin it, rather than shell out from `gitflow.py`. The pin is
+what makes it safe; a subprocess at branch-naming time would add one more `c.run` to mock in every
+gitflow test for no correctness gain once the pin exists. (2026-08-25)]
 
 ## `uv.lock` moves with the bump
 
