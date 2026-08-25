@@ -46,6 +46,24 @@ def test_push_pushes_the_group_versioned_tgz_to_the_entry_registry(c, monkeypatc
     )
 
 
+def test_push_names_the_tgz_after_the_semver_spelling(c, monkeypatch):
+    # Chart.yaml holds `1.2.3-rc.1`, so that is what `helm package` named the archive.
+    _stub(monkeypatch, version="1.2.3rc1")
+    helm.push.body(c)
+    c.run.assert_called_once_with(
+        "helm push dist/helm/sample-service-chart-1.2.3-rc.1.tgz oci://ghcr.io/org/charts", echo=True
+    )
+
+
+def test_package_dev_rewrites_the_version_before_packaging(c, monkeypatch):
+    _stub(monkeypatch)
+    seen = []
+    monkeypatch.setattr(helm, "set_dev", lambda c, group=None: seen.append(group))
+    helm.package.body(c, dev=True)
+    assert seen == ["sample-service"]
+    c.run.assert_called_once_with("helm package examples/sample-service/chart --destination dist/helm", echo=True)
+
+
 def test_push_registry_flag_overrides_the_entry_registry(c, monkeypatch):
     _stub(monkeypatch)
     helm.push.body(c, registry="oci://localhost:5000/charts")

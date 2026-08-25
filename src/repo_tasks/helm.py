@@ -7,10 +7,10 @@ never written or overridden here."""
 
 from pathlib import Path
 
-from invoke import Context, task
+from invoke import Collection, Context, task
 
 from .projects import discover_helm_charts
-from .version import current_version
+from .version import Version, current_version, set_dev
 
 _CHART_DIST_DIR = Path("dist/helm")
 
@@ -40,14 +40,22 @@ def lint(c: Context, project: str | None = None):
     c.run(f"helm lint {chart.path}", echo=True)
 
 
-@task(help={"project": "Chart to package (default: the sole/first discovered chart)"})
-def package(c: Context, project: str | None = None):
+@task(
+    help={
+        "project": "Chart to package (default: the sole/first discovered chart)",
+        "dev": "Package a dev-build version (X.Y.Z-dev.N.gHASH) — rewrites the working tree's version first, "
+        "uncommitted",
+    }
+)
+def package(c: Context, project: str | None = None, dev: bool = False):
     """Package a chart into dist/helm/ (helm package). The .tgz's name and version come from
     Chart.yaml itself — version.py's group bump is what writes those fields."""
     chart = _resolve_chart(c, project)
     if chart is None:
         print(f"[helm.package] {_NO_CHARTS}")
         return
+    if dev:
+        set_dev(c, group=chart.group)
     c.run(f"helm package {chart.path} --destination {_CHART_DIST_DIR}", echo=True)
 
 
@@ -76,8 +84,14 @@ def push(c: Context, project: str | None = None, registry: str | None = None, pl
     resolved_registry = registry or chart.registry
     if resolved_registry is None:
         raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
-    version = current_version(c, group=chart.group)
+    # Chart.yaml holds the SemVer spelling, so that is what helm named the archive after.
+    version = Version.parse(current_version(c, group=chart.group)).semver()
     cmd = f"helm push {_CHART_DIST_DIR / f'{chart.name}-{version}.tgz'} {resolved_registry}"
     if plain_http:
         cmd += " --plain-http"
     c.run(cmd, echo=True)
+
+
+# set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
+# second time as helm.set-dev (contributing/task-module-conventions.md).
+ns = Collection(lint, package, push)

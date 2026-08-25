@@ -12,9 +12,10 @@ import urllib.request
 from pathlib import Path
 from typing import cast
 
-from invoke import Context, task
+from invoke import Collection, Context, task
 
 from .projects import discover_python_projects
+from .version import Version, set_dev
 
 _DIST_DIR = Path("dist")
 _DEFAULT_INDEX = "https://pypi.org/simple"
@@ -119,9 +120,10 @@ def clean(c: Context):
     help={
         "project": "Project to build (default: the repo's own root project)",
         "sdist": "Build sdist+wheel instead of wheel-only",
+        "dev": "Build a dev-build version (X.Y.Z.devN+gHASH) — rewrites the working tree's version first, uncommitted",
     },
 )
-def build(c: Context, project: str | None = None, sdist: bool = False):
+def build(c: Context, project: str | None = None, sdist: bool = False, dev: bool = False):
     """Build a wheel (default) or sdist+wheel pair (uv build), always into a freshly-cleaned
     dist/ — a stale wheel from a previous version can never survive into a fresh build.
 
@@ -132,6 +134,8 @@ def build(c: Context, project: str | None = None, sdist: bool = False):
     if target is None:
         print(f"[dist.build] {_NO_PROJECTS}")
         return
+    if dev:
+        set_dev(c, group=target.name)
     cmd = "uv build" if sdist else "uv build --wheel"
     c.run(f"{cmd} --package {target.name}", echo=True)
 
@@ -151,9 +155,15 @@ def publish(c: Context, project: str | None = None, index: str | None = None, dr
     arguments from the caller, so a pre-built `build` would always build the *root* project and
     silently publish the wrong wheel for `--project=<member>`. No-ops cleanly, as one unit, in a
     repo with no python project."""
-    if _resolve_project(c, project) is None:
+    target = _resolve_project(c, project)
+    if target is None:
         print(f"[dist.publish] {_NO_PROJECTS}")
         return
+    # A dev build carries a local version (+gHASH), which PyPI rejects outright; only a named
+    # index — the private/test one a dev build is for — may receive it. Said here, before uv
+    # builds and then fails at upload time.
+    if Version.parse(target.version).dev is not None and index is None:
+        raise ValueError(f"{target.version} is a dev build — publish it with --index <private index>, never to PyPI")
     clean(c)
     build(c, project=project)
     cmd = "uv publish"
@@ -197,3 +207,8 @@ def list_versions(c: Context, project: str | None = None, index: str | None = No
         return
     for v in sorted(found, key=_version_sort_key):
         print(v)
+
+
+# set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
+# second time as dist.set-dev (contributing/task-module-conventions.md).
+ns = Collection(clean, build, publish, list_versions)

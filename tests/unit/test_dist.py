@@ -11,13 +11,16 @@ import pytest
 from repo_tasks import dist
 
 
-def _stub_project(name="repo-tasks"):
-    return lambda c: [SimpleNamespace(name=name)]
+def _stub_project(name="repo-tasks", version="1.2.3"):
+    return lambda c: [SimpleNamespace(name=name, version=version)]
 
 
 def _stub_workspace():
     """A root project plus one workspace member, root first — projects.py's own ordering."""
-    return lambda c: [SimpleNamespace(name="repo-tasks"), SimpleNamespace(name="sample-service")]
+    return lambda c: [
+        SimpleNamespace(name="repo-tasks", version="1.2.3"),
+        SimpleNamespace(name="sample-service", version="1.2.3"),
+    ]
 
 
 def test_clean_noop_when_dist_absent(c, tmp_cwd, capsys):
@@ -84,6 +87,29 @@ def test_publish_with_index_and_dry_run(c, tmp_cwd, monkeypatch):
     monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
     dist.publish.body(c, index="https://test.pypi.org/legacy/", dry_run=True)
     assert c.run.call_args_list[-1].args[0] == ("uv publish --index https://test.pypi.org/legacy/ --dry-run")
+
+
+def test_publish_refuses_a_dev_build_without_a_named_index(c, tmp_cwd, monkeypatch):
+    # PyPI rejects local versions (+gHASH) outright; say so before building rather than at upload.
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project(version="1.2.4.dev5+gabc1234"))
+    with pytest.raises(ValueError, match="dev build"):
+        dist.publish.body(c)
+    c.run.assert_not_called()
+
+
+def test_publish_dev_build_to_a_named_index(c, tmp_cwd, monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project(version="1.2.4.dev5+gabc1234"))
+    dist.publish.body(c, index="devpi")
+    assert c.run.call_args_list[-1].args[0] == "uv publish --index devpi"
+
+
+def test_build_dev_rewrites_the_version_before_building(c, monkeypatch):
+    monkeypatch.setattr(dist, "discover_python_projects", _stub_project())
+    seen = []
+    monkeypatch.setattr(dist, "set_dev", lambda c, group=None: seen.append(group))
+    dist.build.body(c, dev=True)
+    assert seen == ["repo-tasks"]
+    c.run.assert_called_once_with("uv build --wheel --package repo-tasks", echo=True)
 
 
 def test_publish_builds_the_named_member_not_the_root(c, tmp_cwd, monkeypatch):

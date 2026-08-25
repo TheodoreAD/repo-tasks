@@ -79,10 +79,43 @@ def test_release_builds_tags_and_pushes_version_and_latest(c, monkeypatch):
             ),
             {"echo": True},
         ),
-        (("docker tag ghcr.io/org/sample-service:1.2.3 ghcr.io/org/sample-service:latest",), {"echo": True}),
         (("docker push ghcr.io/org/sample-service:1.2.3",), {"echo": True}),
+        (("docker tag ghcr.io/org/sample-service:1.2.3 ghcr.io/org/sample-service:latest",), {"echo": True}),
         (("docker push ghcr.io/org/sample-service:latest",), {"echo": True}),
     ]
+
+
+@pytest.mark.parametrize("pep440", ["1.2.3rc1", "1.2.4.dev5+gabc1234"])
+def test_release_never_tags_a_prerelease_latest(c, monkeypatch, capsys, pep440):
+    """`latest` is the one tag that opts every puller in; an rc or dev build stays opt-in."""
+    _stub(monkeypatch, version=pep440)
+    docker.release.body(c)
+    call_strings = [call[0][0] for call in c.run.call_args_list]
+    assert not any("latest" in s for s in call_strings)
+    assert "not tagged latest" in capsys.readouterr().out
+
+
+def test_build_tags_the_semver_spelling_of_a_release_candidate(c, monkeypatch):
+    _stub(monkeypatch, version="1.2.3rc2")
+    docker.build.body(c)
+    c.run.assert_called_once_with(
+        "docker build -t ghcr.io/org/sample-service:1.2.3-rc.2 -f examples/sample-service/Dockerfile "
+        "examples/sample-service",
+        echo=True,
+    )
+
+
+def test_build_dev_rewrites_the_version_before_building(c, monkeypatch):
+    _stub(monkeypatch, version="1.2.4.dev5+gabc1234")
+    seen = []
+    monkeypatch.setattr(docker, "set_dev", lambda c, group=None: seen.append(group))
+    docker.build.body(c, dev=True)
+    assert seen == ["sample-service"]
+    c.run.assert_called_once_with(
+        "docker build -t ghcr.io/org/sample-service:1.2.4-dev.5.gabc1234 -f examples/sample-service/Dockerfile "
+        "examples/sample-service",
+        echo=True,
+    )
 
 
 def test_resolve_image_raises_when_project_not_found(c, monkeypatch):

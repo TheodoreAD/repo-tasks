@@ -3,10 +3,10 @@ from projects.discover_docker_images (repo-tasks.toml's [[docker]] entries, or t
 Dockerfile-at-root default) — never hardcoded here, so the task logic stays identical across every
 consumer repo even though image names/registries legitimately differ per repo."""
 
-from invoke import Context, task
+from invoke import Collection, Context, task
 
 from .projects import discover_docker_images
-from .version import current_version
+from .version import Version, current_version, set_dev
 
 _NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
 
@@ -30,17 +30,23 @@ def _resolve_image(c: Context, project: str | None):
         "tag": "Tag override (default: the image's group's current version)",
         "platforms": "Comma-separated platform list (e.g. linux/amd64,linux/arm64) — opts into "
         "docker buildx, which pushes as part of build itself (no separate push step for this path)",
+        "dev": "Build a dev-build tag (X.Y.Z-dev.N.gHASH) — rewrites the working tree's version first, uncommitted",
     }
 )
-def build(c: Context, project: str | None = None, tag: str | None = None, platforms: str | None = None):
+def build(
+    c: Context, project: str | None = None, tag: str | None = None, platforms: str | None = None, dev: bool = False
+):
     """Build a docker image (docker build, or docker buildx build --push when platforms is
-    given — buildx can't --load a multi-platform result into local docker images). No-ops cleanly
-    in a repo with no images."""
+    given — buildx can't --load a multi-platform result into local docker images). The default
+    tag is the group's version in its SemVer spelling (`1.1.0-rc.1` for `1.1.0rc1`). No-ops
+    cleanly in a repo with no images."""
     image = _resolve_image(c, project)
     if image is None:
         print(f"[docker.build] {_NO_IMAGES}")
         return
-    resolved_tag = tag or current_version(c, group=image.group)
+    if dev:
+        set_dev(c, group=image.group)
+    resolved_tag = tag or Version.parse(current_version(c, group=image.group)).semver()
     target = f"{image.image}:{resolved_tag}"
     if platforms:
         cmd = f"docker buildx build --platform {platforms} -t {target} -f {image.dockerfile} {image.path} --push"
@@ -62,20 +68,31 @@ def push(c: Context, project: str | None = None, tag: str | None = None):
     if image is None:
         print(f"[docker.push] {_NO_IMAGES}")
         return
-    resolved_tag = tag or current_version(c, group=image.group)
+    resolved_tag = tag or Version.parse(current_version(c, group=image.group)).semver()
     c.run(f"docker push {image.image}:{resolved_tag}", echo=True)
 
 
 @task(help={"project": "Image to release (default: the sole/first discovered image)"})
 def release(c: Context, project: str | None = None):
-    """Build and push an image tagged with its group's current version, plus latest. No-ops
+    """Build and push an image tagged with its group's current version — plus `latest`, for a
+    final version only: a pre-release (rc or dev build) is opt-in for whoever pulls it, the same
+    way helm and pip treat theirs, and `latest` is the one tag that opts everyone in. No-ops
     cleanly, as one unit, in a repo with no images."""
     image = _resolve_image(c, project)
     if image is None:
         print(f"[docker.release] {_NO_IMAGES}")
         return
-    tag = current_version(c, group=image.group)
+    version = Version.parse(current_version(c, group=image.group))
+    tag = version.semver()
     build(c, project=project, tag=tag)
-    c.run(f"docker tag {image.image}:{tag} {image.image}:latest", echo=True)
     push(c, project=project, tag=tag)
+    if not version.is_final:
+        print(f"[docker.release] {tag} is a pre-release — not tagged latest")
+        return
+    c.run(f"docker tag {image.image}:{tag} {image.image}:latest", echo=True)
     push(c, project=project, tag="latest")
+
+
+# set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
+# second time as docker.set-dev (contributing/task-module-conventions.md).
+ns = Collection(build, push, release)
