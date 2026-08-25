@@ -49,7 +49,8 @@ through `allowedUntypedLibraries` — three separate causes, each with a differe
    - `invoke/__init__.py` re-exports with `# noqa` imports, no `__all__` and no `import X as X`;
      under `py.typed` that makes `from invoke import task, Context, Result, MockContext, Exit` a
      `reportPrivateImportUsage` (50 in this repo). Importing from the defining submodule
-     (`invoke.tasks`, `invoke.context`, `invoke.runners`, `invoke.exceptions`) sidesteps it.
+     (`invoke.tasks`, `invoke.context`, ...) sidesteps it at the cost of the idiomatic form every
+     invoke tutorial uses; a stub `__init__.pyi` in the `as X` form fixes it outright (§2).
 
 ### How other projects handle this (prior art, 2026-08-25)
 
@@ -85,9 +86,9 @@ Landed in `repo-tasks` 2026-08-25: **2,414 → 1 warning, 0 errors** on the same
 - Every task and helper annotates `c: Context` and its remaining parameters (`bump: str`,
   `push: bool = False`, `group: str | None = None`). invoke maps annotations to CLI flag types, so
   this is the correct declaration anyway.
-- Imports come from the defining submodule (`invoke.context`, `invoke.tasks`, `invoke.collection`,
-  `invoke.exceptions`, `invoke.runners`, `invoke.program`, `invoke.config`), clearing
-  `reportPrivateImportUsage` without touching the rule.
+- Imports stay the idiomatic `from invoke import Context, task, ...` — `invoke-stubs` (§2) is what
+  makes those names public to the checker. (The pilot briefly moved every import to the defining
+  submodule to dodge `reportPrivateImportUsage`; reverted once the stub package landed.)
 - Cross-module use of an underscored helper (`deps.py` → `gitflow._next_steps`, `gitflow.py` →
   `version._bump`, `tasks.py` → `configs._CONFIG_FILES`) keeps the underscore — it marks "not a
   task, stays out of the CLI namespace", not "private to the module" — with a one-line
@@ -103,17 +104,20 @@ Landed in `repo-tasks` 2026-08-25: **2,414 → 1 warning, 0 errors** on the same
   a discover function keeping `c` for symmetry with its siblings), so at warning level it fires on
   the structure, not on a mistake. `hint` keeps it in the editor and out of the CLI.]
 
-### 2. The `@task` stub — `typings/invoke/tasks.pyi`
+### 2. The `@task` stub — the `invoke-stubs` distribution
 
-A partial stub overriding only `invoke.tasks`: `Task[T]` generic with
+<https://github.com/TheodoreAD/invoke-stubs>, a PEP 561 partial stub package (`py.typed` =
+`partial`) in the `repo-tasks-quality` group as a git direct reference, the same way consumers
+install `repo-tasks` itself. It overrides only `invoke.tasks` — `Task[T]` generic with
 `__call__(self: Task[Callable[P, R]], *args: P.args, **kwargs: P.kwargs) -> R`, and `task()` as two
-`ParamSpec` overloads (bare `@task` and `@task(pre, ...)`) returning `Task[Callable[P, R]]`. Every
-other invoke module keeps its inline types — pyright's resolution order is `stubPath` (default
-`./typings`) → `-stubs` packages → inline `py.typed`, and a lone `tasks.pyi` in `typings/invoke/`
-with no `__init__.pyi` merges cleanly with the installed package (verified: `Context` imported from
-`invoke.context` still resolves inline; `reportUntypedFunctionDecorator` 27 → 0; the 168
-`task.body(...)` ignore comments in tests became `reportUnnecessaryTypeIgnoreComment` errors and
-were deleted).
+`ParamSpec` overloads (bare `@task` and `@task(pre, ...)`) returning `Task[Callable[P, R]]` — plus a
+package `__init__.pyi` that re-exports invoke's public names in the `import X as X` form. Every
+other invoke module keeps its inline types (pyright's resolution order is `stubPath` → `-stubs`
+packages → inline `py.typed`, and a partial `-stubs` package falls through per module). Verified
+here: `reportUntypedFunctionDecorator` 27 → 0, `reportPrivateImportUsage` 50 → 0 with the idiomatic
+`from invoke import ...` restored everywhere, and the 168 `task.body(...)` ignore comments in tests
+became `reportUnnecessaryTypeIgnoreComment` errors and were deleted. Pilot history: a `stubPath`
+copy (`typings/invoke/tasks.pyi`) landed first and was removed once the package existed.
 
 Two deliberate narrowings, commented in the stub: `Task.pre`/`.post` attributes are
 `list[Task[Any] | Call]` (no `str`) because that is what every `pre=[...]` in this family holds, and
@@ -137,14 +141,13 @@ Two deliberate narrowings, commented in the stub: `Task.pre`/`.post` attributes 
   uses the `as X` form invoke's doesn't. `stubPath` is fine for the pilot but forces every consumer
   onto `from invoke.tasks import task`. (typeshed's `types-invoke` was retired when invoke went
   inline, so the name is free.)]
-- [DEFERRED: build the `invoke-stubs` distribution and add it to the `repo-tasks-quality` group;
-  then delete `typings/` here and revert the submodule-import churn if the idiomatic form is
-  preferred. Publishing need not mean PyPI: a `packages/invoke-stubs/` subdirectory of this repo
-  referenced as a git direct reference in the group (`invoke-stubs @ git+...#subdirectory=...`) is
-  the same git-as-artifact-store shape the `*-polite-mcp` family uses — weigh against the
-  `plans/2026-08-22-pypi-publish-integration.md` flow, which would make it a normal PyPI release.
-  Until it lands, a consumer running `configs.pull` gets the tier-2 config but not the stub, so its
-  `@task` sites still warn.]
+- [DECISION: `invoke-stubs` is its own repo, git-sourced, not a subdirectory here and not (yet) on
+  PyPI (2026-08-25). Keeps `repo-tasks` single-purpose, and the git direct reference is the shape
+  consumers already use for `repo-tasks` itself; a push to that repo's `main` is a release, so its
+  `version` bumps on every stub change. `ensure_deps` splices the entry into consumers unchanged —
+  `_bare_name` reads `invoke-stubs` off the `@ git+` spec — so every consumer gets it on its next
+  `configs.ensure-deps`. PyPI remains an option via `plans/2026-08-22-pypi-publish-integration.md`
+  if the package is ever worth advertising.]
 - [DEFERRED: offer the signature upstream to pyinvoke — the stub's `ParamSpec` overloads for
   `task()` plus `__all__` in `__init__.py`. `main` is unchanged as of 2026-08-25. Delete the local
   stub once a released invoke carries it.]
@@ -194,13 +197,13 @@ code rather than by hiding output.
 
 ## Files touched
 
-- `typings/invoke/tasks.pyi` — new partial stub (§2).
-- `src/repo_tasks/*.py`, `tasks.py` — `c: Context` + parameter annotations, submodule imports, three
-  documented `reportPrivateUsage` ignores, `configs._own_pyproject_data` typed as
-  `dict[str, object]` (§1).
+- `pyproject.toml` — `invoke-stubs` in the `repo-tasks-quality` group (§2); the stub itself lives in
+  its own repo.
+- `src/repo_tasks/*.py`, `tasks.py` — `c: Context` + parameter annotations, three documented
+  `reportPrivateUsage` ignores, `configs._own_pyproject_data` typed as `dict[str, object]` (§1).
 - `pyrightconfig.json` + `src/repo_tasks/configs/pyrightconfig.json` (byte-identical) —
   `reportUnusedCallResult: none`, `reportUnusedParameter: hint`, tests-tier rule list (§1, §3).
-- `tests/**/*.py` — 215 now-unnecessary `# pyright: ignore` rules removed, submodule imports,
+- `tests/**/*.py` — 215 now-unnecessary `# pyright: ignore` rules removed,
   `test_dogfood_sample_service.py` passes a real `Context` (§3).
 
 ## Verification
@@ -213,10 +216,10 @@ code rather than by hiding output.
 
 ## Rollout
 
-- [DEFERRED: `power-user-linux-setup` — `configs.pull` for the tier-2 config, then the same
-  annotation pass over `tasks/` (`c: Context`, parameters, submodule imports). Its own residue after
-  that is real: `tasks/allowlist.py` alone carried 580 warnings and `reportMissingTypeArgument` ×109
-  across `tasks/`. Sequenced after the stub-shipping decision (§2) so the pass is done once.]
+- [DEFERRED: `power-user-linux-setup` — `configs.pull` for the tier-2 config, `configs.ensure-deps`
+  for `invoke-stubs`, then the same annotation pass over `tasks/` (`c: Context`, parameters; imports
+  stay `from invoke import ...`). Its own residue after that is real: `tasks/allowlist.py` alone
+  carried 580 warnings and `reportMissingTypeArgument` ×109 across `tasks/`.]
 - [UNVERIFIED: no other consumer's test suite depends on the `reportPrivateUsage` warning-as-error
   behavior or on `from invoke import ...` re-exports being tolerated — `scaffoldapy`'s template
   `tasks.py` imports `from repo_tasks import ns` only, so it should be unaffected; check its
