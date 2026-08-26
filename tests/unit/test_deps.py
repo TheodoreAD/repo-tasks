@@ -50,6 +50,11 @@ def test_check():
     c.run.assert_called_once_with("uv lock --check", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
+def test_audit(c):
+    deps.audit.body(c)
+    c.run.assert_called_once_with("uv audit --locked", echo=True)
+
+
 def test_list_default(c):
     deps.list.body(c)
     c.run.assert_called_once_with("uv pip list", echo=True)

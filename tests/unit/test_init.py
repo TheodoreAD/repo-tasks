@@ -66,7 +66,7 @@ def test_ns_nests_venv_under_its_own_name():
 def test_ns_nests_deps_under_its_own_name():
     deps_collection = ns.collections["deps"]
     assert deps_collection is not None
-    assert {"lock", "check", "list", "tree", "export"} <= set(deps_collection.task_names)
+    assert {"lock", "check", "audit", "list", "tree", "export"} <= set(deps_collection.task_names)
 
 
 def test_venv_module_is_individually_importable():

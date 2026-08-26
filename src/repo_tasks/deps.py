@@ -49,6 +49,26 @@ def check(c: Context):
     c.run("uv lock --check", echo=True)
 
 
+@task
+def audit(c: Context):
+    """Check the locked dependency set for known advisories (uv audit --locked).
+
+    Needs network: it queries the OSV database, so the answer changes when OSV changes rather than
+    when this repo does. That is why this is a standalone task and never a step in `quality.check`
+    — a gate step whose result moves on its own fails commits that changed nothing, and would put a
+    network call in every consumer's `precommit`.
+
+    `--locked` audits exactly what uv.lock commits to, which is what a consumer actually installs;
+    it also keeps this module's single-writer rule intact, since a re-resolving audit would report
+    on a dependency set nobody has.
+    """
+    # `uv audit` is experimental as of uv 0.11 and prints a warning saying so. Left visible on
+    # purpose: silencing it means `--preview-features audit-command`, and an unknown feature name is
+    # a hard error ("invalid value ... Unknown feature flag"), so that flag breaks outright the day
+    # uv graduates the command and retires it. The warning is informative and cannot rot.
+    c.run("uv audit --locked", echo=True)
+
+
 @task(help={"outdated": "Show the latest available version of each installed package"})
 def list(c: Context, outdated: bool = False):  # noqa: A001 — this is the CLI task name (`inv deps.list`), matches uv's own `list` verb
     """List what's actually installed in .venv (uv pip list)."""
