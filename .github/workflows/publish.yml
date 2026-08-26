@@ -22,9 +22,11 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
 
+# Workflow-level grant is the floor every job inherits, so `id-token: write` is declared per job
+# rather than here — a job added later for something unrelated (a changelog step, a notification)
+# would otherwise silently inherit the one credential in this repo worth stealing.
 permissions:
   contents: read
-  id-token: write
 
 # Actions are pinned to full-length commit SHAs here, and only here. A tag is a mutable ref: whoever
 # can move `v4` can run their code in a job holding `id-token: write` against PyPI Trusted
@@ -37,9 +39,20 @@ permissions:
 jobs:
   testpypi:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # enable-cache: false, not the `auto` default. `auto` disables the cache for a tag push but
+      # not for the workflow_dispatch path this file also carries, and a cache restored into a job
+      # holding id-token: write is a write-up primitive: any lower-privilege workflow on the repo
+      # can seed the cache this one then unpacks. A once-per-release job gains nothing from it.
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: false
       - run: ./bootstrap.sh
       - run: inv dist.publish --index testpypi
 
@@ -48,8 +61,15 @@ jobs:
     if: ${{ !contains(github.ref_name, 'rc') }}
     runs-on: ubuntu-latest
     environment: pypi
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: false
       - run: ./bootstrap.sh
       - run: inv dist.publish

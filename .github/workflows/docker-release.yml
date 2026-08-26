@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v9.0.0
       - run: ./bootstrap.sh
 
@@ -35,4 +37,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: inv docker.release --project ${{ inputs.project }}
+      # The input goes through `env:`, not straight into the run block. A `${{ }}` expansion is
+      # pasted into the shell script before it runs, so a dispatch input containing shell syntax
+      # would execute as code in a job holding `packages: write`; `"$PROJECT"` is read as data.
+      - run: inv docker.release --project "$PROJECT"
+        env:
+          PROJECT: ${{ inputs.project }}
