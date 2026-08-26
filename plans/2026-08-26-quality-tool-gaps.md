@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-26
+updated: 2026-08-27
 depends_on: [power-user-linux-setup, scaffoldapy]
 ---
 
@@ -23,9 +23,37 @@ verification its § asked for:
 | 11 | ci.yml permissions/concurrency/timeouts, 3.11–3.14 unit matrix; publish.yml pinned |
 | 12 | `requirements.py`'s `@requires` + the derived enforcement test                     |
 
-Still open, all of them adding a dependency and so triggering a consumer sweep: **§3** zizmor,
-**§4** hadolint and `docker.check`, **§6**'s `coverage` task (pytest-cov), **§13**'s socket guard
-(pytest-socket). Plus §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
+The four dependency-adding sections shipped 2026-08-27 (`af3ef5c`..`673c478`), each proved by making
+it fail on purpose first:
+
+| §  | landed                                                                                              |
+| -- | --------------------------------------------------------------------------------------------------- |
+| 3  | zizmor in `workflow_check` — 4 real workflow findings fixed first; `zizmor.yml` is a shipped config |
+| 4  | `quality.dockerfile_check` (hadolint) — 4 findings, 2 fixed and 2 declined inline                   |
+| 10 | `docker.check` (`docker build --check`), standalone, exercised from the integration tier            |
+| 6b | `test.coverage` — pytest-cov, report only, 98% on this repo                                         |
+| 13 | the autouse `no_network` fixture — `pytest-socket` in this repo's `dev` group only                  |
+
+Still open: the consumer sweep for the manifest change (zizmor, `hadolint-py`, `pytest-cov`, plus
+the new shipped `zizmor.yml`), and §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
+
+### What the implementation added beyond the design
+
+Three things this plan did not anticipate, recorded so they are not re-derived:
+
+- **`zizmor.yml` had to become a shipped config** (`_CONFIG_FILES`, `configs.promote`). Since zizmor
+  v1.20.0 the default `unpinned-uses` policy is a blanket hash-pin, which contradicts §11's explicit
+  decision to pin `publish.yml` and nothing else. The policy is expressible only in a config file
+  (no CLI flag), and leaving it unshipped would have turned every consumer's gate red over a choice
+  they did not make. `"*": ref-pin` is the encoding.
+- **`--offline` is passed to zizmor explicitly** even though it is already the default: zizmor
+  enables its online audits whenever `GH_TOKEN`/`GITHUB_TOKEN` is in the environment, which is the
+  normal state inside CI. Without the flag the gate's rule set differs between a laptop and a
+  runner.
+- **The §12 enforcement test had a real bug**, found by `docker.check`. It keyed gate steps by bare
+  function name, and `check` names a gate step (`deps.check`), the gate itself (`quality.check`) and
+  now a Docker task — so it reported `docker.check` as a gate step needing Docker. Keyed on
+  `(module, name)` now.
 
 ## Context
 
@@ -54,10 +82,11 @@ Everything in `check` ships to every consumer through `repo-tasks-quality`, so e
 dependency added to `power-user-linux-setup`, `scaffoldapy`, and every generated repo — see
 [`contributing/consumer-sweep.md`](../contributing/consumer-sweep.md).
 
-[UNVERIFIED: tool selection below rests on package metadata, project docs, and 2026 comparison
-articles, plus the live checks recorded inline (PyPI wheel listings, `uv audit --help`, a real
-deptry run, `gh api` on this repo). No candidate has been run against this repo end to end except
-deptry. Each §'s Verification entry is what closes this.]
+Tool selection below started from package metadata, project docs, and 2026 comparison articles, plus
+live checks recorded inline (PyPI wheel listings, `uv audit --help`, a real deptry run, `gh api` on
+this repo). Every adopted candidate has since been run against this repo end to end — each §'s
+Verification entry records the result, and the two that were only ever a report (deptry, lychee)
+stay in §15.
 
 ## Design
 
@@ -385,24 +414,28 @@ Recorded so a later sweep does not re-litigate them:
 | `src/repo_tasks/__init__.py`              | wire the `ci` collection                                                                                                                            |
 | `pytest.ini` + `src/repo_tasks/configs/`  | `filterwarnings`, `xfail_strict` (§9)                                                                                                               |
 | `ruff.toml` + `src/repo_tasks/configs/`   | `PT`, `FURB`, `PGH` (§9)                                                                                                                            |
+| `zizmor.yml` + `src/repo_tasks/configs/`  | new shipped config — the `unpinned-uses` policy (§3)                                                                                                |
+| `src/repo_tasks/configs.py`               | `zizmor.yml` in `_CONFIG_FILES`; zizmor/hadolint in the tool→distribution map                                                                       |
 | `pyproject.toml`                          | `repo-tasks-quality` gains zizmor, `hadolint-py`, `pytest-cov`; `dev` gains `pytest-socket`                                                         |
 | `tests/unit/conftest.py`                  | autouse socket guard (§13)                                                                                                                          |
 | `tests/unit/test_types.py`                | new — `assert_type` contract (§7)                                                                                                                   |
 | `tests/unit/test_*.py`                    | one per new task, `MockContext` command-string assertions                                                                                           |
-| `tests/unit/test_docstring_markers.py`    | enforces §12's convention                                                                                                                           |
+| `tests/unit/test_requirements.py`         | §12's derived enforcement, keyed on (module, name) rather than name                                                                                 |
 | `tests/integration/`                      | `docker build --check` against this repo's Dockerfiles (§10)                                                                                        |
-| `.github/workflows/ci.yml`                | permissions, concurrency, timeouts, uv cache, 3.11–3.14 unit matrix, audit step (§11)                                                               |
-| `.github/workflows/publish.yml`           | SHA-pin actions (§11)                                                                                                                               |
+| `tests/*/Dockerfile`                      | DL4006 pipefail, numeric `USER`, two inline declines (§4)                                                                                           |
+| `.github/workflows/*.yml`                 | permissions, concurrency, timeouts, 3.11–3.14 unit matrix, SHA pins (§11); the §3 security fixes                                                    |
 | `contributing/task-module-conventions.md` | the §12 requirement-marker convention                                                                                                               |
 | `contributing/test-tiers.md`              | the socket guard as the third structural enforcement (§13)                                                                                          |
 
 Consumers do not change until `configs.pull` + `ensure_deps` run there — see
 [`contributing/consumer-sweep.md`](../contributing/consumer-sweep.md). The `repo-tasks-quality`
-manifest changes (zizmor, hadolint-py, pytest-cov), so this is a sweep-triggering release.
+manifest changes (zizmor, hadolint-py, pytest-cov) **and** a new shipped config file appears
+(`zizmor.yml`), so this is a sweep-triggering release on both halves at once — `configs.diff` in
+each consumer will report drift in the config list and in the dev group.
 
 ## Verification
 
-Per §, since [UNVERIFIED] above covers the whole selection:
+Per §. What each one asked for, and what it actually produced:
 
 1. **`deps.audit`** — runs against this repo's real lock and exits 0; unit test pins the command
    string. Confirm exit code directly, never through a pipe.
@@ -410,23 +443,45 @@ Per §, since [UNVERIFIED] above covers the whole selection:
    confirm `inv quality.check` fails where it currently passes.
 3. **zizmor** — run against all three workflow files; every finding triaged before the step is
    allowed into the gate. Confirm the no-op-cleanly path on a repo with no workflows.
+
+   Done. Four classes of finding, all fixed on their merits rather than suppressed: `artipacked`
+   (every checkout left the job token in `.git/config`), `template-injection`
+   (`${{ inputs.project }}` pasted into a `run:` block in a job holding `packages: write`),
+   `excessive-permissions` (`id-token: write` at workflow level in `publish.yml`), `cache-poisoning`
+   (`setup-uv`'s `auto` cache is off for a tag push but on for the `workflow_dispatch` path the same
+   file carries). `unpinned-uses` is the one policy override — see the shipped `zizmor.yml`. Proved
+   it gates by dropping one `persist-credentials: false`: actionlint stays clean, the task exits 13.
+
 4. **hadolint** — run against both Dockerfiles; expect findings on `clean-os.Dockerfile`'s apt
    usage. Triage each before gating. Confirm the file-gated no-op on a Dockerfile-free repo.
+
+   Done, four findings. `--no-install-recommends` and the apt-lists cleanup were already there, so
+   the real ones were DL4006 (a piped `curl | sh` with no pipefail — a failed download exits 0 and
+   commits a layer with no uv in it) and DL3066 on the sample image (`USER app` fails an
+   orchestrator's runAsNonRoot check, which reads the uid without the image's `/etc/passwd`). Both
+   fixed. DL3008 and DL3066-on-the-fixture declined inline. Proved it gates: `debian:bookworm-slim`
+   → `debian:latest` exits 1 on DL3007.
+
 5. **`link_check`** — must flag a deliberately broken relative link, and must return clean on
    `contributing/` + `plans/` as they stand after this plan's own citations are fixed.
 6. **`untested_modules`** — must name a module whose test file is temporarily renamed. `coverage`
-   just has to produce a number.
+   just has to produce a number. It does: 98% over 1324 statements.
 7. **`verify_types` / `test_types.py`** — the `assert_type` module must fail if `invoke-stubs` is
    removed from the environment. That is the regression it exists for; prove it by removing it once.
 8. **`ci.status`** — run against this repo's real Actions history.
 9. **pytest.ini** — `filterwarnings = error` with the suite green proves the zero-warning baseline
    held; `xfail_strict` needs a temporary xpass to prove.
-10. **`docker.check`** — exits 0 for both Dockerfiles via the integration tier.
+10. **`docker.check`** — exits 0 for both Dockerfiles via the integration tier. Done, and the tier
+    also carries the failing case (`FromAsCasing`, a rule hadolint does not have) so the passing one
+    is not vacuous.
 11. **CI** — the matrix job must actually run four interpreters (read the job list, not the summary
     line); `inv test.workflows` (act) before pushing a workflow change.
-12. **§12's test** — must fail when a new non-gate task is added without a marker.
+12. **§12's test** — must fail when a new non-gate task is added without a marker. It did better
+    than that: adding `docker.check` exposed a bug in its own derivation, since it keyed gate steps
+    by bare function name and `check` names three different things here.
 13. **Socket guard** — a temporary unit test making an HTTP call must fail; the full existing suite
-    must stay green, which is what proves the guard doesn't reach the file-backed fixtures.
+    must stay green, which is what proves the guard doesn't reach the file-backed fixtures. Both
+    confirmed; `SocketBlockedError` is raised independently of `filterwarnings = error`.
 
 The whole-plan gate: `inv quality.precommit` green, and the consumer sweep run against
 `power-user-linux-setup` and `scaffoldapy` — naming which gate ran in each, per
