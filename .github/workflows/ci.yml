@@ -5,9 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: nothing here writes anything back to the repo, and the default token grant is
+# broader than that. publish.yml declares its own, wider, set for Trusted Publishing.
+permissions:
+  contents: read
+
+# A newer push supersedes an in-flight run for the same ref instead of racing it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v9.0.0
