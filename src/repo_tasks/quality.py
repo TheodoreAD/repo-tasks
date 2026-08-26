@@ -12,6 +12,7 @@ from .configs import require_tool
 
 # Aliased: this module has its own `check`, and the gate needs deps' one in its pre-chain.
 from .deps import check as deps_check
+from .docs import link_check
 from .projects import tracked_files
 from .testing import unit
 
@@ -114,7 +115,19 @@ def fix(c: Context):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(pre=[lint_check, format_check, type_check, shell_check, shell_format_check, workflow_check, deps_check, unit])
+@task(
+    pre=[
+        lint_check,
+        format_check,
+        type_check,
+        shell_check,
+        shell_format_check,
+        workflow_check,
+        link_check,
+        deps_check,
+        unit,
+    ]
+)
 def check(c: Context):
     """CI-style gate: every check, no changes written. Shell formatting is checked here as well
     as linted — python has always had both `format_check` and a formatter in the gate, and shell
