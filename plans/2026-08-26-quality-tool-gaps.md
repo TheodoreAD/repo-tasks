@@ -1,10 +1,31 @@
 ---
-status: planned
+status: in-progress
 updated: 2026-08-26
 depends_on: [power-user-linux-setup, scaffoldapy]
 ---
 
 # Quality-gate coverage by concern
+
+## What has landed
+
+Everything needing no new dependency shipped 2026-08-26 (`f4f5252`..`e4058b1`), each with the
+verification its § asked for:
+
+| §  | landed                                                                             |
+| -- | ---------------------------------------------------------------------------------- |
+| 1  | `deps.audit` — found 2 real advisories on its first run                            |
+| 2  | `deps.check` in the gate — proved by breaking the lock on purpose                  |
+| 5  | `docs.link_check` — hand-rolled, in the gate                                       |
+| 6  | `test.untested_modules` — found `cli.py` untested, now covered                     |
+| 7  | `quality.verify_types` + `tests/unit/test_types.py`                                |
+| 8  | `ci.status`                                                                        |
+| 9  | `pytest.ini` strictness; ruff `PT`/`FURB`/`PGH`                                    |
+| 11 | ci.yml permissions/concurrency/timeouts, 3.11–3.14 unit matrix; publish.yml pinned |
+| 12 | `requirements.py`'s `@requires` + the derived enforcement test                     |
+
+Still open, all of them adding a dependency and so triggering a consumer sweep: **§3** zizmor,
+**§4** hadolint and `docker.check`, **§6**'s `coverage` task (pytest-cov), **§13**'s socket guard
+(pytest-socket). Plus §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
 
 ## Context
 
