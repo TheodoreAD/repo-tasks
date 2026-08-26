@@ -52,7 +52,10 @@ FROM python:3.13-slim-bookworm AS runtime
 RUN useradd --create-home --uid 10001 app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
-USER app
+# Numeric, not `USER app`: an orchestrator enforcing runAsNonRoot reads the uid out of the image
+# config and cannot resolve a name against the image's own /etc/passwd, so a named USER makes the
+# admission check fail closed on an image that is in fact non-root. hadolint DL3066 is what asks.
+USER 10001
 ENV PATH=/app/.venv/bin:$PATH \
     PORT=8000
 EXPOSE 8000
