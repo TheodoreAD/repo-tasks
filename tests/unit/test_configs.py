@@ -34,7 +34,11 @@ def test_shipped_pyright_include_entries_tolerate_absence():
     entries: list[str] = re.findall(r'"([^"]+)"', re.search(r'"include":\s*\[([^\]]*)\]', text).group(1))  # pyright: ignore[reportOptionalMemberAccess]
     assert entries
     for entry in entries:
-        assert entry.endswith("*") and "/" not in entry, entry
+        # Split, not one composite assertion: the two halves fail for different reasons — a literal
+        # entry (exit 3 where the path is absent) versus a nested one (the glob stops anchoring) —
+        # and a combined assert reports neither.
+        assert entry.endswith("*"), entry
+        assert "/" not in entry, entry
 
 
 def test_pull_overwrites_existing_file(c, tmp_cwd):
