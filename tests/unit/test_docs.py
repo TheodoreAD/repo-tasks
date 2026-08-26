@@ -56,23 +56,36 @@ def test_relative_links_ignores_a_link_title():
     assert docs._relative_links('[x](a.md "the title")\n') == [(1, "a.md")]
 
 
-def test_broken_link_none_when_target_exists(tmp_path):
-    (tmp_path / "target.md").write_text("hi")
-    source = tmp_path / "source.md"
-    assert docs._broken_link(source, "target.md") is None
+def test_bad_link_none_when_target_exists(tmp_cwd):
+    (tmp_cwd / "target.md").write_text("hi")
+    source = tmp_cwd / "source.md"
+    assert docs._bad_link(source, "target.md") is None
 
 
-def test_broken_link_reports_a_missing_target(tmp_path):
-    source = tmp_path / "source.md"
-    assert docs._broken_link(source, "gone.md") == "gone.md"
+def test_bad_link_reports_a_missing_target(tmp_cwd):
+    source = tmp_cwd / "source.md"
+    assert docs._bad_link(source, "gone.md") == "gone.md"
 
 
-def test_broken_link_checks_the_file_not_the_fragment(tmp_path):
+def test_bad_link_checks_the_file_not_the_fragment(tmp_cwd):
     # file.md#heading verifies the file only: a renamed heading still passes, deliberately.
-    (tmp_path / "target.md").write_text("hi")
-    source = tmp_path / "source.md"
-    assert docs._broken_link(source, "target.md#any-heading-at-all") is None
-    assert docs._broken_link(source, "gone.md#heading") == "gone.md"
+    (tmp_cwd / "target.md").write_text("hi")
+    source = tmp_cwd / "source.md"
+    assert docs._bad_link(source, "target.md#any-heading-at-all") is None
+    assert docs._bad_link(source, "gone.md#heading") == "gone.md"
+
+
+def test_bad_link_rejects_a_target_outside_the_repository(tmp_cwd):
+    # The one that kept CI red for a day: `../../sibling-repo/file.md` opens fine on a machine with
+    # both repos checked out side by side, and is dead everywhere else — so it has to fail on that
+    # machine too, or the gate is green exactly where it needs to be red.
+    sibling = tmp_cwd.parent / "sibling"
+    sibling.mkdir(exist_ok=True)
+    (sibling / "notes.md").write_text("hi")
+    source = tmp_cwd / "docs" / "source.md"
+    problem = docs._bad_link(source, "../../sibling/notes.md")
+    assert problem is not None
+    assert "escapes the repository" in problem
 
 
 def test_link_check_passes_when_every_link_resolves(tmp_cwd, capsys):
