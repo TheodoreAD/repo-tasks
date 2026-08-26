@@ -24,3 +24,24 @@ jobs:
       - uses: astral-sh/setup-uv@v9.0.0
       - run: ./bootstrap.sh
       - run: inv quality.check
+
+  # The gate job above runs one interpreter, whichever uv picks. `requires-python = ">=3.11"` is a
+  # claim about four, and this is what makes it true. Only the unit tier: it needs no Docker and
+  # finishes in well under a second, so four of them cost nothing, while the integration tier is
+  # opt-in everywhere and the rest of the gate is interpreter-independent.
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # One interpreter failing should still report the others — that is the difference between
+      # "3.11 is broken" and "everything is broken".
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: ./bootstrap.sh
+      - run: inv test.unit
