@@ -34,6 +34,23 @@ from repo_tasks.projects import DockerImage
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Tolerate ResourceWarning in this tier only — pytest.ini makes every warning an error.
+
+    This tier launches subprocesses and containers, and testcontainers/docker-py leave socket and
+    pipe objects for the garbage collector. The GC finalizes them at an arbitrary later moment, so
+    the unraisable plugin reports the warning against whichever test happens to be running:
+    measured, `test_stamp_script_is_shfmt_clean` failed in a full-tier run and passed in isolation.
+    A failure that moves between innocent tests is worse than the leak it describes.
+
+    Deliberately not in pytest.ini, which ships to every consumer: the unit tier never shells out,
+    so a ResourceWarning there is always this repo's own leak and stays fatal. That is not
+    theoretical — it caught one the day this landed, in the devpi fixture below.
+    """
+    for item in items:
+        item.add_marker(pytest.mark.filterwarnings("ignore::ResourceWarning"))
+
+
 @pytest.fixture
 def c():
     """A real (non-Mock) invoke Context, wired for these tasks' actual c.run() calls to execute —
