@@ -16,9 +16,12 @@ rejects an unregistered marker.
 `inv test.workflows` is not a tier: it runs the repo's own GitHub Actions workflows locally through
 [act](https://github.com/nektos/act) (Docker containers standing in for the hosted runners), which
 re-runs the gate the way CI would. That is only worth doing when a workflow file itself changed —
-the static half, `inv quality.workflow-check` (actionlint), is what runs on every commit. act's
-runner-image map lives in `~/.config/act/actrc`, deployed by `power-user-linux-setup`'s
-`[packages.act]`; without it act's first run is an interactive prompt, fatal under a task.
+the static half, `inv quality.workflow-check` (actionlint + zizmor), is what runs on every commit.
+`inv docker.check` sits on the same line for images: BuildKit's own checks need a daemon, so
+`inv quality.dockerfile-check` (hadolint) is the half in the gate and `docker.check` is exercised
+from the integration tier. act's runner-image map lives in `~/.config/act/actrc`, deployed by
+`power-user-linux-setup`'s `[packages.act]`; without it act's first run is an interactive prompt,
+fatal under a task.
 
 ## Why the split is enforced structurally
 
@@ -45,6 +48,37 @@ prints-and-returns when it does not.
 
 `test.integration` is deliberately _not_ in `check`/`precommit`'s `pre=[...]`; only `test.unit` is.
 
+### The three promises, all three enforced
+
+`test.unit`'s docstring promises "no Docker, no network, nothing outside tmp_path". Each of the
+three is enforced by something, rather than by whoever writes the next test remembering:
+
+| promise             | enforced by                                        |
+| ------------------- | -------------------------------------------------- |
+| no Docker           | `pytest.ini`'s `testpaths = tests/unit` (above)    |
+| nothing outside tmp | the autouse `tmp_cwd` / `isolated_home` fixtures   |
+| no network          | the autouse `no_network` fixture (`pytest-socket`) |
+
+The network half was the one enforced by nothing until 2026-08-27. `no_network` calls
+`disable_socket(allow_unix_socket=True)`, so any `socket.socket()` in a unit test raises
+`SocketBlockedError` naming the call. Unix sockets stay allowed — local IPC is never the coupling
+this guards against.
+
+[DECISION: an autouse fixture, not `--disable-socket` in `pytest.ini`'s `addopts`. That file is
+shipped to every consumer by `configs.pull` while `pytest-socket` sits in this repo's own `dev`
+group and _not_ in the exported `repo-tasks-quality` manifest — a flag there would fail every
+consumer's `pytest` at startup with an unrecognized argument. The fixture lives in test structure,
+which this package does not ship; that is `scaffoldapy`'s half of the split. Seeding the same
+fixture into generated repos is what would move the plugin into the manifest, and belongs to that
+repo.]
+
+[DECISION: verified compatible with the `db-defaults` skill's picks before adopting, since that
+skill's whole point is real local backing services rather than mocks. Every default there is
+in-process or file-backed — `sqlite3`, `sqlalchemy`, `duckdb`, `tinydb`, `diskcache`, FTS5, `huey`,
+`apscheduler`, `blinker` — and opens no socket. `qdrant-client` is the one that can go either way,
+and it splits exactly along the intended line: embedded mode (`path=`/`:memory:`) passes,
+`QdrantClient(url=…)` is blocked. That is the guard enforcing the stated goal, not fighting it.]
+
 ## Conftest layout
 
 Three files, which is most of the reason the directories are split at all:
@@ -63,8 +97,10 @@ Three files, which is most of the reason the directories are split at all:
   `dist/`, `selfinstall` reads its stamp file. A test that forgets `monkeypatch.chdir` reads, or
   deletes, this repo's own files. Taking the fixture makes that impossible to forget.]
 
-  It also holds the autouse `isolated_home`, which points `HOME` at a fresh temp directory for every
-  unit test. [PITFALL: `tmp_path` sandboxes the working tree, not the user.
+  It also holds the two other autouse fixtures. `isolated_home` points `HOME` at a fresh temp
+  directory for every unit test; `no_network` disables sockets (`pytest-socket`'s `disable_socket`,
+  Unix sockets still allowed) so the tier's third promise is enforced rather than merely stated —
+  see "The three promises" above. [PITFALL: `tmp_path` sandboxes the working tree, not the user.
   `agents.wire_claude_hook` writes an env-cache file under `Path.home()/.cache/claude-code`, and
   before the fixture existed each unit run left one stale `tmp-pytest-of-*` file per test in the
   developer's real cache — ~400 accumulated before anyone noticed, because nothing failed. The

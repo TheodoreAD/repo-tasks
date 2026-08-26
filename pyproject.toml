@@ -39,6 +39,11 @@ repo-tasks-quality = [
 # and no task takes a --group flag.
 dev = [
   { include-group = "repo-tasks-quality" },
+  # This repo's own, never the exported manifest above: the socket guard lives in
+  # tests/unit/conftest.py, and test structure is scaffoldapy's half of the split — shipping the
+  # plugin to consumers with no fixture using it would be pure weight. See
+  # contributing/test-tiers.md and plans/2026-08-26-quality-tool-gaps.md §13.
+  "pytest-socket>=0.7.0",
   "devpi-client>=7.3.0",
   "devpi-server>=6.20.3",
   "testcontainers>=4.15.0",
