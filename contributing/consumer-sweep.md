@@ -78,6 +78,31 @@ pitfall below.
 "pulled" the old config unchanged and looked successful. `inv repo-tasks.update` genuinely first,
 and `configs.diff` to confirm, or the sweep silently does nothing.]
 
+[PITFALL: `inv repo-tasks.update` is not enough for a consumer that pins `repo-tasks` in its **own**
+`uv.lock` — `power-user-linux-setup` does, `scaffoldapy` does not. There, `inv` resolves
+`repo_tasks` out of that repo's `.venv`, not out of the global tool, so the pull writes the old
+configs while reporting success in exactly the shape above. Hit again 2026-08-27, one day after the
+pitfall it repeats. `uv lock --upgrade-package repo-tasks` and re-sync before pulling;
+`configs.diff` listing a file you know changed is the tell.]
+
+## What the sweep actually costs
+
+It is not a config refresh. Measured 2026-08-27, sweeping one release that added three tools:
+
+- Three of the four new gate steps found **real defects in both consumers** — 12 zizmor findings in
+  `power-user-linux-setup`, 2 more in `scaffoldapy` and its template, and 16 ruff `PT`/`FURB` hits.
+  Budget for fixing them, not just for running the commands.
+- The consumer's own suite can go red on the **shipped `pytest.ini`**, not on any new tool: `error`
+  as a warning filter turned copier's `DirtyLocalWarning` into 21 failures in `scaffoldapy` and
+  starlette's `TestClient` deprecation into a collection error in every generated web service. Both
+  fixes belong in the consumer (a scoped `catch_warnings`, a dependency migration) — never in the
+  shipped file, whose §9 decision assumed a family-uniform dependency set that a consumer's own
+  dependencies break.
+- `scaffoldapy`'s e2e is the only thing that tests the generator's output, and it earned that
+  billing: it found a defect in **repo-tasks itself** (`untested-modules` demanding a `test_init.py`
+  for a docstring-only `__init__.py`, which every generated repo has). Fixing it meant a second push
+  here and a second `inv repo-tasks.update` mid-sweep. Expect that round trip.
+
 ## Two lags, both invisible from a green terminal
 
 - **The dev machine lags `main`.** The global `uv tool install` is whatever `inv repo-tasks.update`
