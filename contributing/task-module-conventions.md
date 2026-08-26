@@ -137,6 +137,44 @@ external-facing nature — always a deliberate, standalone `inv dist.publish`. S
 [`versioning.md`](versioning.md) for the release path and
 `plans/2026-08-22-pypi-publish-integration.md` for the irreversibility that motivates it.
 
+## Declare what a task needs beyond a checkout
+
+Two rules, and the second exists to keep the first honest:
+
+1. **`quality.check`'s chain stays deterministic and offline.** A step whose answer can change
+   without the code changing — an advisory database, an external URL — or that pulls a Docker image
+   or a binary at run time, does not belong in the gate. That is what makes `inv quality.precommit`
+   runnable in any consumer, on a plane, without a daemon. `deps.audit` is the worked example: it
+   wraps `uv audit`, and it is a standalone task precisely because OSV moves on its own.
+2. **A task outside the gate declares what it needs**, with `@requires(...)` from
+   [`requirements.py`](../src/repo_tasks/requirements.py), above `@task`:
+
+```python
+@requires(NETWORK)
+@task
+def audit(c: Context): ...
+```
+
+The vocabulary is `NETWORK`, `DOCKER`, `GH`, and `requires()` rejects anything else rather than
+recording a typo. It returns the task untouched, so nothing about invoke's dispatch or the stubs'
+typing changes.
+
+`tests/unit/test_requirements.py` enforces it by _derivation_ rather than from a list someone
+maintains: it parses each module, collects the command strings each task builds, and maps their
+leading words onto requirements. A new task that runs `docker build` without declaring `DOCKER`
+fails there. It cannot see a command assembled in a module-level helper, or a library that reaches
+the network without a subprocess (`dist.list-versions` via urllib, the integration tiers via
+testcontainers) — those declare by hand, and the check only ever asserts that what it derives is
+covered, never that a declaration is superfluous.
+
+[PITFALL: the obvious mechanism, invoke's own `@task(klass=..., requires=...)`, costs the typing.
+invoke rejects unknown kwargs (`TypeError`), so custom metadata needs a `Task` subclass — and while
+`invoke-stubs` types `klass` itself, an _extra_ keyword matches none of its overloads, so `@task`
+silently degrades to an untyped decorator. Measured: the decorated function's `.body` becomes `Any`
+and `reportUntypedFunctionDecorator` fires, which `failOnWarnings` turns into a failed gate — the
+exact regression `invoke-stubs` was written to fix. A separate decorator, generic over
+`Callable[P, R]`, keeps the metadata and the types both.]
+
 ## Freshness via `pre=`, not by trusting what's on disk
 
 `dist.build` has `pre=[clean]` so a stale wheel from a previous version can never survive into a
