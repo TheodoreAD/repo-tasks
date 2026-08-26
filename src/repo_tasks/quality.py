@@ -12,24 +12,16 @@ from .configs import require_tool
 
 # Aliased: this module has its own `check`, and the gate needs deps' one in its pre-chain.
 from .deps import check as deps_check
+from .projects import tracked_files
 from .testing import unit
 
 
-def _tracked_files(c: Context, *patterns: str):
-    """Files matching the git pathspecs — tracked or untracked-but-not-ignored, so a script written
-    a moment ago is checked before it is ever `git add`ed. An empty list on any git failure (not a
-    repo at all), which every caller treats as "nothing to do"."""
-    specs = " ".join(f"'{p}'" for p in patterns)
-    result = c.run(f"git ls-files --cached --others --exclude-standard -- {specs}", hide=True, warn=True)
-    return result.stdout.split() if result.ok else []
-
-
 def _sh_files(c: Context):
-    return _tracked_files(c, "*.sh")
+    return tracked_files(c, "*.sh")
 
 
 def _workflow_files(c: Context):
-    return _tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
+    return tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
 
 
 @task

@@ -15,6 +15,22 @@ from invoke import Context
 _REPO_TASKS_TOML = Path("repo-tasks.toml")
 
 
+def tracked_files(c: Context, *patterns: str) -> list[str]:
+    """Files matching the git pathspecs — tracked, or untracked but not ignored, so a file written a
+    moment ago is seen before it is ever `git add`ed and `.gitignore` is honoured without any tool
+    needing its own exclude list.
+
+    An empty list on any git failure (not a repo at all), which every caller treats as "nothing to
+    do" — that is what lets each file-gated step no-op cleanly instead of erroring.
+
+    Lives here rather than in quality.py, where it started, because docs.py needs the same listing
+    and quality.py imports docs.py for the gate's pre-chain: the other direction would be an import
+    cycle. Discovery is this module's job anyway."""
+    specs = " ".join(f"'{p}'" for p in patterns)
+    result = c.run(f"git ls-files --cached --others --exclude-standard -- {specs}", hide=True, warn=True)
+    return result.stdout.split() if result.ok else []
+
+
 @dataclass(frozen=True)
 class PythonProject:
     name: str

@@ -10,6 +10,8 @@ happens to look like."""
 
 from pathlib import Path
 
+from invoke import MockContext, Result
+
 from repo_tasks import projects
 
 _ROOT_PYPROJECT = '[project]\nname = "root-pkg"\nversion = "1.0.0"\n'
@@ -24,6 +26,23 @@ def _write_member(root: Path, relative: str, name: str, version: str) -> None:
 def _write_workspace_root(root: Path, members: str, exclude: str = "", project: str = _ROOT_PYPROJECT) -> None:
     exclude_line = f"exclude = {exclude}\n" if exclude else ""
     (root / "pyproject.toml").write_text(f"{project}\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}")
+
+
+def test_tracked_files_quotes_every_pathspec():
+    c = MockContext(run=Result(stdout="a.md\ndocs/b.md\n", exited=0))
+    assert projects.tracked_files(c, "*.md", "docs/*.md") == ["a.md", "docs/b.md"]
+    c.run.assert_called_once_with(  # pyright: ignore[reportAttributeAccessIssue]
+        "git ls-files --cached --others --exclude-standard -- '*.md' 'docs/*.md'",
+        hide=True,
+        warn=True,
+    )
+
+
+def test_tracked_files_empty_outside_a_git_repo():
+    # Every file-gated caller reads an empty list as "nothing to do", which is what keeps
+    # shell_check/workflow_check/link_check no-ops instead of hard failures.
+    c = MockContext(run=Result(exited=128))
+    assert projects.tracked_files(c, "*.md") == []
 
 
 def test_discover_python_projects_returns_repo_root_first(c):
