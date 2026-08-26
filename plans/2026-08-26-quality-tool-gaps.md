@@ -61,7 +61,7 @@ Three things this plan did not anticipate, recorded so they are not re-derived:
 and the unit tier. Every one of those picks is researched and settled —
 [`contributing/type-checking.md`](../contributing/type-checking.md),
 [`contributing/test-tiers.md`](../contributing/test-tiers.md), and `power-user-linux-setup`'s
-[`contributing/quality-tooling.md`](../../power-user-linux-setup/contributing/quality-tooling.md)
+[`contributing/quality-tooling.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/contributing/quality-tooling.md)
 carry the reasoning. (That last one is where the retired
 `plans/2026-08-14-python-repo-scaffolding.md` §C landed; §D's config-distribution mechanism is in
 that repo's `contributing/repo-family-architecture.md`.)
