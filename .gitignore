@@ -6,6 +6,10 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# `test.coverage` output — a report regenerated on demand, never a committed number.
+.coverage
+htmlcov/
+
 # Build output: `dist.build` writes wheels/sdists here and `helm.package` writes chart .tgz
 # archives into dist/helm/. Both are regenerated on demand and `dist.clean` wipes the directory.
 dist/

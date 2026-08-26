@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from invoke import Exit, MockContext, Result
 
-from repo_tasks import testing
+from repo_tasks import quality, testing
 
 
 @pytest.fixture
@@ -125,6 +125,37 @@ def test_untested_modules_noops_without_a_src_layout(c, tmp_cwd, capsys):
     # contract as shell_check and workflow_check.
     testing.untested_modules.body(c)
     assert "nothing to do" in capsys.readouterr().out
+
+
+def test_coverage_scopes_to_each_package_under_src(c, tmp_cwd):
+    _write_module_and_test(tmp_cwd, "__init__.py", "test_init.py")
+    (tmp_cwd / "src" / "other").mkdir()
+    (tmp_cwd / "src" / "other" / "__init__.py").write_text("")
+    testing.coverage.body(c)
+    c.run.assert_called_once_with("pytest --cov=other --cov=pkg --cov-report=term-missing", echo=True, warn=True)
+
+
+def test_coverage_falls_back_to_the_working_directory_without_a_src_layout(c, tmp_cwd):
+    # A flat project still wants a number; only the scoping differs.
+    testing.coverage.body(c)
+    c.run.assert_called_once_with("pytest --cov=. --cov-report=term-missing", echo=True, warn=True)
+
+
+def test_coverage_adds_the_html_report_on_request(c, tmp_cwd):
+    testing.coverage.body(c, html=True)
+    c.run.assert_called_once_with("pytest --cov=. --cov-report=term-missing --cov-report=html", echo=True, warn=True)
+
+
+def test_coverage_never_sets_a_threshold(c, tmp_cwd):
+    # Report, not gate. This tier asserts on mocked command strings, so the number measures how
+    # much mocking got written; test.untested-modules is the half with a true answer, and the half
+    # in quality.check.
+    testing.coverage.body(c, html=True)
+    assert "--cov-fail-under" not in c.run.call_args[0][0]
+
+
+def test_coverage_is_not_a_gate_step():
+    assert testing.coverage not in quality.check.pre
 
 
 def test_unit_preflights_pytest_itself(monkeypatch):

@@ -92,6 +92,13 @@ Its blind spot is real and worth stating: mocked fixtures only exercise the payl
 to write. Two genuine `dist.py` parsing bugs survived full unit coverage and were caught immediately
 by the integration tier the first time it ran against a real index (see below).
 
+That blind spot is exactly why the two coverage questions land on opposite sides of the gate.
+`inv test.untested-modules` — does every module under `src/` have a `tests/unit/test_<module>.py`? —
+is in `quality.check`: the question has a true answer regardless of how the tier is written.
+`inv test.coverage` is a standalone report with no `--cov-fail-under`, because a line-coverage
+number over a tier of command-string assertions mostly measures how much mocking got written, and
+the two `dist.py` bugs above are what a threshold on it would have called covered.
+
 ## Integration tier: real services, locally
 
 ### Package index: `devpi-server`, not `pypiserver`

@@ -24,6 +24,7 @@ repo-tasks-quality = [
   # Git-sourced like repo-tasks itself; drop once a released invoke carries the same signatures.
   "invoke-stubs @ git+https://github.com/TheodoreAD/invoke-stubs",
   "pytest",
+  "pytest-cov",
   "ruff",
   "shellcheck-py",
   "shfmt-py",

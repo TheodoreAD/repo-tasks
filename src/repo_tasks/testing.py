@@ -104,6 +104,32 @@ def untested_modules(c: Context):
     raise Exit(f"[test.untested-modules] {len(missing)} module(s) with no unit test file", code=1)
 
 
+@task(help={"html": "Also write a browsable report to htmlcov/ (git-ignored, never committed)"})
+def coverage(c: Context, html: bool = False):
+    """Report line coverage for the unit tier (pytest --cov, needs pytest-cov from the
+    repo-tasks-quality group). A report, never a gate step, and deliberately no `--cov-fail-under`.
+
+    This tier asserts on the command string a task builds against a MockContext, so the number
+    largely measures how much mocking got written rather than how much behaviour is covered —
+    contributing/test-tiers.md records two real dist.py bugs that survived full unit coverage. A
+    threshold on that number is metric-gaming with extra steps. `test.untested-modules` is the half
+    with a true answer, and it is the half in `quality.check`.
+
+    Scoped to the packages under src/, so the report is about this project's own code rather than
+    about its tests and its dependencies. A repo with no src/ layout falls back to the working
+    directory, which is what a flat project wants."""
+    packages = (
+        sorted(p.name for p in _SRC_DIR.iterdir() if p.is_dir() and (p / "__init__.py").exists())
+        if _SRC_DIR.is_dir()
+        else []
+    )
+    args = " ".join(f"--cov={name}" for name in packages) or "--cov=."
+    args += " --cov-report=term-missing"
+    if html:
+        args += " --cov-report=html"
+    _pytest(c, args)
+
+
 @requires(DOCKER)
 @task
 def integration(c: Context):
