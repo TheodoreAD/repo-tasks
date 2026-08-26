@@ -28,6 +28,17 @@ consciously scoped out at the time and are still true as of 2026-08-26.
 against a project that has not moved on this? The cheap middle option is opening an issue with the
 stub as the proposed shape and letting the maintainers decide, rather than a PR that may sit.]
 
+- [DEFERRED: a `task(klass=..., **kwargs)` overload in `invoke-stubs`. invoke's own extension point
+  for task metadata is a `Task` subclass plus custom keywords, and the stub types `klass` but has no
+  overload accepting the extra keywords that subclass exists to receive — so
+  `@task(klass=Custom,
+  thing=...)` matches nothing, `@task` degrades to an untyped decorator, and
+  the decorated function's `.body` becomes `Any` with `reportUntypedFunctionDecorator` firing.
+  Measured 2026-08-26 while designing `requirements.py`, which routed around it with a
+  separately-typed decorator instead (see `contributing/task-module-conventions.md`). Nothing needs
+  the stub change today; it is recorded because it is the second real gap found in the stub, which
+  is this plan's own stated trigger for revisiting the upstream question.]
+
 - [DEFERRED: the `sample-service` fixture's `reportImplicitOverride`. `typing.override` is 3.12+ and
   the fixture declares `requires-python = ">=3.11"` with no dependencies, so it currently carries a
   line-level `# pyright: ignore[reportImplicitOverride]` with a comment saying why
