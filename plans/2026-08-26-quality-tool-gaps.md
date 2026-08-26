@@ -226,7 +226,6 @@ is one invocation. `tests/integration/` asserts it exits 0 for this repo's own D
 - `permissions: contents: read` — currently inherits the repo default.
 - `concurrency` with `cancel-in-progress` — superseded runs currently keep burning.
 - `timeout-minutes` on each job.
-- `enable-cache` on `astral-sh/setup-uv`.
 - A second job running `inv test.unit` across a **3.11 / 3.12 / 3.13 / 3.14 matrix**. The
   `quality.check` job stays single-version — the matrix exists to make `requires-python = ">=3.11"`
   a true claim, and the unit tier is 0.5 s with no Docker, so four of them cost nothing.
@@ -236,6 +235,20 @@ is one invocation. `tests/integration/` asserts it exits 0 for this repo's own D
 cadence. The gap this leaves is the one a schedule would close: an advisory landing during a quiet
 week is invisible until the next push. `ci.status` (§8) is the mitigation, and a schedule stays
 available later.]
+
+[PITFALL: `enable-cache` on `astral-sh/setup-uv` was listed here as a gap and is not one. Its
+default is `auto`, which already enables the cache on GitHub-hosted runners for exactly the `push`
+and `pull_request` events this workflow uses — it is disabled only for release/tag,
+`pull_request_target`, and `workflow_run` events, and on self-hosted runners. Setting it explicitly
+would be noise. Read the action's own input defaults before recording a missing-option finding.]
+
+[DEFERRED: the `deps.audit` CI step itself, blocked on
+[`2026-08-24-devpi-dependency-weight.md`](2026-08-24-devpi-dependency-weight.md). `uv audit` is red
+today over two `setuptools` 81.0.0 advisories fixed in 83.0.0, and the lock cannot move:
+`devpi-server` requires `setuptools<=81` and `pyramid` requires `<82`. Adding the step now means
+knowingly red CI. Deferred rather than worked around — narrowing the step's scope, or building the
+suppression list §1 deliberately did not build, would each bake a devpi workaround into shipped
+code. Everything else in this section landed.]
 
 `publish.yml` — SHA-pin `actions/checkout` and `astral-sh/setup-uv` to full-length commit SHAs with
 the version tag in a trailing comment.

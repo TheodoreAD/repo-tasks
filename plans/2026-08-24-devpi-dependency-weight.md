@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-24
+updated: 2026-08-26
 ---
 
 ## Context
@@ -22,8 +22,32 @@ a real PEP 691/503 package index to run `dist.py`'s `versions`/`publish` against
 Folding them into `dev` takes a plain `uv sync` from 39 packages to roughly 82 — most of it devpi's
 pyramid/zope stack, for two tests.
 
-**Explicitly not urgent.** It works today, disk is not a constraint, and `uv` is fast enough that
-the install cost is not felt. This is filed because it is untidy, not because it hurts.
+**Explicitly not urgent** as originally filed: it works today, disk is not a constraint, and `uv` is
+fast enough that the install cost is not felt. Filed because it was untidy, not because it hurt.
+
+**That changed 2026-08-26 — devpi now costs something concrete.** `inv deps.audit` (added by
+[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1) reports two advisories
+against `setuptools` 81.0.0, fixed upstream in 83.0.0, and the lock cannot move:
+
+- `devpi-server` requires `setuptools<=81`
+- `pyramid` (a devpi-server dependency) requires `setuptools<82`
+
+`uv lock --upgrade-package setuptools` is a no-op against those pins, so as long as devpi is in
+`dev`, this repo's dependency set carries a known-vulnerable transitive that nothing here can fix.
+
+Two things follow. The advisory itself is low-impact — an sdist `MANIFEST.in` exclusion bypass via
+Unicode normalization collision on macOS APFS/HFS+, in a package used here only to build a local
+test index on Linux. But it blocks a design decision that was already taken: `deps.audit` was to run
+in CI on push to `main`, and cannot, because it would be red from the first run.
+
+[DEFERRED: the CI audit step (`inv deps.audit` on push to `main`,
+[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §11). Deferred rather than
+worked around — narrowing the CI step's scope, or building the advisory-suppression list §1
+deliberately did not build, would both bake a workaround for devpi into shipped code. It lands when
+this plan does.]
+
+This does not decide the plan on its own: the "is the discovery value recurring" question below is
+still the real one. It does mean the cost side is no longer only tidiness.
 
 ## Open questions
 
