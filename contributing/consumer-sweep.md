@@ -103,6 +103,15 @@ It is not a config refresh. Measured 2026-08-27, sweeping one release that added
   for a docstring-only `__init__.py`, which every generated repo has). Fixing it meant a second push
   here and a second `inv repo-tasks.update` mid-sweep. Expect that round trip.
 
+[PITFALL: a green consumer gate on this machine is not a green CI run there, and
+`filterwarnings =
+error` is where the two come apart. The runner's checkout differs from a working
+tree in ways the consumer's own tests can see — `actions/checkout` clones at depth 1, and CI's tree
+is never dirty. `scaffoldapy` hit exactly that: locally copier raised `DirtyLocalWarning` (full
+clone, uncommitted template edit), in CI it raised `ShallowCloneWarning` (clean, depth 1), and each
+condition raises only its own half. Fixing the one the sweep saw left CI red on the other. Reproduce
+with `git clone --depth 1 file://<path>` before calling a consumer done.]
+
 ## Two lags, both invisible from a green terminal
 
 - **The dev machine lags `main`.** The global `uv tool install` is whatever `inv repo-tasks.update`
