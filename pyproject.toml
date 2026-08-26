@@ -24,7 +24,13 @@ repo-tasks-quality = [
   # Git-sourced like repo-tasks itself; drop once a released invoke carries the same signatures.
   "invoke-stubs @ git+https://github.com/TheodoreAD/invoke-stubs",
   "pytest",
+  # The two pytest plugins the family standardises on. Shipped rather than left per-repo because
+  # both are inert until something asks for them — pytest-cov does nothing without `--cov`,
+  # pytest-socket nothing without `disable_socket()` or `--disable-socket` — so a consumer that
+  # wants neither pays 8.7 KB and a wheel that is already in its resolver's graph. Having them
+  # present everywhere is what lets a test tree opt in with a fixture instead of a dependency edit.
   "pytest-cov",
+  "pytest-socket",
   "ruff",
   "shellcheck-py",
   "shfmt-py",
@@ -39,11 +45,6 @@ repo-tasks-quality = [
 # and no task takes a --group flag.
 dev = [
   { include-group = "repo-tasks-quality" },
-  # This repo's own, never the exported manifest above: the socket guard lives in
-  # tests/unit/conftest.py, and test structure is scaffoldapy's half of the split — shipping the
-  # plugin to consumers with no fixture using it would be pure weight. See
-  # contributing/test-tiers.md and plans/2026-08-26-quality-tool-gaps.md §13.
-  "pytest-socket>=0.7.0",
   "devpi-client>=7.3.0",
   "devpi-server>=6.20.3",
   "testcontainers>=4.15.0",

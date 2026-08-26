@@ -77,13 +77,19 @@ The network half was the one enforced by nothing until 2026-08-27. `no_network` 
 `SocketBlockedError` naming the call. Unix sockets stay allowed — local IPC is never the coupling
 this guards against.
 
-[DECISION: an autouse fixture, not `--disable-socket` in `pytest.ini`'s `addopts`. That file is
-shipped to every consumer by `configs.pull` while `pytest-socket` sits in this repo's own `dev`
-group and _not_ in the exported `repo-tasks-quality` manifest — a flag there would fail every
-consumer's `pytest` at startup with an unrecognized argument. The fixture lives in test structure,
-which this package does not ship; that is `scaffoldapy`'s half of the split. Seeding the same
-fixture into generated repos is what would move the plugin into the manifest, and belongs to that
-repo.]
+[DECISION: an autouse fixture, not `--disable-socket` in `pytest.ini`'s `addopts`. The plugin is
+shipped, but the restriction must not be: `addopts` reaches every consumer through `configs.pull`,
+including the flat-`tests/` single-tier ones, and the guard is a promise the _unit tier_ makes, not
+one the shipped config gets to impose on a layout that never claimed it. A fixture is opt-in by
+existing, in a file this package does not ship — which is exactly the seam wanted.]
+
+[DECISION: `pytest-socket` and `pytest-cov` are both in the exported `repo-tasks-quality` manifest,
+per the user 2026-08-27. The earlier decision kept `pytest-socket` in this repo's own `dev` group,
+reasoning that shipping a plugin to consumers with no fixture using it was pure weight. Measured,
+that weight is an **8.7 KB pure-python wheel** whose only dependency is pytest — and both plugins
+are inert until something asks for them (`--cov`, `disable_socket()`). Standardising them costs
+nothing and removes a dependency edit from the path of any repo that later wants either. What stays
+per-repo is whether a test tree uses them.]
 
 [DECISION: verified compatible with the `db-defaults` skill's picks before adopting, since that
 skill's whole point is real local backing services rather than mocks. Every default there is

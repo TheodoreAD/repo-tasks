@@ -25,11 +25,12 @@ def no_network() -> Iterator[None]:
     blocking them breaks tooling that talks to a local daemon over one for reasons unrelated to the
     test.
 
-    An autouse fixture, not `--disable-socket` in `pytest.ini`'s addopts, because that file ships to
-    every consumer through `configs.pull` while `pytest-socket` sits in this repo's own dev group —
-    a flag there would fail every consumer's `pytest` at startup with an unrecognized argument.
-    Seeding the same fixture into scaffoldapy's generated repos is what would move the plugin into
-    the exported manifest; see plans/2026-08-26-quality-tool-gaps.md §13.
+    An autouse fixture, not `--disable-socket` in `pytest.ini`'s addopts. The plugin is shipped in
+    the `repo-tasks-quality` manifest, but the restriction deliberately is not: addopts reaches
+    every consumer through `configs.pull`, including single-tier repos with a flat `tests/`, and
+    this guard is a promise the unit tier makes rather than one the shared config may impose on a
+    layout that never made it. Living in a conftest this package does not ship is what keeps it
+    opt-in — see contributing/test-tiers.md.
     """
     disable_socket(allow_unix_socket=True)
     yield
