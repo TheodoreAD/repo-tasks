@@ -2,9 +2,9 @@
 
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
 module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`shell_format`/
-`workflow_check`, and the composite `fix`/`check`/`precommit` graph), `test` (one target per tier —
-`unit`/`integration`/`smoke`/`regression`/`all`, with only the unit tier in the default gate — plus
-`workflows`, which runs the repo's GitHub Actions locally through
+`workflow_check`/`dockerfile_check`, and the composite `fix`/`check`/`precommit` graph), `test` (one
+target per tier — `unit`/`integration`/`smoke`/`regression`/`all`, with only the unit tier in the
+default gate — plus `workflows`, which runs the repo's GitHub Actions locally through
 [act](https://github.com/nektos/act)), `venv` (`sync`/`create`/`delete`/`install_wheel` —
 lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
 the only tasks that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a
@@ -45,8 +45,9 @@ unmodified. `precommit` (`fix` then `check`) is the one command an agent always 
 know or invoke the individual tools. Every task, leaf and composite alike, carries a succinct
 one-line docstring — what `inv -l` shows as help text. Every command echoes (`echo=True`) what it
 ran, except a step that would involve a secret (none here do). `shell_check`/`shell_format_*` no-op
-cleanly on a repo with zero `*.sh` files, and `workflow_check` (actionlint + zizmor) on one with no
-`.github/workflows`, so they're safe to run unconditionally — no per-repo opt-out needed.
+cleanly on a repo with zero `*.sh` files, `workflow_check` (actionlint + zizmor) on one with no
+`.github/workflows`, and `dockerfile_check` (hadolint) on one with no Dockerfiles, so they're safe
+to run unconditionally — no per-repo opt-out needed.
 
 Each tool gets its own dedicated config file (`ruff.toml`, `pyrightconfig.json`, `pytest.ini`) — not
 consolidated into `pyproject.toml` — so a template-driven config update across many repos can

@@ -138,6 +138,7 @@ _GATE_TOOL_DISTRIBUTIONS = {
     "actionlint": "actionlint-py",
     "basedpyright": "basedpyright",
     "dprint": "dprint-py",
+    "hadolint": "hadolint-py",
     "pytest": "pytest",
     "ruff": "ruff",
     "shellcheck": "shellcheck-py",

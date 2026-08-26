@@ -27,6 +27,17 @@ def _workflow_files(c: Context):
     return tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
 
 
+def _dockerfiles(c: Context):
+    """Every Dockerfile in the repo, at any depth. Both spellings the family actually uses: a bare
+    `Dockerfile` (the zero-config root image `projects.discover_docker_images` finds) and the
+    `<name>.Dockerfile` suffix a repo with several images, or a test fixture, reaches for.
+
+    Three pathspecs rather than one `*Dockerfile`: git's default pathspec matching lets `*` cross
+    directory separators, so the one-liner works — and also matches a `my-notes-on-Dockerfile`
+    somebody adds later, which would be handed to hadolint as though it were one."""
+    return tracked_files(c, "Dockerfile", "*/Dockerfile", "*.Dockerfile")
+
+
 @task
 def lint_check(c: Context):
     """Run ruff's linter (no fixes)."""
@@ -148,6 +159,28 @@ def workflow_check(c: Context):
         c.run(f"zizmor --offline {' '.join(files)}", echo=True)
 
 
+@task
+def dockerfile_check(c: Context):
+    """Run hadolint against every Dockerfile in the repo. No-ops cleanly on a repo with no images,
+    so it is safe in every consumer's `check`.
+
+    hadolint and `docker build --check` are not substitutes, and this repo runs both at different
+    tiers. Docker's built-in checks are ~21 rules about build semantics and casing; hadolint is
+    ~100 `DL####` rules plus ShellCheck over every `RUN` body — apt pinning, layer merging,
+    `--no-install-recommends`, `ADD` vs `COPY`, `latest` base tags, a root user. Only hadolint's
+    half is static: `docker build --check` needs a daemon, so it lives in `docker.check` and is
+    exercised from the integration tier.
+
+    A finding that does not apply gets `# hadolint ignore=DL####` on the line above it, with the
+    reason in a comment beside it — never a flag on this call, and no repo-wide `.hadolint.yaml`
+    until an exclusion is genuinely repo-wide. The declining is then visible to whoever next reads
+    the Dockerfile, which is where the question comes up."""
+    files = _dockerfiles(c)
+    if files:
+        require_tool("hadolint")
+        c.run(f"hadolint {' '.join(files)}", echo=True)
+
+
 @task(pre=[lint_apply, format_apply, shell_format_apply])
 def fix(c: Context):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
@@ -161,6 +194,7 @@ def fix(c: Context):
         shell_check,
         shell_format_check,
         workflow_check,
+        dockerfile_check,
         link_check,
         deps_check,
         untested_modules,
@@ -200,6 +234,7 @@ ns = Collection(
     shell_format_check,
     shell_format_apply,
     workflow_check,
+    dockerfile_check,
     fix,
     check,
     precommit,

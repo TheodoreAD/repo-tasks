@@ -30,6 +30,7 @@ repo-tasks-quality = [
   "dprint-py",
   "actionlint-py",
   "zizmor",
+  "hadolint-py",
   "act-bin",
 ]
 # The only group install/sync tasks address, alongside the main dependencies. Everything this repo

@@ -24,6 +24,8 @@ _WORKFLOW_LISTING = (
     "git ls-files --cached --others --exclude-standard -- '.github/workflows/*.yml' '.github/workflows/*.yaml'"
 )
 
+_DOCKERFILE_LISTING = "git ls-files --cached --others --exclude-standard -- 'Dockerfile' '*/Dockerfile' '*.Dockerfile'"
+
 
 def test_lint_check(c):
     quality.lint_check.body(c)
@@ -133,6 +135,38 @@ def test_workflow_check_pins_zizmor_offline():
 
 def test_check_gates_on_workflow_check():
     assert "workflow_check" in [t.name for t in quality.check.pre]
+
+
+def test_dockerfile_check_noop_when_no_dockerfiles():
+    c = MockContext(run=Result(stdout="", exited=0))
+    quality.dockerfile_check.body(c)
+    c.run.assert_called_once_with(_DOCKERFILE_LISTING, hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_dockerfile_check_runs_hadolint_when_files_found():
+    c = MockContext(
+        run={
+            _DOCKERFILE_LISTING: Result(stdout="Dockerfile\nsvc/clean-os.Dockerfile\n", exited=0),
+            "hadolint Dockerfile svc/clean-os.Dockerfile": Result(exited=0),
+        }
+    )
+    quality.dockerfile_check.body(c)
+    assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
+        ("hadolint Dockerfile svc/clean-os.Dockerfile",),
+        {"echo": True},
+    )
+
+
+def test_dockerfiles_finds_both_spellings_at_any_depth():
+    # The one piece of real logic here is the pathspec set, and git's `*` crosses directory
+    # separators — which is what lets `*.Dockerfile` reach a fixture nested three levels down.
+    c = MockContext(run=Result(stdout="Dockerfile\na/b/c.Dockerfile\na/Dockerfile\n", exited=0))
+    assert quality._dockerfiles(c) == ["Dockerfile", "a/b/c.Dockerfile", "a/Dockerfile"]
+
+
+def test_check_gates_on_dockerfile_check():
+    # hadolint is the static half; `docker build --check` needs a daemon and stays out of the gate.
+    assert quality.dockerfile_check in quality.check.pre
 
 
 def test_verify_types_reports_each_package_under_src(c, tmp_cwd):
@@ -252,6 +286,7 @@ _SH_LISTING = "git ls-files --cached --others --exclude-standard -- '*.sh'"
         (quality.shell_format_check, _SH_LISTING, "./a.sh\n"),
         (quality.shell_format_apply, _SH_LISTING, "./a.sh\n"),
         (quality.workflow_check, _WORKFLOW_LISTING, ".github/workflows/ci.yml\n"),
+        (quality.dockerfile_check, _DOCKERFILE_LISTING, "Dockerfile\n"),
     ],
 )
 def test_file_gated_steps_preflight_only_once_they_have_files(monkeypatch, step: GateStep, listing: str, found: str):
