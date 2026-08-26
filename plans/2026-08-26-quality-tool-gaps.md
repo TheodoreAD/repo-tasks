@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 updated: 2026-08-27
 depends_on: [power-user-linux-setup, scaffoldapy]
 ---
@@ -34,8 +34,8 @@ it fail on purpose first:
 | 6b | `test.coverage` — pytest-cov, report only, 98% on this repo                                         |
 | 13 | the autouse `no_network` fixture — `pytest-socket` in this repo's `dev` group only                  |
 
-Still open: the consumer sweep for the manifest change (zizmor, `hadolint-py`, `pytest-cov`, plus
-the new shipped `zizmor.yml`), and §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
+The consumer sweep ran the same day, against both consumers, and is written up below. The only thing
+left open in this plan is §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
 
 ### What the implementation added beyond the design
 
@@ -486,3 +486,41 @@ Per §. What each one asked for, and what it actually produced:
 The whole-plan gate: `inv quality.precommit` green, and the consumer sweep run against
 `power-user-linux-setup` and `scaffoldapy` — naming which gate ran in each, per
 `contributing/type-checking.md`'s "rolling this out to a consumer".
+
+## The consumer sweep, 2026-08-27
+
+Both consumers swept against `f01d135`. What ran, and what it found:
+
+**`power-user-linux-setup`** (`d18b38d`..`bbb0df5`) — `inv quality.precommit` green, 376 unit tests.
+12 zizmor findings across three workflows and 16 ruff `PT`/`FURB` hits, all fixed. Two `artipacked`
+findings declined inline: `devcontainer.yml`'s `publish-stable` and `docs` jobs push with the
+credentials the checkout leaves behind, so "fixing" them would break the job being flagged. Its
+`docker/Dockerfile` was already hadolint-clean. Its `uv.lock` pins `repo-tasks`, so the pull needed
+`uv lock --upgrade-package repo-tasks` first — see consumer-sweep.md's second pitfall.
+
+**`scaffoldapy`** (`fc9fff3`..`79cb374`) — both gates, which is the only claim worth making here:
+`inv quality.precommit` green (27 tests) **and** `inv test.integration` green, all ten rendered
+combinations passing the generated repo's own gate.
+
+That e2e tier is what justified its own existence. It found four things nothing else would have:
+
+1. **A defect in this package.** `untested-modules` demanded a `test_init.py` for a docstring-only
+   `__init__.py`, which every generated repo has — all ten combinations failed on it. Fixed in
+   `f01d135`, which meant a second push and a second `inv repo-tasks.update` mid-sweep.
+2. **A template gap.** `models.py` and `parse.py` shipped with no seed test, so five combinations
+   failed the same check for a real reason.
+3. **§9's coupling, twice, and not from any new tool.** The shipped `pytest.ini`'s
+   `filterwarnings = error` turned copier's `DirtyLocalWarning` into 21 failures in `scaffoldapy`
+   itself, and starlette's `TestClient` deprecation into a collection error in every generated web
+   service. §9's decision — "ignores go in the shared shipped file" — assumed a family-uniform
+   dependency set, and a consumer's own dependencies are exactly where that stops holding. Both
+   fixed locally instead: a scoped `catch_warnings` around `copier.run_copy`, and `httpx2` (which
+   starlette prefers when present) in the web-service template's dev group.
+4. **That the template's `ci.yml` needed the same zizmor fixes as `scaffoldapy`'s own** — the two
+   files are byte-identical by design, and only the generated half is what new projects inherit.
+
+[DECISION: `httpx2` over suppressing the starlette warning. It is upstream's own instruction rather
+than a workaround, `web_service` with `fetch_strategy = none` pulls in no other HTTP client so it
+adds exactly one package, and it was verified in a scratch venv — FastAPI's `TestClient` with
+`httpx2` installed passes under `-W error`. Suppression would have left every generated web service
+on a deprecated path with a filter hiding the notice.]
