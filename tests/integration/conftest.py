@@ -84,30 +84,34 @@ def devpi_index(tmp_path_factory):
     )
 
     port = _free_port()
-    process = subprocess.Popen(
+    # `with`, not a bare Popen: terminate()/wait() end the process but never close the stdout pipe,
+    # leaving the BufferedReader for the garbage collector to finalize — which raises ResourceWarning
+    # at an arbitrary later moment, so pytest's unraisable plugin blames whichever test happens to be
+    # running rather than this fixture. Popen.__exit__ closes the pipes.
+    with subprocess.Popen(
         ["devpi-server", "--serverdir", str(serverdir), "--host", "127.0.0.1", "--port", str(port)],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-    )
-    try:
-        # The server root, not /root/pypi/ — the latter is the live PyPI mirror index, whose
-        # first hit can trigger a slow (or, in a sandboxed environment, blocked) upstream fetch.
-        _wait_until_up(f"http://127.0.0.1:{port}/")
+    ) as process:
+        try:
+            # The server root, not /root/pypi/ — the latter is the live PyPI mirror index, whose
+            # first hit can trigger a slow (or, in a sandboxed environment, blocked) upstream fetch.
+            _wait_until_up(f"http://127.0.0.1:{port}/")
 
-        clientdir = tmp_path_factory.mktemp("devpi-client")
-        _run_devpi_client(clientdir, "use", f"http://127.0.0.1:{port}")
-        _run_devpi_client(clientdir, "login", "root", "--password", password)
-        _run_devpi_client(clientdir, "index", "-c", "test", "bases=root/pypi")
+            clientdir = tmp_path_factory.mktemp("devpi-client")
+            _run_devpi_client(clientdir, "use", f"http://127.0.0.1:{port}")
+            _run_devpi_client(clientdir, "login", "root", "--password", password)
+            _run_devpi_client(clientdir, "index", "-c", "test", "bases=root/pypi")
 
-        yield DevpiIndex(
-            upload_url=f"http://127.0.0.1:{port}/root/test/",
-            simple_url=f"http://127.0.0.1:{port}/root/test/+simple",
-            username="root",
-            password=password,
-        )
-    finally:
-        process.terminate()
-        process.wait(timeout=10)
+            yield DevpiIndex(
+                upload_url=f"http://127.0.0.1:{port}/root/test/",
+                simple_url=f"http://127.0.0.1:{port}/root/test/+simple",
+                username="root",
+                password=password,
+            )
+        finally:
+            process.terminate()
+            process.wait(timeout=10)
 
 
 @pytest.fixture(scope="module")
