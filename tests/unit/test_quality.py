@@ -13,7 +13,7 @@ from collections.abc import Callable
 import pytest
 from invoke import Context, Exit, MockContext, Result, Task
 
-from repo_tasks import quality
+from repo_tasks import deps, quality
 
 # Every gate step under test here takes only the Context, so one alias covers the parametrized
 # cases below — `Task` is generic over its body's signature in invoke-stubs. A plain assignment,
@@ -115,6 +115,17 @@ def test_workflow_check_runs_actionlint_when_files_found():
 
 def test_check_gates_on_workflow_check():
     assert "workflow_check" in [t.name for t in quality.check.pre]
+
+
+def test_check_gates_on_lock_drift():
+    # Without this, a pyproject.toml edit with no re-lock passes precommit and fails in CI, where
+    # bootstrap.sh's `uv sync --locked` catches it. Deterministic and offline, unlike deps.audit.
+    assert deps.check in quality.check.pre
+
+
+def test_check_does_not_gate_on_audit():
+    # The gate stays runnable offline: deps.audit queries OSV, so its result moves without the code.
+    assert deps.audit not in quality.check.pre
 
 
 def test_check_gates_on_shell_format_check():

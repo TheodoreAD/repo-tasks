@@ -9,6 +9,9 @@ with no prerequisites beyond the dev dependency group."""
 from invoke import Collection, Context, task
 
 from .configs import require_tool
+
+# Aliased: this module has its own `check`, and the gate needs deps' one in its pre-chain.
+from .deps import check as deps_check
 from .testing import unit
 
 
@@ -119,12 +122,18 @@ def fix(c: Context):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(pre=[lint_check, format_check, type_check, shell_check, shell_format_check, workflow_check, unit])
+@task(pre=[lint_check, format_check, type_check, shell_check, shell_format_check, workflow_check, deps_check, unit])
 def check(c: Context):
     """CI-style gate: every check, no changes written. Shell formatting is checked here as well
     as linted — python has always had both `format_check` and a formatter in the gate, and shell
     without the check half meant drift was only ever surfaced by `fix` mutating the file (a
-    written script that shfmt disagreed with oscillated in `git status` for weeks, unseen by CI)."""
+    written script that shfmt disagreed with oscillated in `git status` for weeks, unseen by CI).
+
+    Lock drift (`deps.check`) is gated here for the same reason: CI covered it only by accident,
+    through `bootstrap.sh`'s `uv sync --locked`, so a pyproject.toml edit without a re-lock passed
+    locally and failed in CI. Every step here stays deterministic and offline — `deps.audit`, whose
+    answer moves with the OSV database rather than with the code, is deliberately not in this
+    chain."""
 
 
 @task(pre=[fix, check])
