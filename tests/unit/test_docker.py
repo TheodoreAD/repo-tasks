@@ -124,7 +124,26 @@ def test_resolve_image_raises_when_project_not_found(c, monkeypatch):
         docker.build.body(c, project="nonexistent")
 
 
-@pytest.mark.parametrize("task_name", ["build", "push", "release"])
+def test_check_runs_build_check_for_each_discovered_image(c, monkeypatch):
+    # Every image, unlike build/push/release: a check that reported only the first repo's findings
+    # would be one that quietly ignores the rest of the repo.
+    second = _stub_image(name="api", path=Path("services/api"), dockerfile=Path("services/api/Dockerfile"))
+    monkeypatch.setattr(docker, "discover_docker_images", lambda c: [_stub_image(), second])
+    docker.check.body(c)
+    assert c.run.call_args_list == [
+        (("docker build --check -f examples/sample-service/Dockerfile examples/sample-service",), {"echo": True}),
+        (("docker build --check -f services/api/Dockerfile services/api",), {"echo": True}),
+    ]
+
+
+def test_check_narrows_to_one_project(c, monkeypatch):
+    second = _stub_image(name="api", path=Path("services/api"), dockerfile=Path("services/api/Dockerfile"))
+    monkeypatch.setattr(docker, "discover_docker_images", lambda c: [_stub_image(), second])
+    docker.check.body(c, project="api")
+    c.run.assert_called_once_with("docker build --check -f services/api/Dockerfile services/api", echo=True)
+
+
+@pytest.mark.parametrize("task_name", ["check", "build", "push", "release"])
 def test_tasks_no_op_cleanly_with_zero_images(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
     getattr(docker, task_name).body(c)  # pyright: ignore[reportAny]

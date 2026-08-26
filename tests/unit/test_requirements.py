@@ -14,9 +14,12 @@ requirements at all, since the whole point of that chain is running offline in a
 """
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
+from invoke import Context, Task
 
 from repo_tasks import quality, requirements
 from repo_tasks.requirements import DOCKER, GH, NETWORK
@@ -96,9 +99,24 @@ def _tasks() -> list[tuple[str, ast.FunctionDef]]:
 
 _TASKS = _tasks()
 
-_GATE_STEPS = {step.name for step in quality.check.pre}
 
-_GATE_TASKS = [(module, function) for module, function in _TASKS if function.name in _GATE_STEPS]
+def _gate_step_key(step: object) -> tuple[str, str]:
+    """Where a gate step is written: (module, function name).
+
+    Keyed on both, never the name alone. `check` names a gate step (`deps.check`), the gate itself
+    (`quality.check`), and a Docker-daemon task (`docker.check`) — a bare-name match reported
+    `docker.check` as a gate step that needs Docker, which is true of the task and false of the
+    gate.
+
+    `Task.pre` is typed as a list of unparameterized tasks, so the one cast here is what gives
+    `.body.__module__` a known type; every entry in this repo's chain is a plain `Task`."""
+    task = cast(Task[Callable[[Context], None]], step)
+    return (task.body.__module__, task.name)
+
+
+_GATE_STEPS = {_gate_step_key(step) for step in quality.check.pre}
+
+_GATE_TASKS = [(module, function) for module, function in _TASKS if (module, function.name) in _GATE_STEPS]
 
 
 def _test_id(value: object) -> str:

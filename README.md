@@ -9,17 +9,17 @@ default gate — plus `workflows`, which runs the repo's GitHub Actions locally 
 lock-respecting venv lifecycle, CI/docker-aware), `deps` (`lock`/`check`/`list`/`tree`/`export` —
 the only tasks that ever write `uv.lock`), `dist` (`clean`/`build`/`publish`/`versions` — build a
 wheel, publish it, and query a package index for a project's released versions), `docker`
-(`build`/`push`/`release` — image name/Dockerfile resolved from `repo-tasks.toml` or a zero-config
-root `Dockerfile`, tagged from the version-grouping model), `helm` (`lint`/`package`/`push` — charts
-resolved from `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model),
-`direnv` (`allow` — idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding
-agent's shell execution to pick up the direnv environment), `dev_env` (`setup` — the one-time
-post-clone bootstrap composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
-[zensical](https://zensical.org/)), `configs` (`pull`/`diff` — materializes
-`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
-package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
-`update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
-decoupled from any consumer's dependency groups) — extracted from
+(`check`/`build`/`push`/`release` — image name/Dockerfile resolved from `repo-tasks.toml` or a
+zero-config root `Dockerfile`, tagged from the version-grouping model), `helm`
+(`lint`/`package`/`push` — charts resolved from `repo-tasks.toml`'s `[[helm]]` entries, versioned by
+that same grouping model), `direnv` (`allow` — idempotent shell auto-activation), `agents`
+(`claude_hook` — wiring an AI coding agent's shell execution to pick up the direnv environment),
+`dev_env` (`setup` — the one-time post-clone bootstrap composing all of the above), and `docs`
+(`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs` (`pull`/`diff` —
+materializes `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/
+`.editorconfig` from this package's own canonical copies), and `repo_tasks` (nested as
+`repo-tasks.*` on the CLI — `update`/`status`/`version`/`stamp`, managing this package's own
+daily-driver global install, decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
 directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
 dependency bump), instead of being hand-copied and silently drifting per repo. `inv configure`

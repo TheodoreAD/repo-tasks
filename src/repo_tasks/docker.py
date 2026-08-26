@@ -58,6 +58,35 @@ def build(
 
 
 @requires(DOCKER)
+@task(help={"project": "Image to check (default: every discovered image)"})
+def check(c: Context, project: str | None = None):
+    """Run BuildKit's own build checks (`docker build --check`) over each discovered image's
+    Dockerfile — build semantics and casing rules hadolint does not look at: `FromAsCasing`,
+    `StageNameCasing`, `LegacyKeyValueFormat`, `UndefinedVar`, `CopyIgnoredFile`,
+    `SecretsUsedInArgOrEnv`. It resolves base-image metadata and evaluates the build graph, so it
+    needs a reachable Docker daemon and the network behind it.
+
+    That is why this is standalone and hadolint is the gate step, rather than either replacing the
+    other: `quality.dockerfile-check` has to run offline in every consumer, and this cannot.
+    tests/integration/ is what runs it against this repo's own images.
+
+    No-ops cleanly in a repo with no images. `--check` builds nothing and writes no image; it
+    reports the findings and exits non-zero if there are any."""
+    if project is None:
+        # Every image, unlike build/push/release, which act on one. Checking is cheap and reporting
+        # only the first repo's findings would be a check that quietly ignores half the repo.
+        images = discover_docker_images(c)
+    else:
+        one = _resolve_image(c, project)
+        images = [one] if one is not None else []
+    if not images:
+        print(f"[docker.check] {_NO_IMAGES}")
+        return
+    for image in images:
+        c.run(f"docker build --check -f {image.dockerfile} {image.path}", echo=True)
+
+
+@requires(DOCKER)
 @task(
     help={
         "project": "Image to push (default: the sole/first discovered image)",
@@ -99,4 +128,4 @@ def release(c: Context, project: str | None = None):
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as docker.set-dev (contributing/task-module-conventions.md).
-ns = Collection(build, push, release)
+ns = Collection(check, build, push, release)
