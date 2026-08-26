@@ -46,6 +46,19 @@ one would defeat it, since an explicit path that does not exist is a hard exit-4
 than a warning. The other targets do name a path, so each checks the directory exists first and
 prints-and-returns when it does not.
 
+A flat `tests/` is a **supported layout, not a lesser one**. The split is what this repo and every
+generated project get by default, because two tiers with different prerequisites is the shape that
+needs enforcing; a project with one tier and no Docker is not doing anything wrong, and nothing in
+the shipped config may punish it.
+
+[PITFALL: `filterwarnings = error` broke exactly that, for a day, in every consumer. The fallback's
+own notice is a `PytestConfigWarning`, so promoting warnings to errors turned the documented
+graceful path into a hard exit-1 crash — a repo with a plain `tests/` could not run `pytest` at all.
+The shipped `pytest.ini` now carries one narrow `ignore` for that single message, and
+`tests/integration/test_written_files_integration.py` runs a real `pytest` subprocess over both
+halves: a flat tree passes, and any _other_ warning still fails. A config that documents a fallback
+must not promote that fallback's own notice.]
+
 `test.integration` is deliberately _not_ in `check`/`precommit`'s `pre=[...]`; only `test.unit` is.
 
 ### The three promises, all three enforced
