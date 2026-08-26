@@ -1,5 +1,5 @@
 """Canonical tool config distribution — ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/
-.editorconfig, shipped as package data so a fix or improvement lands once and reaches every
+zizmor.yml/.editorconfig, shipped as package data so a fix or improvement lands once and reaches every
 consumer deliberately (a pinned dependency bump), instead of being hand-copied and silently
 drifting per repo. Every file is copied verbatim — nothing is resolved per consumer, so a pulled
 root is byte-identical to the package copy (pyrightconfig.json's `include` globs are what make
@@ -30,7 +30,7 @@ from invoke import Context, Exit, task
 
 from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
 
-_CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", ".editorconfig"]
+_CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", "zizmor.yml", ".editorconfig"]
 
 _SOURCE_HELP = "Override the config source: git:<url> or local:<path> (default: the installed repo_tasks package)"
 
@@ -142,6 +142,7 @@ _GATE_TOOL_DISTRIBUTIONS = {
     "ruff": "ruff",
     "shellcheck": "shellcheck-py",
     "shfmt": "shfmt-py",
+    "zizmor": "zizmor",
 }
 
 _DEV_GROUP_FIX = (
@@ -173,8 +174,8 @@ def require_tool(tool: str) -> None:
 
 @task(help={"source": _SOURCE_HELP})
 def pull(c: Context, source: str | None = None):
-    """Materialize ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/.editorconfig from the
-    canonical source into this repo's root, verbatim. Overwrites unconditionally."""
+    """Materialize ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/zizmor.yml/.editorconfig
+    from the canonical source into this repo's root, verbatim. Overwrites unconditionally."""
     src_dir = _source_dir(source)
     for name in _CONFIG_FILES:
         Path(name).write_text((src_dir / name).read_text())

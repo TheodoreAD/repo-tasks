@@ -99,18 +99,36 @@ def test_workflow_check_noop_when_no_workflow_files():
     c.run.assert_called_once_with(_WORKFLOW_LISTING, hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_workflow_check_runs_actionlint_when_files_found():
+def test_workflow_check_runs_both_linters_when_files_found():
     c = MockContext(
         run={
             _WORKFLOW_LISTING: Result(stdout=".github/workflows/ci.yml\n", exited=0),
             "actionlint .github/workflows/ci.yml": Result(exited=0),
+            "zizmor --offline .github/workflows/ci.yml": Result(exited=0),
         }
     )
     quality.workflow_check.body(c)
-    assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
-        ("actionlint .github/workflows/ci.yml",),
-        {"echo": True},
+    assert c.run.call_args_list[-2:] == [  # pyright: ignore[reportAttributeAccessIssue]
+        (("actionlint .github/workflows/ci.yml",), {"echo": True}),
+        (("zizmor --offline .github/workflows/ci.yml",), {"echo": True}),
+    ]
+
+
+def test_workflow_check_pins_zizmor_offline():
+    # Not decoration: zizmor turns its online audits on whenever a GH_TOKEN/GITHUB_TOKEN is in the
+    # environment, which is the normal state inside CI. Without the flag the gate's rule set would
+    # differ between a laptop and a runner, and `check` is supposed to be deterministic and offline.
+    c = MockContext(
+        run={
+            _WORKFLOW_LISTING: Result(stdout=".github/workflows/ci.yml\n", exited=0),
+            "actionlint .github/workflows/ci.yml": Result(exited=0),
+            "zizmor --offline .github/workflows/ci.yml": Result(exited=0),
+        }
     )
+    quality.workflow_check.body(c)
+    zizmor_calls = [call for call in c.run.call_args_list if call[0][0].startswith("zizmor")]  # pyright: ignore[reportAttributeAccessIssue]
+    assert zizmor_calls
+    assert all("--offline" in call[0][0] for call in zizmor_calls)
 
 
 def test_check_gates_on_workflow_check():

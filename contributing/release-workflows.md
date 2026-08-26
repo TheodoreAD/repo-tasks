@@ -56,8 +56,9 @@ Its own tag scheme, `<group>-vX.Y.Z` ([`versioning.md`](versioning.md)), is not 
 
 Two local steps, both via tools in the `repo-tasks-quality` dependency group:
 
-- `inv quality.workflow-check` — actionlint, static; part of `inv quality.check`, so it runs on
-  every commit anyway.
+- `inv quality.workflow-check` — actionlint (correctness) and zizmor (security), both static; part
+  of `inv quality.check`, so they run on every commit anyway. zizmor's `unpinned-uses` policy is
+  relaxed to `ref-pin` in the shipped `zizmor.yml`; that file carries the reason.
 - `inv test.workflows --event workflow_dispatch --job release --dry-run` — act prints the job's plan
   without running a container; drop `--dry-run` to run the job for real in a local container (Docker
   needed, and secrets such as `GITHUB_TOKEN` must be passed by hand). Not a tier and not in any

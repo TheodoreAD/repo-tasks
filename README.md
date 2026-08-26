@@ -16,8 +16,8 @@ resolved from `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same gro
 agent's shell execution to pick up the direnv environment), `dev_env` (`setup` — the one-time
 post-clone bootstrap composing all of the above), and `docs` (`clean`/`build`/`serve`, wrapping
 [zensical](https://zensical.org/)), `configs` (`pull`/`diff` — materializes
-`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/ `.editorconfig` from this package's own
-canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
+`ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
+package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
 `update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
 decoupled from any consumer's dependency groups) — extracted from
 [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
@@ -45,7 +45,7 @@ unmodified. `precommit` (`fix` then `check`) is the one command an agent always 
 know or invoke the individual tools. Every task, leaf and composite alike, carries a succinct
 one-line docstring — what `inv -l` shows as help text. Every command echoes (`echo=True`) what it
 ran, except a step that would involve a secret (none here do). `shell_check`/`shell_format_*` no-op
-cleanly on a repo with zero `*.sh` files, and `workflow_check` (actionlint) on one with no
+cleanly on a repo with zero `*.sh` files, and `workflow_check` (actionlint + zizmor) on one with no
 `.github/workflows`, so they're safe to run unconditionally — no per-repo opt-out needed.
 
 Each tool gets its own dedicated config file (`ruff.toml`, `pyrightconfig.json`, `pytest.ini`) — not

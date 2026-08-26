@@ -125,12 +125,27 @@ def shell_format_apply(c: Context):
 
 @task
 def workflow_check(c: Context):
-    """Run actionlint against every GitHub Actions workflow file (.github/workflows/*.yml). No-ops
-    cleanly on a repo with no workflows, so it is safe in every consumer's `check`."""
+    """Check every GitHub Actions workflow file (.github/workflows/*.yml): actionlint for
+    correctness, zizmor for security. No-ops cleanly on a repo with no workflows, so it is safe in
+    every consumer's `check`.
+
+    Two binaries under one task name, the same way `format_check` runs ruff and dprint: the
+    developer asks one question ("are my workflows OK?"), and both tools gate on the same file list,
+    so the no-op contract is unchanged. They do not overlap — actionlint reads workflow syntax and
+    expression correctness, zizmor reads the security properties (credential persistence,
+    template injection, permission scope, cache poisoning) that a syntactically perfect workflow
+    can still get wrong.
+
+    `--offline` is passed explicitly rather than relied on. zizmor already defaults to offline, but
+    it enables its online audits whenever a `GH_TOKEN`/`GITHUB_TOKEN` is visible in the environment
+    — which is exactly the case inside CI. A gate step whose rule set depends on whether a token
+    happened to be exported is not the deterministic, offline step `check` promises."""
     files = _workflow_files(c)
     if files:
         require_tool("actionlint")
+        require_tool("zizmor")
         c.run(f"actionlint {' '.join(files)}", echo=True)
+        c.run(f"zizmor --offline {' '.join(files)}", echo=True)
 
 
 @task(pre=[lint_apply, format_apply, shell_format_apply])
