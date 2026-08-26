@@ -130,10 +130,16 @@ by the integration tier the first time it ran against a real index (see below).
 
 That blind spot is exactly why the two coverage questions land on opposite sides of the gate.
 `inv test.untested-modules` — does every module under `src/` have a `tests/unit/test_<module>.py`? —
-is in `quality.check`: the question has a true answer regardless of how the tier is written.
-`inv test.coverage` is a standalone report with no `--cov-fail-under`, because a line-coverage
-number over a tier of command-string assertions mostly measures how much mocking got written, and
-the two `dist.py` bugs above are what a threshold on it would have called covered.
+is in `quality.check`: the question has a true answer regardless of how the tier is written. A
+module with no code in it is skipped, which in practice means a docstring-only `__init__.py`; the
+only test such a file could have is a placeholder. [PITFALL: the skip was missing at first and
+`scaffoldapy`'s e2e tier is what found it — all ten rendered combinations failed the generated
+repo's own gate, because the template's `__init__.py` is exactly one docstring. An `__init__.py`
+that re-exports still needs its test: an `__all__` is a contract, and `repo_tasks/__init__.py`'s
+collection wiring is one.] `inv test.coverage` is a standalone report with no `--cov-fail-under`,
+because a line-coverage number over a tier of command-string assertions mostly measures how much
+mocking got written, and the two `dist.py` bugs above are what a threshold on it would have called
+covered.
 
 ## Integration tier: real services, locally
 

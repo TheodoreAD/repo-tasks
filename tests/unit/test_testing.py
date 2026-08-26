@@ -91,9 +91,14 @@ def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
 
 
 def _write_module_and_test(root: Path, module: str, test: str | None) -> None:
+    """A src-layout package with one module, and optionally the unit test for it.
+
+    The module carries a real statement, not an empty file: `untested_modules` skips a module with
+    no code in it, so an empty one would make every "must report this as missing" case below pass
+    for the wrong reason. Tests about that skip overwrite the file themselves."""
     package = root / "src" / "pkg"
     package.mkdir(parents=True, exist_ok=True)
-    (package / module).write_text("")
+    (package / module).write_text("VALUE = 1\n")
     unit_dir = root / "tests" / "unit"
     unit_dir.mkdir(parents=True, exist_ok=True)
     if test is not None:
@@ -118,6 +123,38 @@ def test_untested_modules_maps_dunder_init_to_test_init(c, tmp_cwd):
     # call it test_init.py.
     _write_module_and_test(tmp_cwd, "__init__.py", "test_init.py")
     testing.untested_modules.body(c)
+
+
+@pytest.mark.parametrize(
+    "source",
+    ['"""Just a description."""\n', "", "\n\n# a comment only\n"],
+    ids=["docstring-only", "empty", "comment-only"],
+)
+def test_untested_modules_skips_a_module_with_no_code(c, tmp_cwd, source: str):
+    # A generated project's __init__.py is often exactly its own docstring. Demanding a
+    # test_init.py for it buys a placeholder assertion in every repo, not coverage — found by
+    # scaffoldapy's e2e tier, where all ten rendered combinations failed on it.
+    _write_module_and_test(tmp_cwd, "__init__.py", None)
+    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text(source)
+    testing.untested_modules.body(c)
+
+
+def test_untested_modules_still_wants_a_test_for_a_re_exporting_init(c, tmp_cwd):
+    # The other side of the same rule: an __all__ or a re-export is a contract someone depends on,
+    # which is what this package's own __init__.py is.
+    _write_module_and_test(tmp_cwd, "__init__.py", None)
+    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text('from .thing import ns\n\n__all__ = ["ns"]\n')
+    with pytest.raises(Exit):
+        testing.untested_modules.body(c)
+
+
+def test_untested_modules_treats_an_unparseable_module_as_needing_a_test(c, tmp_cwd):
+    # Silently reporting a broken file as "nothing to test" would hide it, and finding syntax
+    # errors is the linter's job, not this check's.
+    _write_module_and_test(tmp_cwd, "thing.py", None)
+    (tmp_cwd / "src" / "pkg" / "thing.py").write_text("def (\n")
+    with pytest.raises(Exit):
+        testing.untested_modules.body(c)
 
 
 def test_untested_modules_noops_without_a_src_layout(c, tmp_cwd, capsys):

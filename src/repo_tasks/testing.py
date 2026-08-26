@@ -14,6 +14,7 @@ and search from the working directory — which is exactly the fallback a simple
 an explicit path that does not exist is a hard exit-4 usage error, not a warning.
 """
 
+import ast
 from pathlib import Path
 
 from invoke import Context, Exit, task
@@ -39,6 +40,27 @@ _SRC_DIR = Path("src")
 _UNIT_DIR = Path("tests/unit")
 
 _NO_LAYOUT = f"no {_SRC_DIR} or {_UNIT_DIR} directory — nothing to do"
+
+
+def _has_code(module: Path) -> bool:
+    """Whether a module contains anything a test could exercise — any statement beyond its own
+    docstring.
+
+    The case this exists for is a package's `__init__.py`. A generated project's is often exactly
+    one line, `\"\"\"<description>\"\"\"`, and demanding a `test_init.py` for it buys a placeholder
+    assertion in every repo rather than coverage of anything. Stated generally because it is
+    generally true: a module with no code has nothing to test. One with re-exports does — an
+    `__all__` or an import someone depends on is a contract, and `repo_tasks/__init__.py`'s own
+    collection wiring is exactly that, so this package keeps needing its `test_init.py`.
+
+    A file that does not parse counts as having code: reporting it as "nothing to test" would hide
+    it, and it is not this check's job to be the one that finds a syntax error."""
+    try:
+        tree = ast.parse(module.read_text())
+    except SyntaxError:
+        return True
+    body = tree.body[1:] if ast.get_docstring(tree) else tree.body
+    return bool(body)
 
 
 def _expected_test_name(stem: str) -> str:
@@ -86,8 +108,10 @@ def untested_modules(c: Context):
     states the convention this enforces.
 
     Top-level modules of each package under src/ only: it does not recurse, since a nested package
-    is a different unit with its own layout question. No-ops cleanly on a repo with no src/ or no
-    tests/unit — a flat-layout consumer is not doing anything wrong."""
+    is a different unit with its own layout question. A module with no code in it — a docstring-only
+    `__init__.py`, typically — is skipped, since the only test it could have is a placeholder. No-ops
+    cleanly on a repo with no src/ or no tests/unit — a flat-layout consumer is not doing anything
+    wrong."""
     if not _SRC_DIR.is_dir() or not _UNIT_DIR.is_dir():
         print(f"[test.untested-modules] {_NO_LAYOUT}")
         return
@@ -95,7 +119,7 @@ def untested_modules(c: Context):
         f"{module} has no {_UNIT_DIR / _expected_test_name(module.stem)}"
         for package in sorted(p for p in _SRC_DIR.iterdir() if p.is_dir())
         for module in sorted(package.glob("*.py"))
-        if not (_UNIT_DIR / _expected_test_name(module.stem)).exists()
+        if _has_code(module) and not (_UNIT_DIR / _expected_test_name(module.stem)).exists()
     ]
     if not missing:
         return
