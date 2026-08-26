@@ -33,6 +33,19 @@ _NO_WORKFLOWS = f"no {_WORKFLOWS_DIR} directory — nothing to do"
 # still passes `check` — the same safe-to-run-unconditionally contract shell_check has.
 _NO_TESTS_COLLECTED = 5
 
+_SRC_DIR = Path("src")
+
+_UNIT_DIR = Path("tests/unit")
+
+_NO_LAYOUT = f"no {_SRC_DIR} or {_UNIT_DIR} directory — nothing to do"
+
+
+def _expected_test_name(stem: str) -> str:
+    """The unit-test file a module is expected to have. `__init__.py` maps to `test_init.py`, which
+    is what this package and every consumer already call it — `test___init__.py` reads badly and
+    nobody writes it."""
+    return "test_init.py" if stem == "__init__" else f"test_{stem}.py"
+
 
 def _pytest(c: Context, args: str = "") -> None:
     # `unit` runs inside quality.check, so a dev group behind the repo-tasks-quality manifest
@@ -60,6 +73,34 @@ def unit(c: Context):
     `quality.check`/`precommit`. Falls back to searching from the working directory (with pytest's
     own warning) in a repo whose tests aren't split into tests/unit."""
     _pytest(c)
+
+
+@task
+def untested_modules(c: Context):
+    """Check every module in a src-layout package has a tests/unit/test_<module>.py.
+
+    Answers the one question a coverage percentage cannot: which module has no tests at all. This
+    tier asserts on mocked command strings, so line coverage would mostly measure how much mocking
+    got written — a module with no test file is unambiguous, and contributing/test-tiers.md already
+    states the convention this enforces.
+
+    Top-level modules of each package under src/ only: it does not recurse, since a nested package
+    is a different unit with its own layout question. No-ops cleanly on a repo with no src/ or no
+    tests/unit — a flat-layout consumer is not doing anything wrong."""
+    if not _SRC_DIR.is_dir() or not _UNIT_DIR.is_dir():
+        print(f"[test.untested-modules] {_NO_LAYOUT}")
+        return
+    missing = [
+        f"{module} has no {_UNIT_DIR / _expected_test_name(module.stem)}"
+        for package in sorted(p for p in _SRC_DIR.iterdir() if p.is_dir())
+        for module in sorted(package.glob("*.py"))
+        if not (_UNIT_DIR / _expected_test_name(module.stem)).exists()
+    ]
+    if not missing:
+        return
+    for entry in missing:
+        print(f"[test.untested-modules] {entry}")
+    raise Exit(f"[test.untested-modules] {len(missing)} module(s) with no unit test file", code=1)
 
 
 @task

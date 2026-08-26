@@ -14,7 +14,7 @@ from .configs import require_tool
 from .deps import check as deps_check
 from .docs import link_check
 from .projects import tracked_files
-from .testing import unit
+from .testing import unit, untested_modules
 
 
 def _sh_files(c: Context):
@@ -125,6 +125,7 @@ def fix(c: Context):
         workflow_check,
         link_check,
         deps_check,
+        untested_modules,
         unit,
     ]
 )

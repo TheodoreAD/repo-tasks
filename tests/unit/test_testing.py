@@ -90,6 +90,43 @@ def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
     c.run.assert_not_called()
 
 
+def _write_module_and_test(root: Path, module: str, test: str | None) -> None:
+    package = root / "src" / "pkg"
+    package.mkdir(parents=True, exist_ok=True)
+    (package / module).write_text("")
+    unit_dir = root / "tests" / "unit"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    if test is not None:
+        (unit_dir / test).write_text("")
+
+
+def test_untested_modules_passes_when_every_module_has_a_test(c, tmp_cwd):
+    _write_module_and_test(tmp_cwd, "thing.py", "test_thing.py")
+    testing.untested_modules.body(c)
+
+
+def test_untested_modules_names_the_module_and_the_file_it_wants(c, tmp_cwd, capsys):
+    _write_module_and_test(tmp_cwd, "thing.py", None)
+    with pytest.raises(Exit) as exc_info:
+        testing.untested_modules.body(c)
+    assert exc_info.value.code == 1
+    assert "src/pkg/thing.py has no tests/unit/test_thing.py" in capsys.readouterr().out
+
+
+def test_untested_modules_maps_dunder_init_to_test_init(c, tmp_cwd):
+    # test___init__.py reads badly and nobody writes it; this package and every consumer already
+    # call it test_init.py.
+    _write_module_and_test(tmp_cwd, "__init__.py", "test_init.py")
+    testing.untested_modules.body(c)
+
+
+def test_untested_modules_noops_without_a_src_layout(c, tmp_cwd, capsys):
+    # A flat-layout consumer is not doing anything wrong — same safe-to-run-unconditionally
+    # contract as shell_check and workflow_check.
+    testing.untested_modules.body(c)
+    assert "nothing to do" in capsys.readouterr().out
+
+
 def test_unit_preflights_pytest_itself(monkeypatch):
     # `unit` runs inside quality.check, so a dev group behind the repo-tasks-quality manifest hits
     # this the same way it hits quality.py's tools — and gets the same fix rather than exit 127.

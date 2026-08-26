@@ -13,7 +13,7 @@ from collections.abc import Callable
 import pytest
 from invoke import Context, Exit, MockContext, Result, Task
 
-from repo_tasks import deps, docs, quality
+from repo_tasks import deps, docs, quality, testing
 
 # Every gate step under test here takes only the Context, so one alias covers the parametrized
 # cases below — `Task` is generic over its body's signature in invoke-stubs. A plain assignment,
@@ -121,6 +121,11 @@ def test_check_gates_on_link_check():
     # Retiring a plan deletes a file other documents link to; the procedure's "grep for inbound
     # references" step was honour-system until this ran in the gate.
     assert docs.link_check in quality.check.pre
+
+
+def test_check_gates_on_untested_modules():
+    # The question a coverage percentage cannot answer: which module has no tests at all.
+    assert testing.untested_modules in quality.check.pre
 
 
 def test_check_gates_on_lock_drift():
