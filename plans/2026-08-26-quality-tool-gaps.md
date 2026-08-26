@@ -32,7 +32,7 @@ it fail on purpose first:
 | 4  | `quality.dockerfile_check` (hadolint) — 4 findings, 2 fixed and 2 declined inline                   |
 | 10 | `docker.check` (`docker build --check`), standalone, exercised from the integration tier            |
 | 6b | `test.coverage` — pytest-cov, report only, 98% on this repo                                         |
-| 13 | the autouse `no_network` fixture — `pytest-socket` in this repo's `dev` group only                  |
+| 13 | the autouse `no_network` fixture — `pytest-socket` later promoted to the shipped manifest           |
 
 The consumer sweep ran the same day, against both consumers, and is written up below. The only thing
 left open in this plan is §11's `deps.audit` CI step, blocked — see its `[DEFERRED:]`.
@@ -348,8 +348,11 @@ splits exactly along the intended line: embedded mode (`path=`/`:memory:`) passe
 services pass, coupling to a separately deployed service fails loudly in the unit tier.]
 
 [DEFERRED: seeding the same autouse fixture into `scaffoldapy`'s generated repos, which is where
-consumers would get it. Belongs to that repo, and lands with `pytest-socket` moving into
-`repo-tasks-quality` at that point.]
+consumers would get it. Now
+[`2026-08-27-generated-test-layout.md`](2026-08-27-generated-test-layout.md), which widened it: the
+split and the guard are generated together, and a flat `tests/` gets neither. This item assumed the
+seeding is what would move `pytest-socket` into `repo-tasks-quality`; the manifest move happened
+first and on its own merits (see `contributing/test-tiers.md`), so only the generated tree is left.]
 
 ### 14. Considered and rejected
 
