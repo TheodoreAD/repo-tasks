@@ -19,6 +19,7 @@ from pathlib import Path
 from invoke import Context, Exit, task
 
 from .configs import require_tool
+from .requirements import DOCKER, requires
 
 _INTEGRATION_DIR = Path("tests/integration")
 
@@ -103,6 +104,7 @@ def untested_modules(c: Context):
     raise Exit(f"[test.untested-modules] {len(missing)} module(s) with no unit test file", code=1)
 
 
+@requires(DOCKER)
 @task
 def integration(c: Context):
     """Run the whole integration tier against real local services (Docker, a package index). Needs
@@ -110,6 +112,7 @@ def integration(c: Context):
     _integration(c, "", "integration")
 
 
+@requires(DOCKER)
 @task
 def smoke(c: Context):
     """Run the fast, happy-path slice of the integration tier (`-m smoke`) — enough to know the
@@ -118,6 +121,7 @@ def smoke(c: Context):
     _integration(c, "-m smoke", "smoke")
 
 
+@requires(DOCKER)
 @task
 def regression(c: Context):
     """Run everything in the integration tier that isn't smoke (`-m "not smoke"`) — the broad,
@@ -125,6 +129,7 @@ def regression(c: Context):
     _integration(c, '-m "not smoke"', "regression")
 
 
+@requires(DOCKER)
 @task(
     help={
         "job": "Run only this job id (act -j); default: every job the event triggers",

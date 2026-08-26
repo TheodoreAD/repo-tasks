@@ -13,6 +13,7 @@ from typing import TypedDict, cast
 from invoke import Context, Exit, task
 
 from .configs import require_tool
+from .requirements import GH, NETWORK, requires
 
 # A run whose conclusion is one of these is a failure worth stopping for. `cancelled` is not: it is
 # usually the concurrency group doing its job when a newer push superseded an older one.
@@ -50,6 +51,7 @@ def _describe(run: Run) -> str:
     return f"{state:<15} {run.get('workflowName', '?')}  {run.get('createdAt', '?')}  {run.get('url', '')}"
 
 
+@requires(GH, NETWORK)
 @task(
     help={
         "branch": "Branch to report on (default: main)",

@@ -16,6 +16,8 @@ from pathlib import Path
 
 from invoke import Context, task
 
+from .requirements import NETWORK, requires
+
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")
 _INSTALL_CMD = "uv tool install --force --with-executables-from invoke"
@@ -64,6 +66,7 @@ def _stamped_version() -> str | None:
     return match.group(1) if match else None
 
 
+@requires(NETWORK)
 @task
 def update(c: Context):
     """Move the global daily-driver repo-tasks uv tool install forward to the latest tagged

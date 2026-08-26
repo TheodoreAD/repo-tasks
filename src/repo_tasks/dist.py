@@ -15,6 +15,7 @@ from typing import cast
 from invoke import Collection, Context, task
 
 from .projects import discover_python_projects
+from .requirements import NETWORK, requires
 from .version import Version, set_dev
 
 _DIST_DIR = Path("dist")
@@ -140,6 +141,7 @@ def build(c: Context, project: str | None = None, sdist: bool = False, dev: bool
     c.run(f"{cmd} --package {target.name}", echo=True)
 
 
+@requires(NETWORK)
 @task(
     help={
         "project": "Project to publish (default: the repo's own root project)",
@@ -174,6 +176,7 @@ def publish(c: Context, project: str | None = None, index: str | None = None, dr
     c.run(cmd, echo=True)
 
 
+@requires(NETWORK)
 @task(
     help={
         "project": "Project to query (default: the repo's own root project)",

@@ -8,6 +8,8 @@ from pathlib import Path
 
 from invoke import Context, task
 
+from .requirements import NETWORK, requires
+
 _VENV_DIR = Path(".venv")
 
 
@@ -24,6 +26,7 @@ def _register_github_path(bin_dir: Path) -> None:
         f.write(f"{bin_dir.resolve()}\n")
 
 
+@requires(NETWORK)
 @task(
     help={
         "project": "Workspace member to sync (default: the whole workspace root)",
@@ -73,6 +76,7 @@ def delete(c: Context):
     print("[venv.delete] .venv removed")
 
 
+@requires(NETWORK)
 @task(help={"wheel": "Path (or glob) to the already-built wheel to install"})
 def install_wheel(c: Context, wheel: str = "dist/*.whl"):
     """Install an already-built wheel into .venv with --no-deps. Pairs with a deps-only sync

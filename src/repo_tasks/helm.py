@@ -10,6 +10,7 @@ from pathlib import Path
 from invoke import Collection, Context, task
 
 from .projects import discover_helm_charts
+from .requirements import NETWORK, requires
 from .version import Version, current_version, set_dev
 
 _CHART_DIST_DIR = Path("dist/helm")
@@ -59,6 +60,7 @@ def package(c: Context, project: str | None = None, dev: bool = False):
     c.run(f"helm package {chart.path} --destination {_CHART_DIST_DIR}", echo=True)
 
 
+@requires(NETWORK)
 @task(
     help={
         "project": "Chart to push (default: the sole/first discovered chart)",

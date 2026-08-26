@@ -7,6 +7,7 @@ from invoke import Context, Exit, task
 
 # Underscored to stay out of gitflow's CLI namespace, not out of sibling modules.
 from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
+from .requirements import NETWORK, requires
 
 # The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
 # records the member's `source = { editable = "<old path>" }` and uv reads that stale entry before
@@ -17,6 +18,7 @@ from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
 _MOVED_MEMBER_RE = re.compile(r"Failed to generate package metadata for `(?P<name>[^=` ]+)[^`]*@ editable\+")
 
 
+@requires(NETWORK)
 @task(
     help={
         "upgrade": "Fully re-resolve every dependency",
@@ -49,6 +51,7 @@ def check(c: Context):
     c.run("uv lock --check", echo=True)
 
 
+@requires(NETWORK)
 @task
 def audit(c: Context):
     """Check the locked dependency set for known advisories (uv audit --locked).

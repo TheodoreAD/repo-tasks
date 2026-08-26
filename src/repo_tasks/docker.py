@@ -6,6 +6,7 @@ consumer repo even though image names/registries legitimately differ per repo.""
 from invoke import Collection, Context, task
 
 from .projects import discover_docker_images
+from .requirements import DOCKER, requires
 from .version import Version, current_version, set_dev
 
 _NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
@@ -24,6 +25,7 @@ def _resolve_image(c: Context, project: str | None):
     return images[0] if images else None
 
 
+@requires(DOCKER)
 @task(
     help={
         "project": "Image to build (default: the sole/first discovered image)",
@@ -55,6 +57,7 @@ def build(
     c.run(cmd, echo=True)
 
 
+@requires(DOCKER)
 @task(
     help={
         "project": "Image to push (default: the sole/first discovered image)",
@@ -72,6 +75,7 @@ def push(c: Context, project: str | None = None, tag: str | None = None):
     c.run(f"docker push {image.image}:{resolved_tag}", echo=True)
 
 
+@requires(DOCKER)
 @task(help={"project": "Image to release (default: the sole/first discovered image)"})
 def release(c: Context, project: str | None = None):
     """Build and push an image tagged with its group's current version — plus `latest`, for a

@@ -20,6 +20,7 @@ tripped — prints exactly what to run next, so nobody has to read this file to 
 
 from invoke import Context, task
 
+from .requirements import GH, NETWORK, requires
 from .version import Version, current_version, next_version
 
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
@@ -91,6 +92,7 @@ def feature_start(c: Context, name: str):
     _next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
 
 
+@requires(GH, NETWORK)
 @task
 def feature_finish(c: Context, name: str, local: bool = False):
     """Merge feature/<name> back into develop. PR mode (default): opens a PR instead of merging
@@ -169,6 +171,7 @@ def _release_branch(c: Context):
     return branch
 
 
+@requires(NETWORK)
 @task(help={"group": "Version group to bump (default: the repo's own root project)"})
 def release_candidate(c: Context, group: str | None = None):
     """Cut the next release candidate on the current release/hotfix branch: bump `rcN` to
@@ -248,6 +251,7 @@ _FINISH_HELP = {
 }
 
 
+@requires(GH, NETWORK)
 @task(help=_FINISH_HELP)
 def release_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
     """Drop the release candidate (`X.Y.0rcN` → `X.Y.0`, one more commit on the branch), then —
@@ -260,6 +264,7 @@ def release_finish(c: Context, push: bool = False, local: bool = False, group: s
     _pr_finish(c, "release", group)
 
 
+@requires(GH, NETWORK)
 @task(help=_FINISH_HELP)
 def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
     """Drop the release candidate if the hotfix ran one (`--rc`), then — PR mode (default) — open
@@ -304,6 +309,7 @@ def _finalize(c: Context, kind: str):
     )
 
 
+@requires(GH, NETWORK)
 @task
 def release_finalize(c: Context):
     """Run once the PR from release_finish has been merged on GitHub: fetches and tags main, then
@@ -312,6 +318,7 @@ def release_finalize(c: Context):
     _finalize(c, "release")
 
 
+@requires(GH, NETWORK)
 @task
 def hotfix_finalize(c: Context):
     """Run once the PR from hotfix_finish has been merged on GitHub: fetches and tags main, then
@@ -373,6 +380,7 @@ def _support_hotfix_branch_and_tag(c: Context, support: str):
     return branch, f"v{branch.removeprefix(prefix)}"
 
 
+@requires(GH, NETWORK)
 @task
 def support_hotfix_finish(c: Context, support: str, push: bool = False, local: bool = False):
     """PR mode (default): opens a PR merging the patch branch into support/<support> and stops —
@@ -399,6 +407,7 @@ def support_hotfix_finish(c: Context, support: str, push: bool = False, local: b
     )
 
 
+@requires(GH, NETWORK)
 @task
 def support_hotfix_finalize(c: Context, support: str):
     """Run once the PR from support_hotfix_finish has been merged on GitHub: fetches
