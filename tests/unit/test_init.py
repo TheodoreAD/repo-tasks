@@ -63,6 +63,12 @@ def test_ns_nests_venv_under_its_own_name():
     assert {"sync", "create", "delete", "install-wheel"} <= set(venv_collection.task_names)
 
 
+def test_ns_nests_ci_under_its_own_name():
+    ci_collection = ns.collections["ci"]
+    assert ci_collection is not None
+    assert "status" in set(ci_collection.task_names)
+
+
 def test_ns_nests_deps_under_its_own_name():
     deps_collection = ns.collections["deps"]
     assert deps_collection is not None

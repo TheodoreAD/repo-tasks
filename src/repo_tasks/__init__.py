@@ -8,6 +8,7 @@ from invoke import Collection
 
 from . import (
     agents,
+    ci,
     configs,
     configure,
     dev_env,
@@ -41,6 +42,7 @@ ns.add_collection(Collection.from_module(docs), name="docs")
 ns.add_collection(Collection.from_module(venv_module), name="venv")
 ns.add_collection(Collection.from_module(deps_module), name="deps")
 ns.add_collection(Collection.from_module(direnv), name="direnv")
+ns.add_collection(Collection.from_module(ci), name="ci")
 ns.add_collection(Collection.from_module(agents), name="agents")
 ns.add_collection(Collection.from_module(dist), name="dist")
 ns.add_collection(Collection.from_module(docker), name="docker")
