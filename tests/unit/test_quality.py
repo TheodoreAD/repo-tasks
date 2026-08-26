@@ -117,6 +117,28 @@ def test_check_gates_on_workflow_check():
     assert "workflow_check" in [t.name for t in quality.check.pre]
 
 
+def test_verify_types_reports_each_package_under_src(c, tmp_cwd):
+    package = tmp_cwd / "src" / "mypkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    quality.verify_types.body(c)
+    # warn=True: --verifytypes exits non-zero at anything short of 100% completeness, and this is a
+    # report rather than a gate, so its exit code is deliberately not propagated.
+    c.run.assert_called_once_with("basedpyright --verifytypes mypkg", echo=True, warn=True)
+
+
+def test_verify_types_noops_without_a_src_layout(c, tmp_cwd, capsys):
+    quality.verify_types.body(c)
+    assert "nothing to do" in capsys.readouterr().out
+    c.run.assert_not_called()
+
+
+def test_verify_types_is_not_a_gate_step():
+    # A report, not a check: gating on a completeness score means permanent red or a committed
+    # baseline, and contributing/type-checking.md rejected baselines for this repo.
+    assert quality.verify_types not in quality.check.pre
+
+
 def test_check_gates_on_link_check():
     # Retiring a plan deletes a file other documents link to; the procedure's "grep for inbound
     # references" step was honour-system until this ran in the gate.

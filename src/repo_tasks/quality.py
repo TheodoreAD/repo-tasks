@@ -6,6 +6,8 @@ Running tests is not this module's job — that lives in testing.py, under its o
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
 with no prerequisites beyond the dev dependency group."""
 
+from pathlib import Path
+
 from invoke import Collection, Context, task
 
 from .configs import require_tool
@@ -62,6 +64,27 @@ def type_check(c: Context):
     """Run basedpyright's type checker."""
     require_tool("basedpyright")
     c.run("basedpyright", echo=True)
+
+
+@task
+def verify_types(c: Context):
+    """Report basedpyright's type-completeness for each package under src/ — how much of the
+    published API a consumer sees with a known type.
+
+    A diagnostic, not a gate step, and deliberately does not propagate its exit code:
+    `--verifytypes` exits non-zero at anything short of 100%, which every real package is, so
+    gating on it would mean either permanent red or a committed baseline number — and a baseline is
+    what `contributing/type-checking.md` already rejected for this repo. Run it when working on the
+    typed surface; `tests/unit/test_types.py` is what actually pins the signatures that matter.
+
+    No-ops cleanly where there is no src/ layout to inspect."""
+    src = Path("src")
+    if not src.is_dir():
+        print("[quality.verify-types] no src directory — nothing to do")
+        return
+    require_tool("basedpyright")
+    for package in sorted(p for p in src.iterdir() if p.is_dir() and (p / "__init__.py").exists()):
+        c.run(f"basedpyright --verifytypes {package.name}", echo=True, warn=True)
 
 
 @task
@@ -157,6 +180,7 @@ ns = Collection(
     format_check,
     format_apply,
     type_check,
+    verify_types,
     shell_check,
     shell_format_check,
     shell_format_apply,
