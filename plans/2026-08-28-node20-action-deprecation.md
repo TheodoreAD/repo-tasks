@@ -95,12 +95,59 @@ file mechanism make them unnecessary? Worth checking rather than carrying forwar
 suppression is exactly the kind of thing that hides a real finding later. The gate will answer it
 directly: drop them and see whether `zizmor --offline` still passes.]
 
-[NEEDS CLARIFICATION: is there a check worth adding so the next deprecation is not found by accident
-eleven months late? A green run hid this one completely. Options: have `ci.status` surface
-annotations rather than only conclusions (it already parses `gh run list --json`, so annotations are
-a second call away); or let `actionlint`/`zizmor` catch outdated actions, which neither does today —
-they check syntax and security, not currency. Dependabot is the conventional answer and would open
-PRs per repo, which cuts against the family's direct-to-main habit but is worth pricing.]
+### Should a task check this, and fix it?
+
+Raised by the user 2026-08-28, immediately after the plan landed: "shouldn't we have a task to check
+whether any of these versions are behind and fix it in our files?" Researched rather than answered
+from instinct, because the framing hides two different questions with different best answers.
+
+**The hard constraint first:** currency cannot be a gate step. Answering "is this behind?" requires
+asking a remote registry, and `quality.check` is offline and deterministic in every consumer by
+design. Anything here is a standalone `@requires(NETWORK)` task, the same shape as the deferred §11
+`deps.audit` — which is worth noting as a sibling: both are network-only currency checks that the
+gate cannot host, and if either gets built the other's design should follow it.
+
+**Question A — "is anything deprecated or warning?"** GitHub already computes this and hands it over
+free, as run annotations. `ci.status` (`src/repo_tasks/ci.py`) already calls `gh run list --json`
+and already stops on a failed conclusion — but it reads `conclusion` and nothing else, which is
+precisely the blind spot that hid this issue: the 2026-08-28 run of `d941fc7` reported `✓ main CI`
+while carrying four Node 20 annotations, one per job. Annotations are one further call
+(`gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations`).
+
+[DECISION: prefer surfacing annotations over building a version-currency checker, if only one gets
+built. It needs no version oracle, no new dependency and no extra network beyond a call the task is
+already making, and it catches every future deprecation class — runner images, action archival, the
+next Node bump — rather than only the one that prompted it. Letting GitHub be the oracle is strictly
+more general than reimplementing its judgement.]
+
+**Question B — "is anything behind latest, and fix the files?"** This is the part with real prior
+art, and per `~/AGENTS.md` it should not be hand-rolled. Surveyed 2026-08-28:
+
+| tool                                                                        | fit                                                                                                                                         |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Dependabot](https://docs.github.com/en/code-security/) (`version-updates`) | native, free, no install; opens a PR per bump — the friction against this family's direct-to-main habit                                     |
+| [`pinact`](https://github.com/suzuki-shunsuke/pinact)                       | pins _and_ updates, and verifies the `# v4`-style version comment — the only surveyed tool that handles `publish.yml`'s hash pins correctly |
+| [`ratchet`](https://github.com/sethvargo/ratchet)                           | same space; Renovate understands its `# ratchet:` comments                                                                                  |
+| [`actions-up`](https://github.com/azat-io/actions-up)                       | interactive, warns on major bumps; interactivity is wrong for a task                                                                        |
+| [Renovate](https://docs.renovatebot.com/modules/manager/github-actions/)    | most configurable, heaviest to adopt                                                                                                        |
+
+[PITFALL: `pinact` is the best technical fit and the worst install fit. None of `pinact`, `ratchet`,
+`actions-up` or a `*-py` wrapper of any of them exists on PyPI (checked directly, 2026-08-28) — only
+`gha-update`, at 2 releases and a 5 KB pure-python wheel, which is too little adoption to lean on.
+So adopting `pinact` means a Go-binary install method in `setup.toml` rather than the `uv-tool` one
+mechanism everything else here uses. That cost is the real decision, not the tool's merits.]
+
+[NEEDS CLARIFICATION: A or B, or both? A is cheap, general, and fits an existing task; B actually
+edits the files, which is what was asked for. The honest middle is that A would have caught this
+issue eleven months earlier at near-zero cost, while B is what fixes it — but B's value is mostly
+one-off, since this backlog only accumulated because nothing was watching. Doing A first and seeing
+whether B is still wanted is the cheaper order.]
+
+[NEEDS CLARIFICATION: if B, is it Dependabot or a task? Dependabot needs no install at all and is
+the conventional answer; the objection is PR-per-bump against direct-to-main. But that objection may
+be weaker than it looks — these repos already push through a branch-protection bypass, so a
+Dependabot PR is not competing with a review process that exists. Worth pricing honestly before
+writing any code.]
 
 ## Recommended direction
 
