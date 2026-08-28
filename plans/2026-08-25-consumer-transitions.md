@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-26
+updated: 2026-08-28
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -142,3 +142,28 @@ of the per-consumer loop, and `scaffoldapy`'s sweep is not finished at `quality.
 [UNVERIFIED: the preflight has still never fired from a consumer's own CI, only locally — no
 consumer has yet had a dev group behind the manifest since it landed. The first family-wide manifest
 change after this is the real test.]
+
+## The first unswept manifest change (2026-08-28)
+
+`ae54087` added `pytest-socket` and `pytest-cov` to `repo-tasks-quality`, and the consumer sweep for
+it was **deliberately declined** — the session pushed and stopped, at the user's choice. So as of
+`863ede6` both consumers sit behind the manifest for the first time since the preflight landed,
+which is exactly the condition the `[UNVERIFIED:]` above is waiting on. Measured here rather than
+left implicit:
+
+| repo                     | `pytest-cov` | `pytest-socket` | shipped `pytest.ini` ignore line |
+| ------------------------ | ------------ | --------------- | -------------------------------- |
+| `power-user-linux-setup` | present      | **missing**     | **absent**                       |
+| `scaffoldapy`            | present      | **missing**     | **absent**                       |
+
+The prediction this makes is falsifiable, and worth checking rather than assuming, because it is the
+_opposite_ outcome to the incident that created this plan: neither plugin is a binary any gate step
+shells out to — `_GATE_TOOL_DISTRIBUTIONS` does not list them, and `pytest-socket` does nothing
+until a conftest calls `disable_socket()`. So `configs.diff` should exit 1 naming the missing entry
+while **both consumers' CI stays green**, where `actionlint` produced exit 127 on every push. If a
+consumer does go red on this, the inert-by-default reasoning in
+[`2026-08-27-pytest-plugin-survey.md`](2026-08-27-pytest-plugin-survey.md) is wrong and that plan's
+selection criterion needs revisiting, not just this sweep.
+
+[DEFERRED: run the sweep and record which way it went. Until then the drift is known and benign, not
+forgotten — that distinction is the whole reason this section exists rather than a memory entry.]
