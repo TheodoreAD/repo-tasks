@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-26
+updated: 2026-08-28
 ---
 
 # The integration tier is red on `main`
@@ -51,7 +51,14 @@ broken indefinitely is worth a periodic run, which overlaps with the scheduled-r
 in [`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1.]
 
 [UNVERIFIED: whether the tier passes once the version strings are valid. Only the failure's single
-common cause was established; nothing confirms there is not a second failure behind it.]
+common cause was established; nothing confirms there is not a second failure behind it. Re-measured
+2026-08-28 on `863ede6` against a real daemon (Docker 29.7.2): `1 failed, 24 passed, 7 errors` in
+22s, and all eight red are still that one `ValueError`. That is the same eight as the `b11355e`
+baseline, so nothing new has broken and no _second_ cause is visible — but it stays UNVERIFIED,
+because a cause hidden behind a fixture that errors at setup cannot show itself until the fixture
+works. The passing count rose 19 → 24 only because the 2026-08-26/27 gate work added tests
+(`test_written_files_integration.py`'s five, `docker.check`'s three), not because anything was
+repaired.]
 
 ## Recommended direction
 
