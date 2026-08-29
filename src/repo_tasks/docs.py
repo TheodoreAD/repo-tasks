@@ -21,6 +21,12 @@ _LINK_RE = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
 
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 
+# An inline code span: a run of backticks, content holding no run that long, the same run again.
+# `def evolve[T: BaseModel](...)` is a valid inline link to `...` as far as `_LINK_RE` is concerned,
+# and PEP 695 generics make that shape ordinary prose rather than an exotic one. Same reasoning as
+# the fence skip: a code sample that happens to read as markdown is documentation, not a link.
+_CODE_SPAN_RE = re.compile(r"(`+)(?:(?!\1).)*\1")
+
 # Anything with a scheme is somebody else's uptime, not this repo's correctness.
 _EXTERNAL = ("http://", "https://", "mailto:", "tel:", "ftp://")
 
@@ -28,8 +34,11 @@ _EXTERNAL = ("http://", "https://", "mailto:", "tel:", "ftp://")
 def _relative_links(text: str) -> list[tuple[int, str]]:
     """Every relative link target in a markdown document, as (line number, target).
 
-    Fenced blocks are skipped: a code sample showing markdown syntax is documentation, not a link
-    this repo has to keep working."""
+    Fenced blocks and inline code spans are both skipped: a code sample showing markdown syntax is
+    documentation, not a link this repo has to keep working. [PITFALL: the span half was missing at
+    first, and `def f[T](x)` in prose about PEP 695 generics is a valid `[text](target)` — the gate
+    went red on correct input, and the only way to green was rewording prose around the bug.
+    Measured across every markdown file in the repo family: stripping spans loses no real link.]"""
     found: list[tuple[int, str]] = []
     in_fence = False
     for number, line in enumerate(text.splitlines(), start=1):
@@ -38,7 +47,9 @@ def _relative_links(text: str) -> list[tuple[int, str]]:
             continue
         if in_fence:
             continue
-        for match in _LINK_RE.finditer(line):
+        # Blanked rather than removed, so a reported line still lines up with the source.
+        prose = _CODE_SPAN_RE.sub(lambda span: " " * len(span.group(0)), line)
+        for match in _LINK_RE.finditer(prose):
             target = match.group(1)
             if not target.startswith(_EXTERNAL) and not target.startswith("#"):
                 found.append((number, target))

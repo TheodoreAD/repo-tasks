@@ -52,6 +52,22 @@ def test_relative_links_skips_fenced_blocks():
     assert docs._relative_links(text) == [(1, "a.md"), (5, "b.md")]
 
 
+def test_relative_links_skips_inline_code_spans():
+    # `def f[T](x)` is a valid `[text](target)` pointing at `x`. PEP 695 generics make that shape
+    # ordinary prose, so the gate used to go red on correct input.
+    text = "real [one](a.md) and `def f[T](x)` in prose\n"
+    assert docs._relative_links(text) == [(1, "a.md")]
+
+
+def test_relative_links_skips_a_multi_backtick_span():
+    # A span opened with two backticks holds single ones, and only `` closes it.
+    assert docs._relative_links("``a `b` [T](gone.md)`` and [real](a.md)\n") == [(1, "a.md")]
+
+
+def test_relative_links_keeps_a_link_whose_text_holds_code():
+    assert docs._relative_links("[the `evolve` guide](a.md)\n") == [(1, "a.md")]
+
+
 def test_relative_links_ignores_a_link_title():
     assert docs._relative_links('[x](a.md "the title")\n') == [(1, "a.md")]
 
