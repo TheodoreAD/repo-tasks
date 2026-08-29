@@ -196,14 +196,62 @@ a green run looked identical before, which is the whole point of this plan. The 
 `gh api repos/<owner>/repo-tasks/check-runs/<job-id>/annotations` on the first run after these
 commits are pushed, and it cannot be done until they are.]
 
-### Not in scope, but found while here
+### Then the rest of `repo-tasks`, at the user's direction
 
-`astral-sh/setup-uv` is pinned at `v9.0.0` (plain) and `c771a70e…` (hash) across this repo's three
-workflows, while current upstream is **`v10.0.1`** (2026-08-14, checked 2026-08-29). That is not a
-Node 20 issue — setup-uv was never flagged, and the table above correctly lists it as clean — but it
-is the same class of drift, found the same way, and it is evidence for question B above: nothing in
-this family notices a major going by. Left alone rather than folded in, because a currency bump with
-no deprecation forcing it is a different decision with different risk.
+`5ea8387`/`ee6a6d8` brought the other two actions current: `astral-sh/setup-uv` `v9.0.0` ->
+`v10.0.1` (three plain sites plus two hash pins, SHA `20cfd1bf…`), `docker/login-action` `v3` ->
+`v4`. Neither was ever flagged by GitHub — this is plain currency drift, found only by asking the
+registry. Every action in this repo is now current.
+
+Both majors' breaking changes were read and checked against this repo rather than assumed, and one
+of the two mattered enough to be worth checking: setup-uv v10 disables the cache under
+`enable-cache: auto` for `pull_request_target`, `workflow_run` and `release`, as cache-poisoning
+defence. No workflow here uses any of those triggers, so it reaches nothing. login-action v4 is the
+same Node 24 move as checkout v5, with the same self-hosted-only runner minimum.
+
+### What this settles about question A vs question B
+
+The two halves of today's work are the evidence the open question above was missing, because they
+were found by different means and neither means would have found the other:
+
+| action                | behind by | flagged by a GitHub annotation?          |
+| --------------------- | --------- | ---------------------------------------- |
+| `actions/checkout`    | 3 majors  | **yes** — this plan exists because of it |
+| `astral-sh/setup-uv`  | 1 major   | no                                       |
+| `docker/login-action` | 1 major   | no                                       |
+
+So **A alone is insufficient**, which the question did not know. Annotations report what GitHub has
+decided to deprecate; they say nothing about an action simply being behind. Two thirds of what was
+actually out of date here was invisible to A and visible only to B.
+
+The second finding cuts the other way, against B's usual shape. Doing all five bumps by hand took
+minutes, and the whole cost was in one place: reading each major's release notes and deciding
+whether its breaking change reaches these repos. That judgement is the expensive part, and it is
+exactly the part an auto-bumping tool (Dependabot, `pinact`) does not do — it performs the cheap
+half and hands over a diff whose risk is still unread. A _detector_ that reports drift and leaves
+the bump to a human or agent inverts that: it automates the part that gets forgotten and leaves the
+part that needs judgement.
+
+[UNVERIFIED: nothing here has measured how often a major in this family carries a change that
+actually reaches these repos. Today's sample is three actions, of which one (setup-uv v10) had a
+breaking change worth checking and none had one that bit. A sample of three is not a rate.]
+
+### A is cheap, and now proven rather than assumed
+
+Walked end to end against a real green run, 2026-08-29:
+
+```
+gh run list --branch main --limit 3 --json databaseId,conclusion,workflowName,createdAt
+gh api repos/<owner>/repo-tasks/actions/runs/33171547916/jobs --jq '.jobs[] | .id, .name'
+gh api repos/<owner>/repo-tasks/check-runs/98849673566/annotations \
+  --jq '.[] | .annotation_level + " | " + .message'
+warning | Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to
+run on Node.js 24: actions/checkout@v4. ...
+```
+
+`ci.status` already carries `@requires(GH, NETWORK)`, already calls `gh run list --json`, and
+already stops on a failed conclusion. The delta is one field (`databaseId`) plus one call per job —
+five jobs on this repo's CI. No new dependency, no new install method, no version oracle.
 
 ## What is left, and where it goes
 
