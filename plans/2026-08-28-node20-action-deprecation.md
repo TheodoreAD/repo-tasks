@@ -75,13 +75,13 @@ Read from the upstream release notes rather than assumed, because two of the thr
 
 ## Open questions
 
-[NEEDS CLARIFICATION: does this become a shipped concern or stay per-repo? `repo-tasks` already owns
-the family's tool list and its shipped configs, but it does **not** own anyone's workflow files —
-`configs.pull` distributes `ruff.toml`/`pytest.ini`/`zizmor.yml`, never `.github/workflows/`. So
-there is no existing mechanism to push an action bump to consumers, and the honest options are a
-hand-edit per repo (four repos, one template, ~16 sites) or accepting that workflows are simply not
-part of the shared surface. The latter is probably right and worth stating explicitly, since the
-question will recur with the next deprecation.]
+~~Does this become a shipped concern or stay per-repo?~~ Resolved 2026-08-29, and the answer turned
+out to be both, split along a line the question did not see: **workflow files stay per-repo, the
+means of noticing ships**. `configs.pull` still distributes no `.github/workflows/`, and should not
+— but `ci.status` and `ci.check-actions` are tasks, so every consumer gets the detection the moment
+it updates `repo-tasks`, and each repo's bump stays its own hand-edit. That is the durable answer to
+"the question will recur with the next deprecation": next time it recurs into a task that is already
+watching.
 
 ~~`v7` or `v5`?~~ **`v7`**, settled 2026-08-29 when the first repo was actually done. Each of the
 three majors' changes was checked against this family rather than in the abstract, and none reaches
@@ -122,6 +122,11 @@ already making, and it catches every future deprecation class — runner images,
 next Node bump — rather than only the one that prompted it. Letting GitHub be the oracle is strictly
 more general than reimplementing its judgement.]
 
+**Superseded 2026-08-29: both were built, because the premise "if only one" turned out to be the
+wrong frame.** The measurement below showed annotations cover one third of what was actually stale
+here. The decision above is still right about which is more _general_ — it just is not a substitute
+for the other.]
+
 **Question B — "is anything behind latest, and fix the files?"** This is the part with real prior
 art, and per `~/AGENTS.md` it should not be hand-rolled. Surveyed 2026-08-28:
 
@@ -139,17 +144,20 @@ art, and per `~/AGENTS.md` it should not be hand-rolled. Surveyed 2026-08-28:
 So adopting `pinact` means a Go-binary install method in `setup.toml` rather than the `uv-tool` one
 mechanism everything else here uses. That cost is the real decision, not the tool's merits.]
 
-[NEEDS CLARIFICATION: A or B, or both? A is cheap, general, and fits an existing task; B actually
-edits the files, which is what was asked for. The honest middle is that A would have caught this
-issue eleven months earlier at near-zero cost, while B is what fixes it — but B's value is mostly
-one-off, since this backlog only accumulated because nothing was watching. Doing A first and seeing
-whether B is still wanted is the cheaper order.]
+~~A or B, or both?~~ **Both**, decided 2026-08-29 on the measurement rather than the instinct. The
+premise that "B's value is mostly one-off" was wrong: A cannot see plain currency drift at all, so
+without B the two thirds of this repo's staleness that GitHub never annotated stays invisible
+forever, not just once.
 
-[NEEDS CLARIFICATION: if B, is it Dependabot or a task? Dependabot needs no install at all and is
-the conventional answer; the objection is PR-per-bump against direct-to-main. But that objection may
-be weaker than it looks — these repos already push through a branch-protection bypass, so a
-Dependabot PR is not competing with a review process that exists. Worth pricing honestly before
-writing any code.]
+~~If B, Dependabot or a task?~~ **A task, and detect-only** — but the real decision was not the one
+this question asked. Pricing Dependabot honestly against direct-to-main was the wrong axis; what
+settled it was that doing all five bumps by hand cost minutes, and every bit of that cost was
+reading each major's release notes to decide whether its breaking change reaches these repos.
+Dependabot and `pinact` both automate the edit and leave that judgement undone, handing over a green
+PR whose risk is unread — which on repos that push through a branch-protection bypass is worse than
+no tool, because nothing downstream forces the read. A detector inverts it: it automates the part
+that gets forgotten and leaves the part that needs judgement to whoever is reading. `pinact`'s
+Go-binary install method, the objection recorded in the pitfall above, never had to be priced.
 
 ## Recommended direction
 
@@ -271,3 +279,50 @@ tension, and the tension is real rather than a mistake to correct — the templa
 site that keeps producing new instances, so every generation between now and that fix inherits the
 deprecation. The mitigation is that no repo is expected to be generated in that window; if one is,
 it needs the bump by hand.]
+
+## Built: both halves (2026-08-29)
+
+`e51e062` — `ci.status` now prints the latest run's `warning` and `failure` annotations. One extra
+JSON field (`databaseId`), one call for the run's job ids, one per job for its annotations; messages
+deduped across a matrix and rewrapped onto one line. Never raises: an annotation names a deadline,
+not a break, and a token that cannot read check runs degrades to no annotations rather than to an
+error. Verified against this repo's real history — the Node 20 warning printed under three green
+runs, which is the failure mode this plan exists for.
+
+`9f3a03f` — `ci.check-actions`, network-only, report-only. Reads `uses:` out of the workflow files,
+asks GitHub for each action's latest release, compares **only at the precision the pin states**.
+That comparison is the whole trick and the reason a hand-rolled check is defensible: `@v7` against a
+latest of `v7.0.1` is current, because a bare major is a moving tag; `@v9.0.0` against `v10.0.1` is
+behind. A string or full-tuple comparison gets the common case wrong. A SHA pin reads its version
+from the `# v7.0.1` comment, and a SHA with no comment is its own finding — the same thing zizmor's
+`unpinned-uses` policy is asking for. `--path` so it can be pointed at a template's workflows.
+
+Both are `@requires(GH, NETWORK)`, neither is in `quality.check`, and neither exits non-zero on a
+finding. Report-only was a deliberate choice, not an omission: nobody's commit runs these, so a
+non-zero exit blocks nothing and would only train its reader to ignore the output.
+
+Current state of this repo, from the task itself:
+
+```
+[ci.check-actions] actions/checkout@v7  current (latest v7.0.1)  [ci.yml, docker-release.yml]
+[ci.check-actions] actions/checkout@v7.0.1  current (latest v7.0.1)  [publish.yml]
+[ci.check-actions] astral-sh/setup-uv@v10.0.1  current (latest v10.0.1)  [ci.yml, docker-release.yml, publish.yml]
+[ci.check-actions] docker/login-action@v4  current (latest v4.6.0)  [docker-release.yml]
+[ci.check-actions] 0 of 3 action(s) behind
+```
+
+[DEFERRED: neither task runs on a schedule, so both still need someone to type them. That is the
+same "an opt-in check nobody runs can sit stale indefinitely" trade-off deferred in
+[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1 for the integration tier,
+and it should be settled once for both rather than twice. Worth noting that `ci.status` is at least
+already part of a habit — it is the pre-push check — so the annotation half is closer to being
+actually seen than the currency half is.]
+
+[DEFERRED: `ci.check-actions` reads the pin's version but never checks that a SHA pin's comment is
+_truthful_ — a comment saying `# v7.0.1` beside a SHA that is something else would be reported as
+current. `pinact` does verify this. Not a gap worth a Go-binary install method on its own, but worth
+knowing the check has a floor.]
+
+[DEFERRED: the README's namespace overview never named `gitflow` either. `ad4b84d` added `ci`
+because this session added a task to it; `gitflow` is a pre-existing gap, mentioned in the
+release-flow prose further down but absent from the list that claims to enumerate every facility.]
