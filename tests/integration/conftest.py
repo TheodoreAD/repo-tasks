@@ -172,9 +172,11 @@ def clean_os_container(docker_registry):
     ctx = Context(config=Config(overrides={"run": {"in_stream": False}}))
     mp = pytest.MonkeyPatch()
     mp.setattr(docker_tasks, "discover_docker_images", lambda c: [image])
-    mp.setattr(docker_tasks, "current_version", lambda c, group=None: "test")
+    # A final version, not a dev build: `release` skips the `latest` tag for a pre-release, and
+    # `latest` is the tag the container below is started from.
+    mp.setattr(docker_tasks, "current_version", lambda c, group=None: "0.0.0")
     try:
-        # build -> tag :latest -> push :test -> push :latest
+        # build -> tag :latest -> push :0.0.0 -> push :latest
         docker_tasks.release.body(ctx)
     finally:
         mp.undo()

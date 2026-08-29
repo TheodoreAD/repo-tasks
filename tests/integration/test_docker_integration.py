@@ -56,7 +56,9 @@ def test_build_and_push_round_trip(c, monkeypatch, tmp_path, docker_registry):
         group="scratch",
     )
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [image])
-    monkeypatch.setattr(docker, "current_version", lambda c, group=None: "test")
+    # A dev build, so the round trip also proves the PEP 440 local segment (`+g...`) never reaches
+    # the registry: a docker tag forbids `+`, and `semver()` is what keeps it out.
+    monkeypatch.setattr(docker, "current_version", lambda c, group=None: "0.0.0.dev0+gdeadbee")
 
     docker.build.body(c)
     docker.push.body(c)
@@ -65,4 +67,4 @@ def test_build_and_push_round_trip(c, monkeypatch, tmp_path, docker_registry):
     with cast(http.client.HTTPResponse, urllib.request.urlopen(url)) as response:
         body = response.read()
     tags = cast(dict[str, object], json.loads(body))["tags"]
-    assert tags == ["test"]
+    assert tags == ["0.0.0-dev.0.gdeadbee"]
