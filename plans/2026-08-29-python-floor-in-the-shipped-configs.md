@@ -63,12 +63,53 @@ Rough; the pyright half is the part with a real trade-off.
    here still resolves 3.11, now from `requires-python` rather than from the pin.
 2. **Give basedpyright an explicit `pythonVersion`** — the bug fix `ingesta`'s plan already
    identified as landable on its own. The tension is that it is per-project while the shipped file
-   is byte-identical. Options not yet weighed against each other: pyright's own `extends` (a small
-   per-repo config extending the shipped base), a `configs.py` parameterization, or accepting that
-   this one file stops being byte-identical.
+   is byte-identical. Three routes, measured 2026-08-29 and weighed below; **no decision taken** —
+   deliberately deferred, since the tier question this depends on is `scaffoldapy`'s and may make
+   the choice cheaper once it lands.
 3. **Leave the tier question itself to `scaffoldapy`**, per the owning plan — a generation-time
    answer that fans out to `requires-python` and CI. Nothing here should grow its own notion of
    which tier a repo is in.
+
+## The three routes for step 2
+
+Measured 2026-08-29 on basedpyright 1.39.10, in the same scratch projects as the ruff probe:
+
+- `basedpyright --pythonversion 3.11 probe.py` reports
+  `error: Function type parameter syntax requires Python 3.12 or newer`. The same file with no flag
+  is clean — it uses the interpreter it finds, which is 3.14 here. So the CLI flag works and is the
+  cheapest lever available.
+- **`[tool.basedpyright]` in `pyproject.toml` is ignored whenever a `pyrightconfig.json` exists.**
+  `pythonVersion = "3.11"` in pyproject produced the 3.12 error with the shipped
+  `pyrightconfig.json` removed and produced nothing with it present — same pyproject both times.
+  This kills the tempting fourth route ("let each consumer declare it in its own pyproject next to
+  `requires-python`"): it cannot coexist with the file this package ships.
+
+| route                                   | shipped file stays byte-identical | editor agrees with CI |
+| --------------------------------------- | --------------------------------- | --------------------- |
+| A — `--pythonversion` from `quality.py` | yes                               | **no**                |
+| B — derive `pythonVersion` at pull time | **no**                            | yes                   |
+| C — library-tier venv _is_ the floor    | yes (no config change at all)     | yes                   |
+
+- **A. `quality.py` reads `requires-python` and passes `--pythonversion`.** One source of truth, no
+  per-repo file, nothing about `configs.py` changes. The cost is the row above: an editor's
+  basedpyright LSP reads the config file alone and never sees the flag, so the IDE stays permissive
+  while CI is strict. That is the failure mode this whole plan is about — a tool reporting success
+  against the wrong version — merely moved from CI to the editor.
+- **B. `configs.pull` writes `pythonVersion` into each consumer's `pyrightconfig.json`.** Editor and
+  CI agree because the answer is in the file. The cost is that this one file stops being a
+  byte-for-byte materialisation, so `configs.diff` has to apply the same derivation before comparing
+  or it reports drift forever — and "why does this repo's config differ" gains a second possible
+  answer, which is exactly the objection raised against a per-repo append in
+  `2026-08-29-pytest-ini-anyio-mode.md`. The two questions should be answered the same way.
+- **C. A library-tier repo's venv is 3.11.** basedpyright's found-interpreter default is then
+  already correct and no config changes at all — the cheapest fix that has no editor/CI split. The
+  cost is that dev runs the floor rather than the newest, and `venv.create` has to know which tier
+  the repo is in, which is `scaffoldapy`'s question rather than this one. It also only helps the
+  type checker: nothing else about the tier follows from it.
+
+[DEFERRED: pick between A, B and C. Not blocked on measurement — all three are understood — but on
+`scaffoldapy`'s tier answer, which C needs outright and which changes what B has to derive from.
+Revisit when this plan's `depends_on` clears.]
 
 ## Open questions
 
