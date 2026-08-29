@@ -167,3 +167,39 @@ selection criterion needs revisiting, not just this sweep.
 
 [DEFERRED: run the sweep and record which way it went. Until then the drift is known and benign, not
 forgotten — that distinction is the whole reason this section exists rather than a memory entry.]
+
+## The second unswept change (2026-08-29) — the sweep is now batched
+
+`8f384d7` added `ignore:unclosed file:ResourceWarning` to the shipped `pytest.ini`
+([`2026-08-26-integration-tier-version-fixture.md`](2026-08-26-integration-tier-version-fixture.md)
+has why). The sweep was deferred again, deliberately and at the user's direction: more work is
+landing here first, and one sweep covering everything accumulated is cheaper than one per change.
+
+So the pending consumer transition is now **two items, not one**, and they are different kinds:
+
+| change    | what drifts                                       | detected by                                 |
+| --------- | ------------------------------------------------- | ------------------------------------------- |
+| `ae54087` | `dependency-groups.dev` short of `pytest-socket`  | `configs.diff` (dev-group drift, `e169837`) |
+| `8f384d7` | `pytest.ini` byte-different from the shipped copy | `configs.diff` (config drift, original)     |
+
+That is worth stating because it makes the sweep a better test than either change alone: the two
+halves of `configs.diff` — the config-file comparison it always had, and the dev-group comparison
+added in `e169837` — should now both fire on the same run, against both consumers. Neither had ever
+fired together before.
+
+The prediction from the section above is unchanged and now covers both: `configs.diff` exits 1
+naming each, and **both consumers' CI stays green**, because neither change touches a binary a gate
+step shells out to. `pytest.ini`'s new line is inert in a repo whose tests never leak a file handle,
+and strictly loosening in one whose tests do.
+
+[PITFALL: neither item reaches a consumer until this repo's commits are pushed _and_ the global tool
+is moved — `configs.pull` reads the installed `repo_tasks` package by default, and
+`inv repo-tasks.update` is the single global step that moves it (not a per-consumer one; the
+2026-08-26 walk-through corrected the sweep doc on exactly this). A sweep run before that step
+measures the old package and reports "up to date" for changes that have not shipped, which looks
+identical to a clean sweep.]
+
+[DEFERRED: one batched sweep once the current run of work here is done, covering `ae54087`,
+`8f384d7`, and whatever else lands before it. Record which way each prediction went — the
+`[UNVERIFIED:]` above is still waiting on a preflight that has never fired from a consumer's own CI,
+and neither of these two changes will make it fire, since neither is a gate binary.]
