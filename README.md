@@ -15,8 +15,10 @@ model), `helm` (`lint`/`package`/`push` — charts resolved from `repo-tasks.tom
 entries, versioned by that same grouping model), `direnv` (`allow` — idempotent shell
 auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up
 the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the
-above), and `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `configs`
-(`pull`/`diff` — materializes
+above), `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `ci`
+(`status`/`check-actions` — GitHub Actions read through `gh`: the previous push's conclusion, the
+warning annotations a green run hides, and which pinned actions are behind their latest release),
+`configs` (`pull`/`diff` — materializes
 `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
 package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
 `update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
