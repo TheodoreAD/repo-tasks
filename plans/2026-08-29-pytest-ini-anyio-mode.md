@@ -30,11 +30,29 @@ file does not have?**
 
 ## Open questions
 
-[NEEDS CLARIFICATION: Whether `anyio_mode = auto` belongs in the canonical file for everyone. It is
-inert in a repo with no async tests and no AnyIO installed — the plugin is not loaded, so the ini
-key is simply unread, though `--strict-config` may object to an unknown key, which is exactly the
-thing to measure before assuming. If it is inert, this is one line in one file and the general
-question below can wait for a second, less lucky case.]
+**Answered 2026-08-29: it is not inert, and the answer is a hard failure.** With the shipped
+`pytest.ini` plus `anyio_mode = auto`, in an environment holding pytest 9.1.1 and no AnyIO:
+
+```
+ERROR: Unknown config option: anyio_mode
+...
+collected 1 item
+============================ no tests ran in 0.00s =============================
+```
+
+Exit code 4, no test executed — because `--strict-config` is already in the file's own `addopts`,
+which is what turns the unread key into a fatal error rather than a warning. The same project with
+AnyIO 4.14.2 added and nothing else changed collects and passes. So shipping the line family-wide
+breaks every consumer that does not depend on AnyIO, which is most of them.
+
+[PITFALL: this is only measurable in a genuinely isolated environment. The first run —
+`uv run --no-project --with pytest` from a shell with this repo's venv active — reported
+`plugins: anyio-4.14.2, socket-0.8.1, cov-7.1.0` and passed cleanly: the active `VIRTUAL_ENV` leaked
+its site-packages in, so the probe measured a machine that had AnyIO all along and produced exactly
+the "it is inert" answer being tested for.
+`env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project
+--python 3.11 --with pytest==9.1.1` is what
+actually isolates it. Any future probe of "is this dependency absent" has the same hole.]
 
 [NEEDS CLARIFICATION: Whether pulled configs should support a per-repo append at all — a
 `pytest.local.ini` merged in, a marked block the pull preserves, or a documented "these keys are
@@ -49,8 +67,23 @@ silently until someone runs the pull that reverts it.]
 
 ## Recommended direction
 
-Measure the inert claim first, because it decides how much of the rest matters. Add
-`anyio_mode = auto` to the canonical `pytest.ini`, run a consumer repo with no AnyIO installed and
-no async tests under `--strict-config`, and see whether pytest objects. If it does not, ship the
-line and leave the general mechanism unbuilt until a second case turns up — one that is genuinely
-per-repo rather than merely not-yet-shared.
+~~Measure the inert claim first~~ — done, and it went the unlucky way. The cheap escape is gone: the
+line cannot ship family-wide, so the general question is live now rather than waiting for a second
+case.
+
+What that leaves, in rough order of cost:
+
+1. **Ship AnyIO as a `repo-tasks-quality` dependency, then ship the line.** Restores the
+   byte-identical file at the price of putting an async framework into every consumer's dev
+   environment for a key most of them will never use. Cheapest mechanically, worst on principle.
+2. **Build a per-repo append** — the second open question above. Now the leading candidate rather
+   than a hypothetical, and its cost is the same one route B in
+   `2026-08-29-python-floor-in-the-shipped-configs.md` pays: a pull that preserves anything stops
+   being a byte-for-byte materialisation, and `configs.diff` needs the same rule or it reports drift
+   forever. **The two should be decided together** — one mechanism serving both, or neither.
+3. **Leave the consumer diverged and make the divergence loud** — the third open question above.
+   Does not solve anything, but stops the silent revert, and is the only option that costs nothing
+   until a decision is made.
+
+Whichever wins, the affected consumer keeps a local edit until then, so option 3's noticing is worth
+having regardless.
