@@ -23,7 +23,7 @@ jobs:
       # persist-credentials: false everywhere in this repo — nothing here pushes back, and the
       # default leaves the job's token in .git/config, where any later step (or an uploaded
       # artifact built from the checkout) can read it. zizmor's `artipacked` audit is what asks.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v9.0.0
@@ -44,7 +44,7 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v9.0.0
