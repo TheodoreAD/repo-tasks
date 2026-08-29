@@ -1,6 +1,6 @@
 ---
-status: done
-updated: 2026-08-27
+status: landed
+updated: 2026-08-29
 depends_on: [power-user-linux-setup, scaffoldapy]
 ---
 
