@@ -199,10 +199,27 @@ A lightweight tag, so the ref is already the commit — no tag object to derefer
 (2026-07-20) re-confirmed as current upstream the same day. Gate green: actionlint clean, zizmor
 `--offline` no findings.
 
-[UNVERIFIED: that the annotation is actually gone. Nothing here proves it — the gate is offline and
-a green run looked identical before, which is the whole point of this plan. The check is
-`gh api repos/<owner>/repo-tasks/check-runs/<job-id>/annotations` on the first run after these
-commits are pushed, and it cannot be done until they are.]
+~~That the annotation is actually gone.~~ **Verified 2026-08-29** on run `33251847669`, the first
+after these commits were pushed. All five jobs green — and green was never the question, so it was
+checked the only way that answers it:
+
+```
+inv ci.status --limit 3
+[ci.status] success  CI  2026-08-29T12:10:29Z  .../actions/runs/33251847669
+[ci.status] success  CI  2026-08-28T12:33:18Z  .../actions/runs/33171547916
+[ci.status] success  CI  2026-08-28T12:26:24Z  .../actions/runs/33171076772
+```
+
+Silence where the previous run printed the Node 20 warning. Confirmed against the API directly
+rather than trusting an absence —
+`gh api repos/<owner>/repo-tasks/check-runs/99098758033/
+annotations` returns `[]`, so the call
+works and the nothing is real.
+
+Worth recording how that reads: the two runs above it in the same listing are the _old_ workflows,
+and they are the ones carrying the warning. The same three lines, from the same command, say
+"deprecated" for yesterday and nothing for today. That is the signal this plan set out to make
+visible, doing its job on its own fix.
 
 ### Then the rest of `repo-tasks`, at the user's direction
 
