@@ -215,4 +215,9 @@ session that wrote it:
   markdown documents PEP 695 generics is currently red on correct input. This one is a _fix_ to a
   gate a consumer already runs, so unlike the others it changes an outcome rather than a
   configuration — a consumer's CI could go from red to green on the sweep, which is the one way a
-  prediction of "both CIs stay green" could be right for the wrong reason.]
+  prediction of "both CIs stay green" could be right for the wrong reason.
+- `949607c` — `target-version` deleted from the shipped `ruff.toml`. The sweep's own `configs.pull`
+  will rewrite each consumer's copy, after which that consumer's `requires-python` decides its ruff
+  floor. Check the field exists in each before pulling: a consumer without it moves from a 3.11
+  linter to an unversioned one and a 3.10 formatter, which is the one regression this change can
+  cause and the one `configs.diff` will not show.]
