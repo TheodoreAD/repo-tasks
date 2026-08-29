@@ -199,7 +199,20 @@ is moved — `configs.pull` reads the installed `repo_tasks` package by default,
 measures the old package and reports "up to date" for changes that have not shipped, which looks
 identical to a clean sweep.]
 
-[DEFERRED: one batched sweep once the current run of work here is done, covering `ae54087`,
-`8f384d7`, and whatever else lands before it. Record which way each prediction went — the
-`[UNVERIFIED:]` above is still waiting on a preflight that has never fired from a consumer's own CI,
-and neither of these two changes will make it fire, since neither is a gate binary.]
+[DEFERRED: one batched sweep once the current run of work here is done. Record which way each
+prediction went — the `[UNVERIFIED:]` above is still waiting on a preflight that has never fired
+from a consumer's own CI, and none of the changes below will make it fire, since none is a gate
+binary. What the sweep has to cover, kept here rather than in a session handoff so it survives the
+session that wrote it:
+
+- `ae54087` — `pytest-socket`/`pytest-cov` added to the `repo-tasks-quality` manifest.
+- `8f384d7` — `ignore:unclosed file:ResourceWarning` in the shipped `pytest.ini`.
+- The two `ci` tasks added since: status annotations, and `check-actions`.
+- `actions/checkout@v4` → `v7` across the consumers, plus `setup-python` and two `artipacked`
+  suppressions to retest in `power-user-linux-setup`.
+- `3a58b1d` — `docs.link-check` no longer reads inline code as a link. Consumer-visible for the same
+  reason as the rest: consumers run this task out of the installed package, and any consumer whose
+  markdown documents PEP 695 generics is currently red on correct input. This one is a _fix_ to a
+  gate a consumer already runs, so unlike the others it changes an outcome rather than a
+  configuration — a consumer's CI could go from red to green on the sweep, which is the one way a
+  prediction of "both CIs stay green" could be right for the wrong reason.]
