@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-28
+status: done
+updated: 2026-08-29
 ---
 
 # The integration tier is red on `main`
@@ -38,11 +38,17 @@ it. It is written down here instead so it is not rediscovered a third time.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: is the fix the fixtures or the validation? The fixtures want "some tag that is
-not a real release" and `"test"` reads well in an image tag; `version.py` wants every version string
-it handles to be parseable. A real version (`"0.0.0"`, or a dev build like `"0.0.0.dev0+gtest"`)
-makes the fixtures honest without weakening validation, and the dev-build form is already a shape
-`version.py` accepts.]
+~~Is the fix the fixtures or the validation?~~ Resolved 2026-08-29: the fixtures, as recommended
+below. Two details this question got wrong, both found by making the change:
+
+- `"0.0.0.dev0+gtest"` is **not** a shape `version.py` accepts — `_PEP440`'s commit group is
+  `[0-9a-f]+` and `test` is not hex. A dev build needs a real hex stand-in (`+gdeadbee`).
+- The two fixtures cannot take the same value. `clean_os_container` starts its container from
+  `:latest`, and `docker.release` deliberately skips the `latest` tag for a pre-release, so a dev
+  build there produces an image that is never tagged and a fixture that fails one step later. It
+  takes the final `"0.0.0"`; only `test_build_and_push_round_trip`, which calls `build`/`push`
+  directly, takes the dev build — and there it earns its keep, since asserting the pushed tag is
+  `0.0.0-dev.0.gdeadbee` is what proves the PEP 440 `+` local segment never reaches a registry.
 
 [NEEDS CLARIFICATION: when did this start failing, and why did nothing catch it? The tier is opt-in
 and runs on nobody's commit — `contributing/test-tiers.md` says so deliberately — so "no gate covers
@@ -50,18 +56,64 @@ it" is the designed behaviour, not an oversight. The question is whether an opt-
 broken indefinitely is worth a periodic run, which overlaps with the scheduled-run question deferred
 in [`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1.]
 
-[UNVERIFIED: whether the tier passes once the version strings are valid. Only the failure's single
-common cause was established; nothing confirms there is not a second failure behind it. Re-measured
-2026-08-28 on `863ede6` against a real daemon (Docker 29.7.2): `1 failed, 24 passed, 7 errors` in
-22s, and all eight red are still that one `ValueError`. That is the same eight as the `b11355e`
-baseline, so nothing new has broken and no _second_ cause is visible — but it stays UNVERIFIED,
-because a cause hidden behind a fixture that errors at setup cannot show itself until the fixture
-works. The passing count rose 19 → 24 only because the 2026-08-26/27 gate work added tests
-(`test_written_files_integration.py`'s five, `docker.check`'s three), not because anything was
-repaired.]
+~~Whether the tier passes once the version strings are valid.~~ Answered 2026-08-29, and the answer
+was no — there was a second cause behind the fixture, exactly as this tag suspected. See "What was
+behind it" below. Re-measured 2026-08-28 on `863ede6` against a real daemon (Docker 29.7.2):
+`1 failed, 24 passed, 7 errors` in 22s, all eight red the same `ValueError`, no second cause
+_visible_ — which is the point: the one that existed could not show itself while the fixture errored
+at setup.
 
 ## Recommended direction
 
 Change the fixtures, not the validation — a fixture asserting on an invalid version is the thing
 that is wrong, and `version.py`'s validation is load-bearing for the release flow. Then run the
 whole tier and see what is behind it.
+
+## What was behind it (2026-08-29)
+
+With both fixtures on valid versions, all 32 tests pass — and the run still exits 1, from
+`pytest_unconfigure`, after the last test has already gone green:
+
+```
+ExceptionGroup: multiple unraisable exception warnings (42 sub-exceptions)
+  ResourceWarning: unclosed file <_io.FileIO name=50 mode='rb' closefd=True>
+```
+
+`invoke`'s `Local` runner never closes the subprocess pipes it opens. Every real `c.run` leaks two
+or three file objects, and `filterwarnings = error` promotes each one the collector reaches into an
+error that pytest's unraisable-exception plugin re-raises. Attributed with no test code involved at
+all — `Context().run("true", hide=True)` then `gc.collect()` under `-W error::ResourceWarning`
+reproduces it on invoke 3.0.3 — and confirmed by module: every integration module that drives a real
+task is affected (6 to 30 warnings each), and `test_written_files_integration.py`, the one that
+never shells out, is clean at exit 0.
+
+This corrects a claim in `pytest.ini` itself. `filterwarnings = error` was "adopted while the
+baseline was genuinely zero across both tiers"; it was zero across the _unit_ tier, and the
+integration tier's cost was invisible because that tier was already red for the reason this plan is
+about. The tier being opt-in is what let one failure hide the other.
+
+The fix follows `pytest.ini`'s own written rule for where an ignore goes — that file, family-wide,
+since every consumer's integration tier drives real tasks through `c.run`:
+
+```
+ignore:unclosed file:ResourceWarning
+```
+
+Narrowest filter that works; `-p no:unraisableexception` would have disabled the detection wholesale
+instead. The accepted cost is that a genuine unclosed file in a consumer's own code is silenced with
+invoke's — bounded, in that the only tier this reaches is the opt-in one.
+
+### Verified
+
+`inv test.integration` on this change: **32 passed in 42.02s, exit 0**. First green integration tier
+recorded in this plan's history.
+
+### What this leaves open
+
+Only the second question above, unchanged: an opt-in tier that nobody's commit runs can sit broken
+indefinitely, and whether it earns a periodic run is the scheduled-run trade-off deferred in
+[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1. It belongs there, not here.
+
+[DEFERRED: drop the `ResourceWarning` ignore once invoke closes its pipes. Nothing tracks invoke
+releases for this, so it will be noticed whenever someone next reads `pytest.ini` — cheap to leave,
+and the comment there names the condition.]
