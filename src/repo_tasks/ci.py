@@ -8,11 +8,15 @@ Reads only. Nothing here dispatches, re-runs, or cancels a workflow — a task t
 release from a terminal is a different risk profile, and `gh` already does it for the rare case."""
 
 import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TypedDict, cast
 
 from invoke import Context, Exit, task
 
 from .configs import require_tool
+from .projects import tracked_files
 from .requirements import GH, NETWORK, requires
 
 # A run whose conclusion is one of these is a failure worth stopping for. `cancelled` is not: it is
@@ -150,3 +154,130 @@ def status(c: Context, branch: str = "main", limit: int = 10):
             f"[ci.status] the most recent {branch} run failed — {latest.get('url', '')}",
             code=1,
         )
+
+
+# `uses:` as a workflow actually writes it: on a step (`- uses:`), on a job (a reusable workflow),
+# quoted or not, with an optional trailing `# v1.2.3` comment beside a SHA pin.
+_USES = re.compile(r"""^\s*(?:-\s*)?uses:\s*['"]?(?P<ref>[^\s'"#]+)['"]?(?:\s*#\s*(?P<comment>\S+))?""")
+
+_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+# The leading numeric run of a tag, `v` or not: v7, v7.0.1, 0.3, 1.2.3-rc1 -> (1, 2, 3).
+_VERSION = re.compile(r"^v?(?P<parts>\d+(?:\.\d+)*)")
+
+
+@dataclass(frozen=True)
+class ActionUse:
+    """One `uses:` site, reduced to what a currency check needs."""
+
+    action: str
+    """`owner/repo`, with any `/.github/workflows/...` path of a reusable workflow dropped."""
+
+    version: str | None
+    """The human-readable version this site pins. The ref itself for `@v7`; the trailing `# v7.0.1`
+    comment for a SHA pin, since the SHA says nothing on its own; None when a SHA carries no
+    comment, which is its own finding."""
+
+    where: str
+
+
+def _parts(text: str) -> tuple[int, ...] | None:
+    match = _VERSION.match(text)
+    return tuple(int(p) for p in match["parts"].split(".")) if match else None
+
+
+def _is_behind(pinned: str, latest: str) -> bool | None:
+    """Whether `pinned` is behind `latest`, compared only at the precision the pin actually states.
+
+    `@v7` against a latest of `v7.0.1` is current, not behind: a bare major is a moving tag that
+    already resolves to the newest release under it. `@v9.0.0` against `v10.0.1` is behind. None
+    when either side is not a version at all — a branch name, a date tag, a calver scheme this
+    cannot rank — because guessing there produces confident nonsense."""
+    pin, current = _parts(pinned), _parts(latest)
+    if pin is None or current is None:
+        return None
+    return current[: len(pin)] > pin
+
+
+def _uses_in(text: str, where: str) -> list[ActionUse]:
+    uses: list[ActionUse] = []
+    for line in text.splitlines():
+        match = _USES.match(line)
+        if match is None:
+            continue
+        ref = match["ref"]
+        # A local action or a container image is nobody's release to track.
+        if ref.startswith((".", "docker://")) or "@" not in ref:
+            continue
+        path, _, version = ref.partition("@")
+        action = "/".join(path.split("/")[:2])
+        if _SHA.match(version):
+            comment = match["comment"]
+            version = comment if comment and _parts(comment) else ""
+        uses.append(ActionUse(action=action, version=version or None, where=where))
+    return uses
+
+
+def _latest_tag(c: Context, action: str) -> str | None:
+    """The action's latest release tag, or None when it publishes no releases at all — several
+    popular actions tag without releasing, and that is not an error to report as one."""
+    result = c.run(f"gh api repos/{action}/releases/latest --jq .tag_name", hide=True, warn=True)
+    return result.stdout.strip() if result.ok else None
+
+
+@requires(GH, NETWORK)
+@task(
+    help={
+        "path": "Directory of workflow files to read (default: .github/workflows)",
+    },
+    name="check-actions",
+)
+def check_actions(c: Context, path: str = ".github/workflows"):
+    """Report which GitHub Actions used in this repo's workflows are behind their latest release.
+
+    Needs network and an authenticated `gh` — never part of `quality.check`, which stays offline.
+
+    Companion to `status`, covering the half annotations cannot. GitHub annotates what it has
+    decided to deprecate; it says nothing about an action merely being behind. Measured on this repo
+    2026-08-29: of three actions that were out of date, one was annotated and two were invisible to
+    anything but this question.
+
+    Reports only. Nothing here edits a workflow, and that is the design rather than a missing
+    feature — the cost of a bump is not the edit, it is reading the major's release notes and
+    deciding whether its breaking change reaches this repo. A tool that rewrites the file does the
+    cheap half and leaves the risk unread. See plans/2026-08-28-node20-action-deprecation.md.
+
+    `--path` because the highest-value call site in this family is a template's workflows rather
+    than a repo's own — a generated repo inherits whatever the template pins."""
+    require_tool("gh")
+    files = tracked_files(c, f"{path}/*.yml", f"{path}/*.yaml")
+    if not files:
+        print(f"[ci.check-actions] no workflow files under {path} — nothing to do")
+        return
+
+    uses: list[ActionUse] = []
+    for name in files:
+        uses.extend(_uses_in(Path(name).read_text(), Path(name).name))
+    if not uses:
+        print("[ci.check-actions] no third-party actions in use — nothing to do")
+        return
+
+    latest = {action: _latest_tag(c, action) for action in sorted({u.action for u in uses})}
+    behind = 0
+    for action, version in sorted({(u.action, u.version) for u in uses}, key=lambda p: (p[0], p[1] or "")):
+        where = ", ".join(sorted({u.where for u in uses if u.action == action and u.version == version}))
+        newest = latest[action]
+        if version is None:
+            verdict = "no version comment beside its SHA pin"
+        elif newest is None:
+            verdict = "publishes no releases — check its tags by hand"
+        elif _is_behind(version, newest) is None:
+            verdict = f"cannot be ranked against latest {newest}"
+        elif _is_behind(version, newest):
+            verdict = f"BEHIND — latest {newest}"
+            behind += 1
+        else:
+            verdict = f"current (latest {newest})"
+        print(f"[ci.check-actions] {action}@{version or '?'}  {verdict}  [{where}]")
+
+    print(f"[ci.check-actions] {behind} of {len(latest)} action(s) behind")
