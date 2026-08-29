@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-28
+status: in-progress
+updated: 2026-08-29
 depends_on: [scaffoldapy, power-user-linux-setup, agent-skills]
 ---
 
@@ -83,11 +83,13 @@ hand-edit per repo (four repos, one template, ~16 sites) or accepting that workf
 part of the shared surface. The latter is probably right and worth stating explicitly, since the
 question will recur with the next deprecation.]
 
-[NEEDS CLARIFICATION: should the version bump go to `v7` or to `v5`? `v5` is the minimum that clears
-the Node 20 warning and carries the least behavioural change; `v7` is current and avoids doing this
-again in six months. The `v6` credential change and the `v7` fork-PR block both argue for reading
-before jumping, but neither looks risky for these repos specifically. Defaulting to `v7` unless the
-`artipacked` interaction below turns up something.]
+~~`v7` or `v5`?~~ **`v7`**, settled 2026-08-29 when the first repo was actually done. Each of the
+three majors' changes was checked against this family rather than in the abstract, and none reaches
+it: v5's minimum runner v2.327.1 is a self-hosted concern and every job in every one of these repos
+is `ubuntu-latest`; v6 changes where credentials are persisted, not the `persist-credentials` input,
+which stays `false` at every site; v7's fork-PR block applies to `pull_request_target` and
+`workflow_run`, which no workflow here uses. The `artipacked` interaction this was waiting on is
+`power-user-linux-setup`-only and does not gate the other three repos.
 
 [NEEDS CLARIFICATION: do the two `# zizmor: ignore[artipacked]` suppressions in
 `power-user-linux-setup`'s `devcontainer.yml` survive the upgrade, or does v6's separate-credential-
@@ -170,3 +172,54 @@ Rough — the questions above come first, particularly the `v5`-vs-`v7` one.
 [DEFERRED: the standing-check question in the last open question above is a separate piece of work
 with its own trade-offs (Dependabot's PR-per-bump model against this family's direct-to-main
 convention), and should not hold up clearing the deprecation itself.]
+
+## Landed: `repo-tasks` (2026-08-29)
+
+The first of the four repos, done here because the session was already in it and the work is
+self-contained. `e8837b1` bumped the three plain refs `v4` -> `v7`; `a9cb3d9` re-pinned
+`publish.yml`'s two hash sites. Split deliberately, per the direction below — a stale SHA is not a
+version mismatch, it is a checkout of something nobody reviewed.
+
+The SHA was re-resolved rather than copied from this file, and came back the same value:
+
+```
+gh api repos/actions/checkout/git/ref/tags/v7.0.1 --jq '.object.type + " " + .object.sha'
+commit 3d3c42e5aac5ba805825da76410c181273ba90b1
+```
+
+A lightweight tag, so the ref is already the commit — no tag object to dereference. `v7.0.1`
+(2026-07-20) re-confirmed as current upstream the same day. Gate green: actionlint clean, zizmor
+`--offline` no findings.
+
+[UNVERIFIED: that the annotation is actually gone. Nothing here proves it — the gate is offline and
+a green run looked identical before, which is the whole point of this plan. The check is
+`gh api repos/<owner>/repo-tasks/check-runs/<job-id>/annotations` on the first run after these
+commits are pushed, and it cannot be done until they are.]
+
+### Not in scope, but found while here
+
+`astral-sh/setup-uv` is pinned at `v9.0.0` (plain) and `c771a70e…` (hash) across this repo's three
+workflows, while current upstream is **`v10.0.1`** (2026-08-14, checked 2026-08-29). That is not a
+Node 20 issue — setup-uv was never flagged, and the table above correctly lists it as clean — but it
+is the same class of drift, found the same way, and it is evidence for question B above: nothing in
+this family notices a major going by. Left alone rather than folded in, because a currency bump with
+no deprecation forcing it is a different decision with different risk.
+
+## What is left, and where it goes
+
+Three repos and one template still carry it. All of them are outside this repo, so they join the
+batched cross-repo pass already deferred in
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) rather than being done
+piecemeal from here:
+
+| repo                     | remaining                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `scaffoldapy`            | own CI, **plus `template/.github/workflows/`** — the only site still emitting new instances |
+| `power-user-linux-setup` | `checkout`, `setup-python@v5`, and the two `artipacked` suppressions to drop and re-test    |
+| `agent-skills`           | `checkout`                                                                                  |
+
+[PITFALL: "do the template first" (direction 1 below) and "repo-tasks first" (what happened) are in
+tension, and the tension is real rather than a mistake to correct — the template is the only call
+site that keeps producing new instances, so every generation between now and that fix inherits the
+deprecation. The mitigation is that no repo is expected to be generated in that window; if one is,
+it needs the bump by hand.]
