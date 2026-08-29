@@ -1,4 +1,9 @@
-target-version = "py311"
+# No target-version: ruff reads the floor from the consumer's own `requires-python`, so one
+# byte-identical file serves a 3.11 library and a 3.14 application without either declaring its
+# tier twice. Measured 2026-08-29 on ruff 0.16.3 — PEP 695 `def f[T](x)` is a syntax error under
+# `>=3.11` and clean under `>=3.12`, same config. A project with no `requires-python` at all is the
+# one case that changes: the linter then targets no version (newest syntax passes) while the
+# formatter falls back to 3.10, so declare the field rather than re-adding a pin here.
 line-length = 120
 
 [lint]
