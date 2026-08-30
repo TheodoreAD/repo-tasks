@@ -77,7 +77,7 @@ Three constraints shaped the spellings, all verified 2026-08-25:
 - A Docker tag is `[\w][\w.-]{0,127}` — no `+`, so SemVer build metadata cannot round-trip into an
   image tag. The commit hash of a dev build therefore rides _inside_ the pre-release identifiers
   (`-dev.3.g1a2b3c`), and the chart uses the same spelling so `appVersion` equals the image tag.
-- PyPI rejects local versions (`+g1a2b3c`) outright, while a private index (devpi) accepts them —
+- PyPI rejects local versions (`+g1a2b3c`) outright, while a private index generally accepts them —
   exactly the split a dev build wants. `dist.publish` refuses a dev build without a named index.
 - Ordering agrees where it matters: `dev.N < rc.N < final` in both schemes.
 

@@ -53,7 +53,8 @@ Docker's slice is real but needs a daemon, so it lands in the integration tier i
 No `.hadolint.yaml` until a suppression is actually needed, matching the `.shellcheckrc` posture: an
 exclusion lands in the file with an inline reason, following kubernetes' precedent, rather than as a
 flag on the call. The accepted cost is ~12 MB in every consumer's venv, including consumers with no
-Dockerfile — the same dependency-weight concern as `plans/2026-08-24-devpi-dependency-weight.md`.
+Dockerfile — the same dependency-weight concern that eventually cost devpi its place in the
+integration tier ([`test-tiers.md`](test-tiers.md), "Package index").
 
 **`docs.link_check`, hand-rolled.** Extracts markdown links, resolves the relative ones against the
 containing file, asserts each target exists. Relative file links only — not external URLs, not
@@ -92,8 +93,11 @@ nobody has.]
 [DECISION: no suppression mechanism. A vulnerable transitive with no fixed version stops the task
 loudly, matching "stop loudly and say what to run next". An ignore list would be a second place
 where "which advisories do we accept" lives, with no expiry. Build one only when a real unfixable
-advisory blocks work — and note that one already has, without moving this decision: see
-`plans/2026-08-24-devpi-dependency-weight.md`.]
+advisory blocks work. One did, for four days: `devpi-server`'s `setuptools<=81` held two advisories
+open that nothing here could fix. The decision held, and the fix was to remove the dependency rather
+than to suppress its advisory — see [`test-tiers.md`](test-tiers.md), "Package index". That is the
+outcome the no-suppression rule is for: a suppression list would have hidden the pin instead of
+costing it.]
 
 **`docker.check`** (`docker build --check`) needs a daemon, so it is standalone and exercised from
 the integration tier, which already builds both images for real.
@@ -132,8 +136,8 @@ changes: `deps.audit` when dependencies move, `ci.check-actions` when a workflow
 residual staleness risk is accepted, not pending. Settled 2026-08-30.
 
 This rules out a _schedule_, not a _trigger_. The push-triggered `deps.audit` step is a separate,
-still-wanted design that a push already gives a reader — it is blocked on
-`plans/2026-08-24-devpi-dependency-weight.md`, not on this decision.]
+still-wanted design that a push already gives a reader — open in
+`plans/2026-08-30-deps-audit-in-ci.md`.]
 
 **Run `inv ci.status` before pushing.** It is the habit the decision above rests on, and the only
 thing standing between a failed push-triggered run and nobody noticing.

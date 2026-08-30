@@ -284,9 +284,9 @@ a simpler repo with a flat `tests/`, pytest's own testpaths warning falls back t
 working directory, so `test.unit` works there unchanged.
 
 `inv test.integration` exercises `dist.py`/`docker.py`/`helm.py`/`version.py` — including the whole
-`tests/fixtures/sample-service` round trip — against a real local `devpi-server` and a real local
+`tests/fixtures/sample-service` round trip — against a real local `pypi-server` and a real local
 `registry:3` container. It needs a reachable Docker daemon and is never part of `check`/`precommit`.
 No extra dependency group to install: everything that isn't a main dependency lives in `dev`. A
-missing `devpi-server` skips that half of the tier; a missing or unreachable Docker daemon fails it
+missing `pypi-server` skips that half of the tier; a missing or unreachable Docker daemon fails it
 outright rather than skipping. Every integration target no-ops cleanly in a repo with no
 `tests/integration` directory.

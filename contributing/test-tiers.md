@@ -131,8 +131,8 @@ Three files, which is most of the reason the directories are split at all:
 It is exemplary by being read, not distributed: this package ships tool config and the quality
 dependency manifest, never project structure or tests. That is `scaffoldapy`'s half of the split.
 
-The devpi fixture still **skips gracefully** (`pytest.skip`, never a hard failure) when
-`devpi-server` isn't on PATH. That is now belt-and-braces rather than the main path — devpi lives in
+The `package_index` fixture **skips gracefully** (`pytest.skip`, never a hard failure) when
+`pypi-server` isn't on PATH. That is belt-and-braces rather than the main path — pypiserver lives in
 `dev` like everything else, so a plain `inv venv.sync` installs it — but it keeps a half-synced
 environment from looking like a real regression. A missing Docker daemon deliberately fails loudly
 instead.
@@ -186,44 +186,47 @@ covered.
 
 ## Integration tier: real services, locally
 
-### Package index: `devpi-server`, not `pypiserver`
+### Package index: a real server for the HTML branch, a stub for the JSON one
 
-`pypiserver` (MIT/zlib, actively maintained) was the more obvious first pick, but its `CHANGES.rst`
-confirms it **has never added PEP 691 JSON Simple API support** — only the PEP 503 HTML index.
-Testing `dist.list-versions()` against it would exercise only the HTML-fallback branch, leaving the
-JSON branch — the primary path against any modern index, including real PyPI — completely untested.
+`dist.list_versions` asks a PEP 691 JSON index first and falls back to the PEP 503 HTML listing.
+Those two branches are covered by two different fixtures, because no one lightweight server does
+both — and the split is per-test rather than per-tier for exactly that reason.
 
-`devpi-server` (MIT, actively maintained) serves both: PEP 691 JSON on its own `/simple` endpoint
-and PEP 503 HTML for non-JSON-aware clients. It is the one local server that exercises both of
-`dist.py`'s branches against something real.
+**`package_index` — pypiserver, real.** `uv publish` uploads the freshly built wheel to it and the
+HTML branch is parsed off its real response, `#sha256=` fragments and all.
 
-`simple-repository-server` was also considered and not used: it does PEP 691 only via a
-`?format=...` querystring rather than real `Accept`-header content negotiation, so it wouldn't
-exercise `dist.py`'s actual `_get(url, accept=...)` path.
+[DECISION: pypiserver over devpi, reversing the original pick, 2026-08-30. devpi did serve both
+branches, which is why it was chosen — but measured, it cost **61 resolved packages against
+pypiserver's 4**, and `devpi-server`'s `setuptools<=81` (with its `pyramid` dependency's `<82`) held
+this repo's lock on a `setuptools` with two live advisories that nothing here could fix. That in
+turn blocked the push-triggered `deps.audit` step, which would have been red from its first run.
+Dropping devpi took the lock from 98 packages to 63, removed `setuptools` from it entirely, and took
+`inv deps.audit` to zero vulnerabilities.]
 
-No pytest fixture plugin is depended on. `pytest-devpi-server` exists in the
-`man-group/pytest-plugins` monorepo, but that repo's maintenance freshness wasn't confirmed — verify
-before ever reaching for it. The hand-rolled fixture runs `devpi-init`, launches `devpi-server` as a
-subprocess on a scratch server-dir and free port, polls until up, creates the index, yields the
-URLs, and terminates on teardown.
+[PITFALL: pypiserver rejects a re-upload of a filename it already holds with a **409**, where devpi
+tolerated it. The index fixture is module-scoped while each test publishes the repo's own wheel —
+the same filename every time — so the fixture passes `--overwrite`. The alternative, hoisting the
+upload into the fixture, would cost each test its own end-to-end round trip, which is the point of
+the tier.]
 
-[PITFALL: devpi's PEP 691/503 simple endpoint lives at `<index-url>/+simple/<name>/`, **not** the
-bare index URL. The bare `<index-url>/<name>/` is a different HTML-only project-detail page that
-404s/415s on the JSON accept header. The upload target (`uv publish --publish-url`) is the bare
-index URL, with no `+simple` or `/legacy/` suffix — the two URLs are not interchangeable.]
+**`json_index` — a stub, deliberately.** pypiserver serves no PEP 691 at all: measured 2026-08-30,
+it answers `text/html` whatever the `Accept` header says, which is the reason it was originally
+passed over. Nothing lightweight replaces it there — `simple-repository-server` does implement PEP
+691, but pulls `fastapi` + `uvicorn[standard]` + `httpx` and accepts no uploads at all, so it cannot
+cover `dist.publish` either.
 
-[PITFALL: `devpi use` without `--set-cfg` only _reports_ what it would touch in the active venv's
-pip/uv config — it never writes it. The fixture relies on that and points `--clientdir` at its own
-scratch dir, so it can never disturb the developer's real config. Never add `--set-cfg`.]
+[DECISION: a stub covers _more_ than any real server could here, which is why this is not a
+downgrade. `_json_versions` has three sub-paths — a top-level `versions` key, a per-file `version`
+key, and deriving the version from the filename — and no real index emits all three. Measured
+2026-08-30: PyPI takes the first and omits the per-file key entirely; devpi took the third;
+**nothing produces the second**, so it was mock-only for as long as devpi was the fixture. The stub
+serves all three, and asserts on `seen_accept` that `dist.list_versions` genuinely put the JSON
+media type on the wire — which a mocked `_get` cannot show and a real server cannot be made to
+report.]
 
-Server-side setup sequence, each call with `--clientdir <dir>`:
-`devpi-init --serverdir <dir>
---root-passwd <pw>` (non-interactive, avoiding the deprecated
-interactive `--passwd` prompt), then `devpi use http://127.0.0.1:<port>`,
-`devpi login root --password <pw>`, `devpi index -c test
-bases=root/pypi`. The `devpi`
-upload/install subcommands are never used — `dist.py`'s own `uv build`/`uv publish` do the real work
-being tested.
+The stub is still a real socket round trip through `urllib`, so it exercises `_get`'s actual request
+construction and response handling. It is a stub in the sense that the _body_ is canned, not in the
+sense that the HTTP is faked.
 
 ### Docker registry: `registry:3` via `testcontainers`
 
@@ -247,14 +250,21 @@ hostname identically on every platform — Docker Desktop on macOS/Windows can d
 ### What this tier caught
 
 Two real `dist.py` bugs, immediately, on first run — neither reachable through the mocked unit
-fixtures, whose JSON/HTML payloads happened not to hit either gap:
+fixtures, whose JSON/HTML payloads happened not to hit either gap. Both were found against devpi,
+which served the index at the time:
 
-- devpi's JSON file entries omit the (PEP 691-optional) `"version"` key entirely.
-- devpi's HTML hrefs carry a `#sha256=...` fragment that broke `_html_versions`' regex.
+- Its JSON file entries omit the (PEP 691-optional) `"version"` key entirely.
+- Its HTML hrefs carry a `#sha256=...` fragment that broke `_html_versions`' regex.
 
 Both fixed, with unit-level regressions pinning them:
 `test_versions_derives_from_json_filename_when_version_key_absent` and
 `test_versions_html_fallback_strips_sha256_fragment` in `tests/unit/test_dist.py`.
+
+Worth keeping in view when weighing a real server against a stub: the discovery above is what a real
+implementation buys, and it is a one-time payoff already banked — both shapes are now pinned by
+tests, and the second still runs against a real index (pypiserver's HTML carries the same fragment).
+What replaced devpi covers strictly more of `_json_versions` than devpi did, so the trade was not
+coverage for weight.
 
 ### The dogfood sample: `tests/fixtures/sample-service`
 
@@ -273,7 +283,7 @@ configuration nobody ships.
 automatic `127.0.0.0/8` insecure-registry exemption — it speaks HTTPS to a loopback registry like
 any other and fails with `server gave HTTP response to HTTPS client`.]
 
-### Real group bump: no Docker, no devpi
+### Real group bump: no Docker, no index
 
 `tests/integration/test_version_integration.py` runs `bump-my-version` for real against a throwaway
 git repo holding a `pyproject.toml` and a `Chart.yaml` read from the dogfood chart. It needs neither
@@ -385,4 +395,7 @@ the subject under test _is_ Docker, a local daemon is unavoidable. That is still
 
 Check whether a candidate actually exercises the code paths you care about before adopting it. The
 `pypiserver`/`devpi-server` decision turned entirely on that question and would have gone the other
-way on maintenance and popularity alone.
+way on maintenance and popularity alone — and then reversed six days later, because "exercises every
+code path" stopped being worth 61 packages and a pinned transitive once the paths it uniquely
+reached were pinned by tests and an advisory landed on that pin. Re-ask the question when the cost
+changes, not only when the candidates do.
