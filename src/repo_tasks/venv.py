@@ -14,6 +14,7 @@ from .projects import python_floor
 from .requirements import NETWORK, requires
 
 _VENV_DIR = Path(".venv")
+_PYTHON_VERSION_FILE = Path(".python-version")
 
 _PYTHON_HELP = "Build .venv against this Python (e.g. 3.11), replacing it if it is on another version"
 
@@ -106,8 +107,13 @@ def delete(c: Context):
 
 @task
 def check(c: Context):
-    """Report whether .venv's Python is the one this project declares in `requires-python`. Reads
-    only — exits nonzero when they differ, naming `venv.recreate` as the fix.
+    """Report whether the interpreter this project declares in `requires-python` is the one its
+    `.venv` was built with, and the one any `.python-version` pins. Reads only — exits nonzero when
+    either disagrees, naming the fix for each (`venv.recreate`, `venv.pin`). Both can be wrong at
+    once, and both are reported before it exits.
+
+    `.python-version` is optional and its absence is never a finding; a repo that has one is
+    asserting an interpreter in two places, and the copy that is not derived is the one that drifts.
 
     The mismatch is silent by construction and outlives whatever caused it: uv builds a venv with
     the newest interpreter satisfying the floor, so a repo declaring `>=3.11` gets 3.14 and every
@@ -128,11 +134,25 @@ def check(c: Context):
         print(f"[venv.check] no .venv (this project declares Python {declared})")
         _next_steps("inv venv.create")
         raise Exit(code=1)
+    steps: list[str] = []
     if actual == declared:
         print(f"[venv.check] .venv is on Python {actual}, as declared")
+    else:
+        print(f"[venv.check] .venv is on Python {actual}, but this project declares {declared}")
+        steps.append(f"inv venv.recreate  # rebuild .venv on Python {declared}")
+
+    # Only when the file exists: it is optional, and a repo without one is not misconfigured.
+    # A repo that has one, though, is asserting an interpreter twice, and the copy that is not
+    # derived is the one that drifts — which is how a sibling ended up pinning 3.14 while declaring
+    # >=3.11.
+    pinned = _PYTHON_VERSION_FILE.read_text().strip() if _PYTHON_VERSION_FILE.exists() else None
+    if pinned is not None and pinned != declared:
+        print(f"[venv.check] .python-version pins {pinned}, but this project declares {declared}")
+        steps.append(f"inv venv.pin  # rewrite .python-version as {declared}")
+
+    if not steps:
         return
-    print(f"[venv.check] .venv is on Python {actual}, but this project declares {declared}")
-    _next_steps(f"inv venv.recreate  # rebuild .venv on Python {declared}")
+    _next_steps(*steps)
     raise Exit(code=1)
 
 
@@ -155,6 +175,42 @@ def recreate(c: Context, python: str | None = None):
         raise Exit("[venv.recreate] this project declares no requires-python — name a version with --python")
     sync(c, python=target)
     print(f"[venv.recreate] .venv is on Python {target}")
+
+
+@task
+def pin(c: Context):
+    """Write `.python-version` from the floor this project declares in `requires-python`.
+
+    A fourth reader of that one declaration, alongside `pythonVersion` in the shipped
+    pyrightconfig, `venv.recreate`'s interpreter, and ruff's own inference — see
+    `projects.python_floor`. Hand-writing this file is what lets it drift from the thing it is
+    supposed to restate, which has already happened once in this family.
+
+    Regeneration is deliberate and standalone: the output is committed, never gitignored as
+    reproducible, and nothing in `check`/`precommit` calls this. A pinned interpreter is a fact
+    about the repo that a reviewer should see change in a diff.
+
+    [PITFALL: `UV_PYTHON` in the environment **overrides this file** — uv reports it as an explicit
+    request and resolves it ahead of `.python-version`. Measured 2026-08-30 on uv 0.11.19: with
+    `UV_PYTHON=3.14` exported, a project pinned to 3.11 still has its venv destroyed and rebuilt at
+    3.14 by a bare `uv run`; with it unset, the same venv survives untouched. So this task is
+    prevention for CI, containers and machines without that export, and is inert wherever it is set
+    — which is why it says so rather than reporting success into a shell where it will not take.]"""
+    declared = python_floor()
+    if declared is None:
+        print("[venv.pin] no requires-python declared — nothing to pin")
+        return
+
+    existing = _PYTHON_VERSION_FILE.read_text().strip() if _PYTHON_VERSION_FILE.exists() else None
+    if existing == declared:
+        print(f"[venv.pin] .python-version already pins {declared}")
+    else:
+        _ = _PYTHON_VERSION_FILE.write_text(f"{declared}\n")
+        was = f" (was {existing})" if existing else ""
+        print(f"[venv.pin] .python-version pins {declared}{was}")
+
+    if override := os.environ.get("UV_PYTHON"):
+        print(f"[venv.pin] UV_PYTHON={override} is set and overrides this file — uv will still use {override} here")
 
 
 @requires(NETWORK)

@@ -150,3 +150,67 @@ def test_recreate_refuses_without_a_declaration_or_an_explicit_version(c, tmp_cw
     # miniature. Refuse and name the flag instead.
     with pytest.raises(Exit, match="no requires-python"):
         venv.recreate.body(c)
+
+
+def test_pin_writes_the_declared_floor(c, tmp_cwd, monkeypatch, capsys):
+    monkeypatch.delenv("UV_PYTHON", raising=False)
+    _declare(tmp_cwd, ">=3.11")
+    venv.pin.body(c)
+    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"
+    assert "pins 3.11" in capsys.readouterr().out
+
+
+def test_pin_rewrites_a_drifted_file_and_names_what_it_replaced(c, tmp_cwd, monkeypatch, capsys):
+    # The state this task exists to correct, and the one a sibling repo is actually in: a
+    # hand-written pin asserting an interpreter the project never declared.
+    monkeypatch.delenv("UV_PYTHON", raising=False)
+    _declare(tmp_cwd, ">=3.11")
+    (tmp_cwd / ".python-version").write_text("3.14\n")
+    venv.pin.body(c)
+    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"
+    assert "pins 3.11 (was 3.14)" in capsys.readouterr().out
+
+
+def test_pin_is_a_noop_when_already_correct(c, tmp_cwd, monkeypatch, capsys):
+    monkeypatch.delenv("UV_PYTHON", raising=False)
+    _declare(tmp_cwd, ">=3.11")
+    (tmp_cwd / ".python-version").write_text("3.11\n")
+    venv.pin.body(c)
+    assert "already pins 3.11" in capsys.readouterr().out
+
+
+def test_pin_says_when_uv_python_will_override_the_file(c, tmp_cwd, monkeypatch, capsys):
+    # Writing the file and reporting success into a shell where uv ignores it is the failure mode
+    # worth naming: measured, UV_PYTHON is an explicit request that outranks .python-version.
+    monkeypatch.setenv("UV_PYTHON", "3.14")
+    _declare(tmp_cwd, ">=3.11")
+    venv.pin.body(c)
+    out = capsys.readouterr().out
+    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"  # still written
+    assert "UV_PYTHON=3.14 is set and overrides this file" in out
+
+
+def test_pin_has_nothing_to_pin_without_a_declaration(c, tmp_cwd, capsys):
+    venv.pin.body(c)
+    assert not (tmp_cwd / ".python-version").exists()
+    assert "nothing to pin" in capsys.readouterr().out
+
+
+def test_check_reports_a_drifted_python_version_file(c, tmp_cwd, capsys):
+    _declare(tmp_cwd, ">=3.11")
+    _venv_on(tmp_cwd, "3.11.15")  # the venv is right; only the pin has drifted
+    (tmp_cwd / ".python-version").write_text("3.14\n")
+    with pytest.raises(Exit) as exc_info:
+        venv.check.body(c)
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert ".python-version pins 3.14, but this project declares 3.11" in out
+    assert "inv venv.pin" in out
+
+
+def test_check_ignores_an_absent_python_version_file(c, tmp_cwd, capsys):
+    # Optional by design: a repo without one is not misconfigured, so its absence is never a finding.
+    _declare(tmp_cwd, ">=3.11")
+    _venv_on(tmp_cwd, "3.11.15")
+    venv.check.body(c)
+    assert ".python-version" not in capsys.readouterr().out
