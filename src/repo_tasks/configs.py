@@ -31,6 +31,7 @@ from typing import cast
 from invoke import Context, Exit, task
 
 from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
+from .projects import python_floor
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", "zizmor.yml", ".editorconfig"]
 
@@ -76,23 +77,6 @@ _PYTHON_VERSION_RE = re.compile(r'^(?P<indent>[ \t]*)"pythonVersion": "[^"]*",\n
 _ANYIO_MODE_RE = re.compile(r"^anyio_mode = auto\n", re.MULTILINE)
 
 
-def _requires_python_floor(root: Path) -> str | None:
-    """The `major.minor` a project declares as its lowest supported Python, or None when it declares
-    nothing at all. Read from the consumer's own pyproject.toml, never from repo-tasks' — this
-    package runs the tools, it does not decide what they target."""
-    pyproject = root / "pyproject.toml"
-    if not pyproject.exists():
-        return None
-    project = cast(dict[str, object], tomllib.loads(pyproject.read_text()).get("project", {}))
-    spec = project.get("requires-python")
-    if not isinstance(spec, str):
-        return None
-    # `>=3.11`, `>=3.11.0`, `~=3.11`, `>=3.11,<4` — the floor is the first lower bound whichever
-    # operator states it. An upper bound alone (`<4`) declares no floor and is correctly no match.
-    match = re.search(r"(?:>=|~=|==)\s*(\d+\.\d+)", spec)
-    return match.group(1) if match else None
-
-
 def _project_resolves_anyio(root: Path) -> bool:
     """Whether a project's lock resolves AnyIO, and so whether its pytest will recognise the
     `anyio_mode` key at all.
@@ -118,7 +102,7 @@ def _derive_for_project(name: str, text: str, root: Path) -> str:
     one answer. A pull that preserved hand-edits would give that question two, and leave `diff`
     nothing to check against. Every other shipped file is still copied verbatim."""
     if name == "pyrightconfig.json":
-        floor = _requires_python_floor(root)
+        floor = python_floor(root)
         if floor is None:
             return _PYTHON_VERSION_RE.sub("", text)
         return _PYTHON_VERSION_RE.sub(lambda m: f'{m.group("indent")}"pythonVersion": "{floor}",\n', text)

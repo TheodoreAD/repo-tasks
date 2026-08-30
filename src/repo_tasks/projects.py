@@ -5,6 +5,7 @@ zero-config Dockerfile-at-root fallback for the common single-image case. Every 
 (docker.py, dist.py, helm.py, version.py) calls into here instead of hardcoding "the repo
 root"."""
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,10 @@ from typing import cast
 from invoke import Context
 
 _REPO_TASKS_TOML = Path("repo-tasks.toml")
+
+# The repo root, as every task here already assumes: cwd. A module constant rather than a `Path()`
+# call in a parameter default, which `reportCallInDefaultInitializer` rejects.
+_CWD = Path()
 
 
 def tracked_files(c: Context, *patterns: str) -> list[str]:
@@ -58,6 +63,28 @@ class HelmChart:
 def _load_toml(path: Path) -> dict[str, object]:
     with path.open("rb") as f:
         return cast(dict[str, object], tomllib.load(f))
+
+
+def python_floor(root: Path = _CWD) -> str | None:
+    """The `major.minor` a project declares as its lowest supported Python, or None when it declares
+    no `requires-python` at all.
+
+    One reader, because three things now target the same declaration and must not disagree about
+    what it says: the `pythonVersion` `configs.pull` derives into a consumer's pyrightconfig.json,
+    the interpreter `venv.recreate` builds against, and ruff's own inference (which reads
+    `requires-python` directly and needs nothing from here). A project's declared floor is a project
+    fact, so it lives with the rest of discovery rather than in whichever module needed it first."""
+    pyproject = root / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    project = cast(dict[str, object], _load_toml(pyproject).get("project", {}))
+    spec = project.get("requires-python")
+    if not isinstance(spec, str):
+        return None
+    # `>=3.11`, `>=3.11.0`, `~=3.11`, `>=3.11,<4` — the floor is the first lower bound whichever
+    # operator states it. An upper bound alone (`<4`) declares no floor and is correctly no match.
+    match = re.search(r"(?:>=|~=|==)\s*(\d+\.\d+)", spec)
+    return match.group(1) if match else None
 
 
 def _project_at(path: Path, data: dict[str, object]) -> PythonProject | None:

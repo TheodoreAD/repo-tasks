@@ -49,28 +49,6 @@ def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(
     assert '"typeCheckingMode": "recommended",\n' in text
 
 
-@pytest.mark.parametrize(
-    ("spec", "expected"),
-    [
-        (">=3.11", "3.11"),
-        (">=3.11.2", "3.11"),
-        (">=3.12,<4.0", "3.12"),
-        ("~=3.13", "3.13"),
-        ("==3.14", "3.14"),
-        (">= 3.11", "3.11"),
-        # An upper bound alone declares no floor — the answer is None, not "4.0".
-        ("<4.0", None),
-    ],
-)
-def test_requires_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, spec, expected):
-    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n')
-    assert configs._requires_python_floor(tmp_cwd) == expected
-
-
-def test_requires_python_floor_is_none_without_a_pyproject(tmp_cwd):
-    assert configs._requires_python_floor(tmp_cwd) is None
-
-
 def test_pull_emits_anyio_mode_only_when_the_consumers_lock_resolves_anyio(c, tmp_cwd):
     (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n')
     configs.pull.body(c, source=None)

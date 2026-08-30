@@ -10,6 +10,7 @@ happens to look like."""
 
 from pathlib import Path
 
+import pytest
 from invoke import MockContext, Result
 
 from repo_tasks import projects
@@ -187,3 +188,30 @@ def test_discover_helm_charts_registry_optional_and_group_defaults_to_name(c, tm
     (tmp_cwd / "repo-tasks.toml").write_text('[[helm]]\nname = "solo-chart"\npath = "chart"\n')
     result = projects.discover_helm_charts(c)
     assert result == [projects.HelmChart(name="solo-chart", path=Path("chart"), registry=None, group="solo-chart")]
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (">=3.11", "3.11"),
+        (">=3.11.2", "3.11"),
+        (">=3.12,<4.0", "3.12"),
+        ("~=3.13", "3.13"),
+        ("==3.14", "3.14"),
+        (">= 3.11", "3.11"),
+        # An upper bound alone declares no floor — the answer is None, not "4.0".
+        ("<4.0", None),
+    ],
+)
+def test_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, spec, expected):
+    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n')
+    assert projects.python_floor(tmp_cwd) == expected
+
+
+def test_python_floor_is_none_without_a_requires_python(tmp_cwd):
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    assert projects.python_floor(tmp_cwd) is None
+
+
+def test_python_floor_is_none_without_a_pyproject(tmp_cwd):
+    assert projects.python_floor(tmp_cwd) is None
