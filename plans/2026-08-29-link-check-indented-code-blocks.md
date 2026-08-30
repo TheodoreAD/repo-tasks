@@ -53,6 +53,17 @@ Against: `link_check` is currently the one docs task that needs no dependency at
 the gate — see the module docstring. That property is the reason it exists in the gate, and trading
 it away needs a deliberate decision, not a drive-by.]
 
+## The other scope the task deliberately does not cover
+
+[DEFERRED: **external URLs and anchors/fragments**. `docs.link-check` is relative file links only,
+by design — that is what lets it be dependency-free and therefore a gate step
+([`../contributing/quality-gate.md`](../contributing/quality-gate.md)). Moved here from the retired
+quality-gate sweep plan, because it is the same task's scope question. `lychee-bin` remains the tool
+if this is ever wanted, at 78 MB and one release ever; its maintenance record is worth re-checking
+before adopting rather than trusting the 2026-08 measurement. Note this interacts with the
+`markdown-it-py` question above: a real parser closes the anchor half locally, while only a network
+checker closes the external-URL half, so they are two decisions rather than one.]
+
 ## Recommended direction
 
 Leave it open. Revisit when an indented sample actually trips the gate, or when the `markdown-it-py`

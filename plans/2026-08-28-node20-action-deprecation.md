@@ -329,11 +329,19 @@ Current state of this repo, from the task itself:
 ```
 
 [DEFERRED: neither task runs on a schedule, so both still need someone to type them. That is the
-same "an opt-in check nobody runs can sit stale indefinitely" trade-off deferred in
-[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1 for the integration tier,
-and it should be settled once for both rather than twice. Worth noting that `ci.status` is at least
-already part of a habit — it is the pre-push check — so the annotation half is closer to being
-actually seen than the currency half is.]
+same "an opt-in check nobody runs can sit stale indefinitely" trade-off that the integration tier
+and the CI `deps.audit` step carry, and it should be settled once for all of them rather than three
+times — now [`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md).
+Worth noting that `ci.status` is at least already part of a habit — it is the pre-push check — so
+the annotation half is closer to being actually seen than the currency half is.]
+
+[DEFERRED: **SHA-pinning every workflow, plus dependabot to keep the pins fresh.** Only
+`publish.yml` is pinned today, by the decision now recorded in
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md) — pinning everywhere without
+dependabot means pins rot, and dependabot means a recurring PR stream on repos whose owner pushes
+straight to `main` and reviews no PRs. Moved here from the retired quality-gate sweep plan because
+`ci.check-actions` is the third option that decision did not have: a checker that reports staleness
+without opening a PR may make pinning everywhere maintainable by hand after all.]
 
 [DEFERRED: `ci.check-actions` reads the pin's version but never checks that a SHA pin's comment is
 _truthful_ — a comment saying `# v7.0.1` beside a SHA that is something else would be reported as

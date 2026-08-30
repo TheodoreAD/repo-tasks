@@ -159,3 +159,12 @@ inert until asked for — but the justification does not transfer. Those two are
 dependencies_; AnyIO would be added for the sole purpose of making one config key parse, which makes
 deliberate and permanent a coupling that is currently accidental, and puts an async framework in
 every consumer's dev environment for a key most of them will never use.
+
+## The other conditional line in the same file
+
+[DEFERRED: drop `ignore:unclosed file:ResourceWarning` from the shipped `pytest.ini` once `invoke`
+closes the subprocess pipes its `Local` runner opens. Moved here from the retired integration-tier
+plan because it is a line in this same file with a stated expiry condition and no tracker: nothing
+watches invoke releases for it, so it will be noticed whenever someone next reads `pytest.ini`,
+where the comment names the condition. Unlike `anyio_mode` this one is unconditional today and does
+not need deriving — the question is only when it can go.]
