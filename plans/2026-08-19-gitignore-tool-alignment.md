@@ -1,7 +1,6 @@
 ---
 status: idea
 updated: 2026-08-30
-depends_on: [scaffoldapy]
 ---
 
 # What is left of the `.gitignore` alignment work
