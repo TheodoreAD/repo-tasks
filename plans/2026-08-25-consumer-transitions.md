@@ -220,4 +220,17 @@ session that wrote it:
   will rewrite each consumer's copy, after which that consumer's `requires-python` decides its ruff
   floor. Check the field exists in each before pulling: a consumer without it moves from a 3.11
   linter to an unversioned one and a 3.10 formatter, which is the one regression this change can
-  cause and the one `configs.diff` will not show.]
+  cause and the one `configs.diff` will not show.
+- `c514bd9` — `configs.pull` now derives two lines per consumer: `pythonVersion` in
+  `pyrightconfig.json` from that repo's `requires-python`, and `anyio_mode` in `pytest.ini` from
+  whether its lock resolves AnyIO. Unlike everything else in this list, the sweep's own `pull` is
+  what makes each consumer correct, and each ends up with a _different_ file — so "byte-identical
+  across the family" stops being the thing to check. What to check instead, per consumer: that the
+  derived `pythonVersion` matches what that repo actually declares, and that its type check still
+  passes at that version rather than at the venv's. **The type checker moving from the developer's
+  interpreter to the declared floor is the one change here that can turn a green consumer red on
+  correct input** — anything using syntax above its own declared floor has been passing only because
+  nothing was checking. That is the finding, not a regression, but it is the reason this item wants
+  running first and alone.
+- `b79b76a` — `quality.type-check --python-version`. Additive and unused by default; nothing to
+  check beyond it being present.]

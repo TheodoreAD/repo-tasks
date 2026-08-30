@@ -127,17 +127,30 @@ rather than leaving behind a key that has become fatal.
 ## Recommended direction
 
 ~~Measure the inert claim first~~ — done, and it went the unlucky way. ~~The general question is
-live now~~ — answered 2026-08-30 by the two decisions above. What is left is implementation:
+live now~~ — answered 2026-08-30 by the two decisions above, and **implemented the same day**
+(`c514bd9`):
 
 1. `configs.pull` reads the target project's `uv.lock` and emits `anyio_mode = auto` into
    `pytest.ini` only when AnyIO is in it; `_diff_config_files` applies the same derivation before
-   comparing, so a correctly-derived file never reports drift.
+   comparing, so a correctly-derived file never reports drift. Both branches are unit-tested, plus
+   the pull-then-diff invariant under a lock that does contain AnyIO.
 2. The canonical `pytest.ini` carries the line with a comment saying it is derived and why — a
    reader of the shipped file should not have to find this plan to learn that the line is
    conditional, or that `--strict-config` in the same file's `addopts` is what makes an unrecognised
    key fatal rather than a warning.
 3. The affected consumer's hand-edit stops being a divergence and becomes the derived output, so
-   nothing there needs undoing.
+   nothing there needs undoing — **once the sweep reaches it**, which it has not.
+
+One thing the implementation turned up that the design had not: the integration tests exercising the
+shipped `pytest.ini` copied it verbatim into a scratch tree and ran pytest with `sys.executable`.
+That passed only because this repo's own venv carries AnyIO — the same hidden environment dependency
+this plan is about, reproduced inside its own test suite. They now write the derived text, so they
+assert on the file a consumer without AnyIO actually receives.
+
+[UNVERIFIED: the derivation is proven against a hand-written `uv.lock` fixture and against this
+repo, never against the consumer that needs the line. Nothing reaches a consumer until
+`inv repo-tasks.update` moves the global tool; `2026-08-25-consumer-transitions.md` owns that
+ordering and now lists this change.]
 
 Rejected: **shipping AnyIO as a `repo-tasks-quality` dependency** and then shipping the line
 unconditionally. It reads well — the manifest is already where the family standardises pytest

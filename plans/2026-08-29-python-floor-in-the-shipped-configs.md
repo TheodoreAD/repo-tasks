@@ -201,4 +201,22 @@ It is **not** verified at a consumer, and cannot be yet: nothing reaches one unt
 old package and reports "up to date" — indistinguishable from a real match. Left to the deferred
 cross-repo sweep in `2026-08-25-consumer-transitions.md`, which owns that ordering.
 
-The basedpyright half is unstarted.
+**The basedpyright half landed 2026-08-30** (`b79b76a`, `c514bd9`, `db5d8d2`), verified here to the
+same depth and no further:
+
+- `configs.pull` derives `pythonVersion` from `requires-python`, omitting the key entirely when a
+  project declares no floor — the ruff decision's shape, so neither tool imposes a floor nobody
+  chose. `_diff_config_files` applies the same derivation, and a unit test pins the invariant that
+  makes the whole thing work: a pull under a non-default floor followed by a diff reports up to
+  date.
+- Pulled into this repo's own root. `inv quality.precommit` green with basedpyright now checking at
+  3.11 rather than the 3.14 interpreter it had been finding — 0 errors, 0 warnings, 489 tests — so
+  nothing here was leaning on syntax above its own declared floor.
+- `configs.promote` grew a guard in the same commit: the derived lines are restored to the package's
+  own values before a root file is written back, so this repo's floor cannot become everyone's by
+  the promote path. That was a hole the derivation itself opened.
+
+[UNVERIFIED: that the editor half actually pays off — that a language server picks up the derived
+`pythonVersion` and flags floor-violating syntax live. It follows from the value being in the config
+file rather than on a command line, which is the documented difference between routes A and B, but
+nothing here has watched an editor do it.]
