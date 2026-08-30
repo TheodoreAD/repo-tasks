@@ -137,6 +137,28 @@ The devpi fixture still **skips gracefully** (`pytest.skip`, never a hard failur
 environment from looking like a real regression. A missing Docker daemon deliberately fails loudly
 instead.
 
+### Every test module basename must be unique across the whole tree
+
+There is no `__init__.py` anywhere under `tests/` — the only one in the tree belongs to the
+`sample-service` fixture's own package, which is a fixture rather than a test module. That is the
+layout pytest's own good-practices page recommends for a `src` project whose tests sit outside the
+package, and it is supported rather than accidental.
+
+It comes with one requirement, and pytest states it plainly for the `prepend` import mode this repo
+uses: without `__init__.py` files, "each test file needs to have a unique name compared to the other
+test files". Two same-named modules in different tiers collide on import.
+
+[PITFALL: the `_integration` suffix on every integration module is load-bearing for _collection_,
+not merely descriptive. A `tests/integration/test_dist.py` alongside `tests/unit/test_dist.py`
+breaks the run outright — an import collision at collection time, not a failing assertion — and
+nothing in the tooling prevents it. Checked 2026-08-30: zero duplicate `test_*.py` basenames across
+the tree, maintained entirely by that naming convention. It reads as a style preference and is not
+one.]
+
+Whether to permit a packaged `tests/` instead — which would make the collision impossible and the
+suffix purely descriptive — is open, and costs a change to the shipped `pyrightconfig.json`. See
+[`../plans/2026-08-27-tests-package-layout.md`](../plans/2026-08-27-tests-package-layout.md).
+
 ## Unit tier: mocked `c.run`
 
 Every task module has a `tests/unit/test_<module>.py` following `tests/unit/test_quality.py`'s

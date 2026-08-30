@@ -89,12 +89,13 @@ and the natural name for the new file is the same as the unit one.
 Do the cheap, unambiguously-correct half first, and treat the config change as a genuinely open
 question rather than a foregone one.
 
-1. **Write the constraint down**, in `contributing/test-tiers.md` next to the conftest layout: with
-   no `__init__.py` under `tests/`, every test module basename must be unique across the whole tree,
-   and the `_integration` suffix is what currently guarantees it. This is worth doing whatever is
-   decided below — it is true today, it is enforced by nothing, and the failure it prevents is a
-   collection error rather than a wrong answer, so it costs a confusing afternoon rather than a bad
-   result.
+1. ~~**Write the constraint down**, in `contributing/test-tiers.md` next to the conftest layout.~~
+   **Landed 2026-08-30** — "Every test module basename must be unique across the whole tree", under
+   Conftest layout, carrying the `_integration`-suffix pitfall. Re-checked while writing it: zero
+   duplicate `test_*.py` basenames in the tree, and the single `__init__.py` under `tests/` belongs
+   to the `sample-service` fixture's own package rather than to the test tree, so the claim is about
+   what it says it is about. Worth doing whatever is decided below — it is true today, enforced by
+   nothing, and the failure it prevents is a collection error rather than a wrong answer.
 2. **Then decide on `extraPaths`,** on its merits, using the questions below.
 
 The mechanical fix, if taken, is one line in the tests execution environment:
