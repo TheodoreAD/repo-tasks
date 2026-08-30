@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-25
+updated: 2026-08-30
 ---
 
 # Releasing without a release branch every time
@@ -42,9 +42,18 @@ there is nothing to sync; in (c) the rc tag is already on `develop`, so only the
 ## Recommended direction
 
 Rough. Do nothing until the pre-release plan has landed and been used once — the rc cycle on a
-release branch may turn out cheap enough that (c) is not wanted. If it is, prefer (c) as a
-`repo-tasks.toml` `[gitflow]` setting over a per-call flag, and keep `hotfix_*` unchanged in every
-shape: a hotfix is the one flow whose branch always earns its keep.
+release branch may turn out cheap enough that (c) is not wanted.
+
+**Half of that gate is now met, and the half that is not is the informative one.** Checked
+2026-08-30: the pre-release work landed on 2026-08-25 and its plan has since been retired, so there
+is no `plans/2026-08-25-prerelease-versions.md` to look for — the rc cycle is described in
+[`../contributing/release-flow.md`](../contributing/release-flow.md). But `git tag -l` is empty:
+this repo has never cut a release of any kind, so the rc cycle has been exercised only against a
+local bare repo and never once for real. Until it has, there is no evidence about whether the
+release branch is ceremony or load-bearing, which is the entire question this plan turns on. Waiting
+is still the right call, and it is now waiting on one specific thing rather than two. If it is,
+prefer (c) as a `repo-tasks.toml` `[gitflow]` setting over a per-call flag, and keep `hotfix_*`
+unchanged in every shape: a hotfix is the one flow whose branch always earns its keep.
 
 Prior art to check before designing: `git-flow-avh`'s `release finish` from a non-release branch,
 `semantic-release`'s prerelease branches config (`develop` → `rc` channel), and how
