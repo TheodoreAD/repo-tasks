@@ -14,9 +14,10 @@ side effect of a push. Extracted from the now-retired
 second account, no PAT to create, rotate, or store as a repo secret. Docker Hub would add all three
 for no offsetting benefit. A human publishing from their own machine does a one-time
 `docker login ghcr.io` with a PAT scoped to `write:packages`, kept in their own secret manager.
-`docker.py` itself has no auth handling and none is planned for CI — the token does not expire
-mid-job and the login runs once up front. The interactive-session retry idea lives in
-`plans/2026-08-23-registry-auth-retry.md`.
+`docker.py` carries no auth handling in the CI path and none is planned — the token does not expire
+mid-job and `docker/login-action` runs once up front. Its `docker.login` task exists for a human's
+own machine and CI never calls it. Turning a stale-credential push failure into a pointer at that
+task is still open in `plans/2026-08-23-registry-auth-retry.md`.
 
 The image ref comes entirely from `repo-tasks.toml`'s `[[docker]]` entry; the workflow
 (`docker-release.yml`) only logs in and runs `inv docker.release --project <name>`.

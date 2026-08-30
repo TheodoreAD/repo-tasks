@@ -1,7 +1,9 @@
 ---
 status: idea
-updated: 2026-08-23
+updated: 2026-08-30
 ---
+
+# Turn a push's auth failure into the login task that already fixes it
 
 ## Context
 
@@ -14,69 +16,88 @@ The now-retired `plans/2026-08-19-helm-chart-tasks.md` §4 deferred the same ide
 this plan and named the same shared `src/repo_tasks/_registry_auth.py` helper, so this plan owns the
 behavior for both rather than either one implementing it privately.
 
-Current state, confirmed 2026-08-23: `src/repo_tasks/docker.py` has no auth handling of any kind
-(`build`/`push`/`release`/`_resolve_image` only), and `_registry_auth.py` does not exist.
-`docker
-login` being already done is the caller's responsibility, matching `quality.py`'s
-no-secrets-touched stance.
+**The plan as filed has been overtaken three times, and what survives is the option it never
+seriously considered.** Reviewed 2026-08-30; each shift is recorded below because the original
+design is still the first thing a future session would find, and it is no longer the right one.
 
-**The premise has weakened since it was written, and that is the first thing to settle.**
+### 1. CI never needed it — established 2026-08-24
+
 [`contributing/release-workflows.md`](../contributing/release-workflows.md) (from the now-retired
 `plans/2026-08-22-docker-registry-integration.md`) established that the CI path needs none of this:
 `docker/login-action` + `GITHUB_TOKEN` authenticates once up front and `GITHUB_TOKEN` doesn't expire
-mid-job — verified by a real `inv docker.release` run against GHCR on 2026-08-24. The retry logic
-remains meaningful only for a human's local/interactive session hitting a stale credential. So the
-remaining audience is one developer on one machine whose SSO session lapsed, which may not justify a
-shared helper module at all.
+mid-job — verified by a real `inv docker.release` run against GHCR. The retry logic was already down
+to one audience: a human on one machine whose local credential went stale.
+
+### 2. The login tasks landed — 2026-08-30
+
+`docker.login` (`docker.py:144`) and `helm.login` (`helm.py:110`) both exist as of `ccc9dcd`, each
+resolving the registry host from `repo-tasks.toml` and handing off to the tool's own interactive
+login. When this plan was written, `docker.py` had `build`/`push`/`release`/`_resolve_image` and
+nothing else, and half the stated motivation for a shared `_registry_auth.py` was that `helm.py` did
+not exist at all.
+
+That is the shift that matters most, and it cuts both ways. It removes the reason to design a shared
+auth module — the shared surface got built, as two per-tool tasks. It also **hands the cheap option
+its missing piece**: detect-and-instruct had nothing specific to instruct with in 2026-08-23, and
+now it has an exact task name to print.
+
+### 3. The keyring question is answered — 2026-08-30
+
+The household rule recorded in
+[`2026-08-30-registry-credentials-in-the-os-store.md`](2026-08-30-registry-credentials-in-the-os-store.md):
+**anything needing a password uses the OS secret store through whatever native integration the tool
+already has**, and `keyring` is a machine-provided CLI, never a dependency of this package. The
+original question — whether a cross-platform keyring binding was justified as this package's first
+non-quality runtime dependency — is settled as a no, family-wide, and not by this plan.
+
+## What is actually left
+
+One small thing, in the shape the package has since standardised on. `_next_steps()` was
+`gitflow.py`'s local convention when this plan proposed reusing it; it is now imported by `venv.py`,
+`configs.py` and `deps.py` as well, so printing a next command is how every module in this package
+tells a human what to run.
+
+So the residue is: `docker.push`/`helm.push` notice an auth failure and print `inv docker.login` /
+`inv helm.login`, instead of leaving the tool's raw `denied: unauthorized` as the last word. No new
+module, no new dependency, no shared abstraction, no re-auth cycle.
+
+**The full re-auth cycle is rejected, not deferred.** It was designed for a CI path that turned out
+not to need it, its credential-storage half is now answered by the OS secret store, and it would
+have this package drive an interactive login on a user's behalf — which is the opposite of the
+stance `quality.py` and both `login` tasks take.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: is this worth building? With CI covered by `docker/login-action`, the only
-beneficiary is a human whose local credential went stale — for whom the current behavior (a clear
-`denied`/`unauthorized` from the docker CLI, then `docker login`) is arguably fine, and is what
-every other tool does. The honest options are: build it as designed, reduce it to a
-_detect-and-instruct_ step (catch the 401, print the exact `docker login`/`helm registry login`
-command to run — matching `gitflow.py`'s established `_next_steps()` convention), or close this as
-`abandoned`. The middle option looks strongest and was never considered when the original §4 was
-written, because `_next_steps()` didn't exist yet.]
+[NEEDS CLARIFICATION: is even the print worth it? Against: the tools' own errors are not actually
+bad, every other tool in the ecosystem behaves this way, and a wrong guess prints misleading advice.
+For: this package's whole stance is that a human should be told the next `inv` command rather than
+left to know it, and there is now a task name that is genuinely the right answer.]
 
-[NEEDS CLARIFICATION: the original design keys off "`docker push` output containing
-`401`/`unauthorized`". That is string-matching another tool's human-readable output, which drifts
-across docker versions and is locale-sensitive. Is there a structured signal instead — an exit code
-that distinguishes auth failure from any other push failure, or
-`docker system info`/`docker
-manifest inspect` as a pre-flight check? If string matching is the only
-option, that is itself an argument for the detect-and-instruct option above, since a false positive
-that merely prints wrong advice is much cheaper than one that triggers a spurious re-auth cycle.]
+[NEEDS CLARIFICATION: what signal to key off. The original design matched `docker push` output for
+`401`/`unauthorized` — string-matching another tool's human-readable output, which drifts across
+versions and is locale-sensitive. Worth checking whether docker and helm distinguish an auth failure
+by exit code at all before writing a matcher; if string matching is the only lever, that is an
+argument for keeping the consequence cheap, which the print already is. Note this machine's mixed
+locale (`LC_MESSAGES` stays `en_US.UTF-8`, so the message text is stable here) is not a property a
+consumer's machine shares.]
 
-[NEEDS CLARIFICATION: `keyring` would be the first runtime dependency this package adds for a
-non-quality concern (current dev-time set is `ruff`/`basedpyright`/`dprint`/`shfmt`/
-`bump-my-version`, and the runtime set is essentially just `invoke`). Is a cross-platform keyring
-binding justified when docker's own credential helpers already solve credential storage, and when
-`repo-tasks` explicitly "never stores, generates, or invents credentials itself"?]
-
-[NEEDS CLARIFICATION: if a shared helper is built, is `_registry_auth.py` the right shape given this
-repo's "one module per facility, named after what it owns" convention (`AGENTS.md`)? A leading
-underscore marks it private-to-the-package, but it would be the first such module — every existing
-one is a public task module. An alternative is a small non-task module with no underscore, since the
-convention is about what a module _owns_, not about whether it exports tasks.]
-
-[NEEDS CLARIFICATION: `helm push` and `docker push` fail differently and authenticate differently
-(`helm registry login` vs `docker login`, different output). How much is genuinely shared versus two
-thin per-tool implementations behind one interface? The original design assumed "identical behavior"
-without checking helm's actual failure output — unverifiable until `helm.py` exists at all.]
+[NEEDS CLARIFICATION: helm's failure output has still never been looked at. The original plan
+assumed "identical behavior" for docker and helm without checking, and that assumption was
+unverifiable then because `helm.py` did not exist. It exists now, so this is a five-minute
+measurement rather than an open design question — and it decides whether one matcher serves both or
+each push grows its own two-line check.]
 
 ## Recommended direction
 
-Rough, not designed. Settle the first open question before any of the others: if the answer is
-detect-and-instruct, most of this plan evaporates into a few lines inside `docker.py`'s existing
-`push`, reusing `gitflow.py`'s `_next_steps()` pattern, with no new module, no new dependency, and
-no shared abstraction to design.
+Do not build the shared helper. Nothing in the original design survives its three overtakings
+intact, and rebuilding it would add a module and a dependency to solve a problem that the `login`
+tasks and the OS secret store have already divided between them.
 
-Do not build the full re-auth cycle just because it was written down first — the CI wiring that
-landed since removed its main justification, and the original design deferred it on the grounds that
-"the release flow doesn't quietly become more manual than it needs to be" — a concern that
-`docker/login-action` has now answered for the automated path.
+If anything is built, it is two or three lines inside each `push`, reusing `_next_steps()`. Measure
+helm's and docker's actual auth-failure output first — the third question above — because a matcher
+written against one tool's message and assumed to fit the other is exactly the mistake the original
+plan already made once.
 
-Sequencing: this was waiting on `helm.py` existing at all, since half the stated motivation is
-sharing with a module that didn't exist. It landed 2026-08-23, so nothing blocks this plan now.
+Otherwise close this as `abandoned` and let the tools' own errors stand. That is a legitimate
+outcome and the plan should not be kept alive out of momentum: what it was filed to protect has been
+built, and what it originally designed has been rejected on the evidence.
