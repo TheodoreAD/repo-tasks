@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: blocked on the batched consumer sweep, which is the only thing that can verify the derivation at a consumer
 updated: 2026-08-30
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---

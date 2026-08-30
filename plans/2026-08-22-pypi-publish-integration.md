@@ -1,6 +1,6 @@
 ---
-status: in-progress
-updated: 2026-08-25
+status: blocked on the one-time manual trusted-publisher setup on TestPyPI and PyPI, which only a human can do
+updated: 2026-08-30
 ---
 
 ## Context

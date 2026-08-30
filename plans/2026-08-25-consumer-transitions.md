@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-28
+updated: 2026-08-30
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 

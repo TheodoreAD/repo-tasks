@@ -1,6 +1,6 @@
 ---
-status: in-progress
-updated: 2026-08-29
+status: blocked on the batched consumer sweep reaching scaffoldapy, power-user-linux-setup and agent-skills
+updated: 2026-08-30
 depends_on: [scaffoldapy, power-user-linux-setup, agent-skills]
 ---
 
