@@ -310,8 +310,9 @@ takes the dev build — and there it earns its keep, since asserting the pushed 
 long enough that `pytest.ini`'s `filterwarnings = error` was adopted on a "baseline is zero across
 both tiers" claim that was only true of the unit tier — the integration tier's cost (invoke's
 unclosed subprocess pipes, now the `ignore:unclosed file:ResourceWarning` line there) was invisible
-behind a fixture erroring at setup. Nobody's commit runs this tier by design; whether that earns a
-periodic run is `plans/2026-08-30-scheduled-checks-cadence.md`.]
+behind a fixture erroring at setup. Nobody's commit runs this tier by design, and it earns no
+periodic run either — see [`quality-gate.md`](quality-gate.md), "Nothing here runs on a schedule".
+Running it is a deliberate act, and the staleness that follows is accepted.]
 
 ## Clean-OS tier: testing user-wide effects
 

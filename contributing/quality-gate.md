@@ -117,6 +117,27 @@ watches the Actions tab.
 release flow, which is not where these pushes happen — direct pushes to `main` are. A preflight in
 gitflow would guard the path that needs it least.]
 
+### Nothing here runs on a schedule, and that is the decision
+
+Three things answer a question whose answer changes without any code changing, so each is correctly
+outside `check` — and each can therefore sit stale or red with a green terminal everywhere:
+`deps.audit`, the integration tier (which sat red for an unknown length of time on a bad fixture,
+and hid a second failure behind it while it was), and `ci.check-actions`.
+
+[DECISION: no scheduled workflow. A schedule surfaces staleness only to a reader, and this repo
+pushes straight to `main` and reviews no PRs — a red scheduled run has no natural audience. An
+unwatched scheduled job is worse than a known gap, because it looks like coverage. The answer is
+`ci.status` as a deliberate pre-push step, plus running the other two by hand when their subject
+changes: `deps.audit` when dependencies move, `ci.check-actions` when a workflow is edited. The
+residual staleness risk is accepted, not pending. Settled 2026-08-30.
+
+This rules out a _schedule_, not a _trigger_. The push-triggered `deps.audit` step is a separate,
+still-wanted design that a push already gives a reader — it is blocked on
+`plans/2026-08-24-devpi-dependency-weight.md`, not on this decision.]
+
+**Run `inv ci.status` before pushing.** It is the habit the decision above rests on, and the only
+thing standing between a failed push-triggered run and nobody noticing.
+
 ## What the gate's shipped configs commit every consumer to
 
 `pytest.ini`, `ruff.toml`, and `zizmor.yml` exist twice: the root copy governs this repo and

@@ -11,6 +11,10 @@ confirmed by hitting them. Read the relevant one before changing behavior it cov
 included (`dprint` reflows prose, and a skipped gate is the most common red CI run in this family).
 `inv quality.check` is the same gate without mutations; `inv -l` lists the individual tasks.
 
+`inv ci.status` — before pushing. Nothing here runs on a schedule and nobody watches the Actions
+tab, so this is what keeps a failed run from going unnoticed; see
+[`contributing/quality-gate.md`](contributing/quality-gate.md).
+
 ## Where the reasoning lives
 
 - [`contributing/task-module-conventions.md`](contributing/task-module-conventions.md) — the rules

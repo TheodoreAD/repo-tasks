@@ -330,12 +330,14 @@ Current state of this repo, from the task itself:
 [ci.check-actions] 0 of 3 action(s) behind
 ```
 
-[DEFERRED: neither task runs on a schedule, so both still need someone to type them. That is the
-same "an opt-in check nobody runs can sit stale indefinitely" trade-off that the integration tier
-and the CI `deps.audit` step carry, and it should be settled once for all of them rather than three
-times — now [`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md).
-Worth noting that `ci.status` is at least already part of a habit — it is the pre-push check — so
-the annotation half is closer to being actually seen than the currency half is.]
+**Settled 2026-08-30, and not in this plan's favour.** Neither task runs on a schedule and neither
+will: [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Nothing here runs on a
+schedule", records the decision for all three items that carried this trade-off — no scheduled
+workflow, `ci.status` as a deliberate pre-push step, `ci.check-actions` run by hand when a workflow
+is edited, and the residual staleness accepted rather than left pending. The consumer-side half of
+the question is still open in
+[`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md), because a
+generated repo with actual reviewers has the reader this one lacks.
 
 [DEFERRED: **SHA-pinning every workflow, plus dependabot to keep the pins fresh.** Only
 `publish.yml` is pinned today, by the decision now recorded in
