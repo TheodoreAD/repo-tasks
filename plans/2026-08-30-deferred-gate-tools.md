@@ -62,13 +62,20 @@ per-package entry in `pyproject.toml`'s `[tool.deptry]`; `DEP003` carries a real
 is suppressible per occurrence. The `repo_tasks` self-import — the one finding genuinely unique to
 this repo's dogfooding — is the suppressible kind.
 
-[PITFALL: `uv run --with deptry` **deleted and recreated this repo's `.venv`** rather than layering
-an overlay over it, because the tool's resolution wanted a different interpreter than the venv had.
+[PITFALL: `uv run --with deptry` **deleted and recreated this repo's `.venv`**, and neither `--with`
+nor deptry is the cause. `uv run` in a project directory resolves the interpreter by uv's **own
+default choice**, not from the venv already sitting there — and when the two differ it silently
+removes and recreates the environment. Isolated in a scratch project 2026-08-30: a 3.13.13 venv
+under `requires-python = ">=3.11"` is destroyed by a bare `uv run --with cowsay` because uv picks
+3.14.5, while the identical command against a 3.14 venv prints nothing at all and touches nothing.
+`--python <the venv's version>` also leaves it intact. The original note here blamed "the tool's
+resolution", which was wrong and would have sent the next reader looking at deptry.
+
 `uv sync --all-groups` restored it and the gate came back green, but between the two the dev
 environment is broken for every parallel session sharing the tree. A one-off measurement of a tool
 that is not a dependency belongs in a throwaway environment —
-`env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --with deptry …` — never against the project
-venv. Confirmed 2026-08-30 by doing it the wrong way.]
+`env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --with deptry …`, where `--no-project` is the
+part that matters — never against the project venv.]
 
 ### ruff `S602`/`S603`/`S607`: 3 findings, and the reason matters more than the count
 
