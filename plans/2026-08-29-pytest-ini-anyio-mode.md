@@ -1,5 +1,5 @@
 ---
-status: idea
+status: in-progress
 updated: 2026-08-30
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---
@@ -71,40 +71,78 @@ documents. `env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --python 3.11 -
 is what actually isolates. Any future probe of the form "is this dependency absent" has the same
 hole, and a plugin that auto-registers is the kind that hides in it.]
 
-[NEEDS CLARIFICATION: Whether pulled configs should support a per-repo append at all — a
-`pytest.local.ini` merged in, a marked block the pull preserves, or a documented "these keys are
-yours" region. Every mechanism here has a cost: a pull that preserves anything stops being a
-byte-for-byte materialisation, and "why does this repo's config differ" becomes a question with two
-possible answers instead of one.]
+[DECISION: **No per-repo append, in any of its three shapes.** Answered 2026-08-30, and the
+alternative is not "ship the line to everyone" either: `configs.pull` **derives** the line, emitting
+`anyio_mode = auto` only for a consumer whose own lock contains AnyIO. That keeps the property the
+append would have cost — a pulled file stays fully determined by the canonical copy plus declared
+facts about the consumer, so `configs.diff` applies the same derivation and still compares exactly,
+and "why does this repo's config differ" keeps one answer. The distinction the earlier framing
+missed is between **derivation** (computed from something declared) and **preservation** (arbitrary
+hand-edits kept across a pull); only the second has the two-answers problem. Same mechanism as route
+B in `2026-08-29-python-floor-in-the-shipped-configs.md`, so the "decide these together" clause is
+satisfied — one rule covers both.]
 
-[NEEDS CLARIFICATION: Whether `configs.diff` should report a local edit to a pulled file loudly
-enough to be noticed. It compares against the canonical copy already; what is missing is anything in
-the routine `quality.precommit` path that surfaces the difference, so a diverged file stays diverged
-silently until someone runs the pull that reverts it.]
+[DEFERRED: Whether `configs.diff` should report a local edit to a pulled file loudly enough to be
+noticed. It compares against the canonical copy already; what is missing is anything in the routine
+`quality.precommit` path that surfaces the difference, so a diverged file stays diverged silently
+until someone runs the pull that reverts it. Derivation removes the immediate need — the affected
+consumer stops carrying a hand-edit at all — but not the general hole, which the next hand-edit
+falls into.]
+
+## What the predicate has to be, and the one that looks right and is not
+
+[PITFALL: **"is AnyIO installed" must not be answered in the process running the task.** The obvious
+implementation — `importlib.util.find_spec("anyio")` inside `configs.pull` — reads whichever
+interpreter is running `repo_tasks`, and for a consumer that gets this package as a global `uv tool`
+that is the _tool's_ venv, not the consumer's. Measured 2026-08-30:
+
+```
+~/.local/share/uv/tools/repo-tasks/lib/python*/site-packages/
+  anyio  anyio-4.14.2.dist-info  bump_my_version-1.5.1.dist-info  httpx2  httpx2-2.12.0.dist-info
+```
+
+`bump-my-version -> httpx2 -> anyio` puts AnyIO in the tool's own environment, so the in-process
+check answers "yes" for **every** consumer — including `scaffoldapy`, whose venv has none. It would
+write the line into exactly the repo the derivation exists to protect, and pytest would exit 4. The
+check has to be a fact about the _target project_, and the failure mode of getting it wrong is the
+original bug with a mechanism on top.]
+
+[DECISION: **the predicate is the consumer's `uv.lock`.** Chosen 2026-08-30 over probing
+`./.venv/bin/python`, which measures the exact environment pytest will use but needs a venv to
+already exist — and `configs.pull` runs during bootstrap, before `venv.create`, so it would need a
+fallback anyway and two paths that can silently disagree. The lock is the family's source of truth
+for what `venv.sync` installs, needs no interpreter, and is independent of which `repo_tasks` is
+running. It splits the two known consumers correctly, measured the same day:
+`grep -c 'name = "anyio"'` gives 2 for the project-dependency consumer and 0 for the global-tool
+one. The residual gap — a hand-installed AnyIO absent from the lock — is out of scope by the same
+argument the family already applies elsewhere: an environment that disagrees with its lock is broken
+independently of this.]
+
+The predicate is also the right one on its own terms, not just the cheapest: the line is a no-op for
+a consumer that has AnyIO transitively and writes no async tests, correct for one that writes them,
+and fatal only where AnyIO is absent — which is precisely what the lock reports. And it self-heals:
+if the dependency graph moves and AnyIO leaves a consumer's lock, the next pull drops the line
+rather than leaving behind a key that has become fatal.
 
 ## Recommended direction
 
-~~Measure the inert claim first~~ — done, and it went the unlucky way. The cheap escape is gone: the
-line cannot ship family-wide, so the general question is live now rather than waiting for a second
-case.
+~~Measure the inert claim first~~ — done, and it went the unlucky way. ~~The general question is
+live now~~ — answered 2026-08-30 by the two decisions above. What is left is implementation:
 
-What that leaves, in rough order of cost:
+1. `configs.pull` reads the target project's `uv.lock` and emits `anyio_mode = auto` into
+   `pytest.ini` only when AnyIO is in it; `_diff_config_files` applies the same derivation before
+   comparing, so a correctly-derived file never reports drift.
+2. The canonical `pytest.ini` carries the line with a comment saying it is derived and why — a
+   reader of the shipped file should not have to find this plan to learn that the line is
+   conditional, or that `--strict-config` in the same file's `addopts` is what makes an unrecognised
+   key fatal rather than a warning.
+3. The affected consumer's hand-edit stops being a divergence and becomes the derived output, so
+   nothing there needs undoing.
 
-1. **Ship AnyIO as a `repo-tasks-quality` dependency, then ship the line.** Restores the
-   byte-identical file at the price of putting an async framework into every consumer's dev
-   environment for a key most of them will never use. Cheaper than it first looks — the manifest is
-   already the place the family standardises pytest plugins, and the consumers that take
-   `repo-tasks` as a project dependency have AnyIO anyway — but it makes deliberate a coupling that
-   is currently accidental, and the argument for it ("it is already there") is exactly the
-   accidental part.
-2. **Build a per-repo append** — the second open question above. Now the leading candidate rather
-   than a hypothetical, and its cost is the same one route B in
-   `2026-08-29-python-floor-in-the-shipped-configs.md` pays: a pull that preserves anything stops
-   being a byte-for-byte materialisation, and `configs.diff` needs the same rule or it reports drift
-   forever. **The two should be decided together** — one mechanism serving both, or neither.
-3. **Leave the consumer diverged and make the divergence loud** — the third open question above.
-   Does not solve anything, but stops the silent revert, and is the only option that costs nothing
-   until a decision is made.
-
-Whichever wins, the affected consumer keeps a local edit until then, so option 3's noticing is worth
-having regardless.
+Rejected: **shipping AnyIO as a `repo-tasks-quality` dependency** and then shipping the line
+unconditionally. It reads well — the manifest is already where the family standardises pytest
+plugins, and its own comment justifies `pytest-cov`/`pytest-socket` on the grounds that both are
+inert until asked for — but the justification does not transfer. Those two are inert _as
+dependencies_; AnyIO would be added for the sole purpose of making one config key parse, which makes
+deliberate and permanent a coupling that is currently accidental, and puts an async framework in
+every consumer's dev environment for a key most of them will never use.
