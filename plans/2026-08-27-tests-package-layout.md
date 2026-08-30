@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-27
+updated: 2026-08-30
 ---
 
 # The shipped pyrightconfig forbids `tests/` being a package
@@ -59,10 +59,25 @@ and the natural name for the new file is the same as the unit one.
 
 ### What constrains any fix
 
-- **The config is distributed byte-identically.** `configs.py`'s `_CONFIG_FILES` materializes
-  `pyrightconfig.json` into every consumer verbatim, and this repo's own root copy is asserted
-  byte-identical to the package copy. There is no per-repo parameterization, so whatever is decided
-  lands on every consumer at once via `inv configs.pull`.
+- ~~**The config is distributed byte-identically.**~~ **No longer true as of `c514bd9`
+  (2026-08-30).** When this plan was written `configs.py`'s `_CONFIG_FILES` materialized
+  `pyrightconfig.json` into every consumer verbatim and there was no per-repo parameterization at
+  all. `_derive_for_project` now computes two lines per consumer — `pythonVersion` from that repo's
+  `requires-python`, and `pytest.ini`'s `anyio_mode` from whether its lock resolves AnyIO — with
+  `_diff_config_files` applying the same derivation so `configs.diff` still compares exactly. See
+  [`2026-08-29-python-floor-in-the-shipped-configs.md`](2026-08-29-python-floor-in-the-shipped-configs.md).
+
+  This matters to the question below rather than answering it. The rule the family settled on is
+  **derivation, never preservation**: a pulled file stays fully determined by the canonical copy
+  plus declared facts about the consumer. `extraPaths: ["."]` is not a derived value — it would be
+  the same for every consumer — so the mechanism does not apply to it, and the real objection is
+  unchanged: whether the entry is correct everywhere, not whether it can vary. What has changed is
+  that "the file cannot vary at all" is no longer an argument available to either side.
+
+  This repo's own root copies are still byte-identical to the package copies, verified 2026-08-30 —
+  but only because its `requires-python = ">=3.11"` and its lock carries AnyIO, so both derived
+  values coincide with the canonical defaults. That coincidence is not the general case and should
+  not be read as one.
 - **This package ships tool config, never project structure.** `contributing/test-tiers.md` is
   explicit that the tests tree here is "exemplary by being read, not distributed" and that
   `scaffoldapy` owns the generated layout. So this repo can only decide whether the config _permits_

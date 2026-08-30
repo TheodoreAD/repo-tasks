@@ -1,17 +1,18 @@
 ---
 status: idea
-updated: 2026-08-25
+updated: 2026-08-30
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
 ## Context
 
 `repo_tasks` distributes shared config for every tool this family's `quality.py` wraps — `ruff`,
-`basedpyright`, `pytest`, `dprint`, `shellcheck`/`shfmt` — to every consumer repo (see
-`power-user-linux-setup/plans/2026-08-14-python-repo-scaffolding.md` §D for the distribution
-mechanism, `configs.pull`/`configs.diff`/`configs.local.toml`). Two of those tools' actual
-relationship with `.gitignore` were checked empirically while designing that mechanism, and the
-result was not what documentation-only reasoning would have predicted:
+`basedpyright`, `pytest`, `dprint`, `shellcheck`/`shfmt` — to every consumer repo (the distribution
+mechanism, `configs.pull`/`configs.diff`/`configs.local.toml`, was §D of `power-user-linux-setup`'s
+now-retired `plans/2026-08-14-python-repo-scaffolding.md`; that repo's own docs are the live
+reference, not this pointer). Two of those tools' actual relationship with `.gitignore` were checked
+empirically while designing that mechanism, and the result was not what documentation-only reasoning
+would have predicted:
 
 - **`ruff` respects `.gitignore` natively, no config needed.** Confirmed live against
   `power-user-linux-setup`: `ruff check .` surfaces 0 hits from the (gitignored) `reference/` tree;
@@ -172,9 +173,12 @@ How far each tool can actually honour that, given the audit above:
 
 - [DECISION: canonical `include` entries are spelled `src*`/`tests*`/`tasks*` — a trailing `*` is
   the only spelling that tolerates absence without widening reach (see the PITFALL above), so the
-  per-consumer filtering was deleted and root/package are byte-identical. The widening is confined
-  to top-level siblings sharing the prefix; checked 2026-08-25, no repo in the family has one.
-  Resolved 2026-08-25.]
+  per-consumer filtering was deleted and the include list is uniform across every consumer. The
+  widening is confined to top-level siblings sharing the prefix; checked 2026-08-25, no repo in the
+  family has one. Resolved 2026-08-25. **The stronger claim this originally made — that the whole
+  file is byte-identical root-to-package — stopped being true at `c514bd9` (2026-08-30)**, which
+  derives `pythonVersion` per consumer from its `requires-python`. The include list itself is
+  unaffected and stays uniform, which is all this decision ever turned on.]
 - [NEEDS CLARIFICATION: should anything _detect_ a source tree no `include` entry covers? A check
   that every tracked `*.py` file is matched by some entry would catch a new top-level tree the
   moment it appears — the exact gap `examples/sample-service` sat in before it moved under `tests/`.
