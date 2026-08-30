@@ -25,6 +25,9 @@ included (`dprint` reflows prose, and a skipped gate is the most common red CI r
   bump.
 - [`contributing/release-workflows.md`](contributing/release-workflows.md) — how images reach GHCR,
   why the release workflows are dispatched by hand, how to check a workflow locally first.
+- [`contributing/quality-gate.md`](contributing/quality-gate.md) — which classes of problem the gate
+  looks for, why each tool is in `check` or standalone beside it, what the shipped configs commit
+  every consumer to, and what was considered and not adopted.
 - [`contributing/test-tiers.md`](contributing/test-tiers.md) — the unit / integration / clean-OS
   split and its fixtures.
 - [`contributing/type-checking.md`](contributing/type-checking.md) — why the basedpyright profile is
