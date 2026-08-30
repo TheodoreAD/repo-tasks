@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-30
+updated: 2026-08-31
 ---
 
 # Should `tests/` be a package, and under which import mode?
@@ -151,6 +151,20 @@ conftest fixtures, which is pytest's own mechanism, needs no `__init__.py`, no `
 ruff guard, and works identically under all three import modes. That is the cheapest answer
 available and it is already in production in the repo the requirement came from.]
 
+[PITFALL: **the conftest answer does not transfer to `scaffoldapy`, and assuming it did was this
+plan's own error on 2026-08-30.** The first write-up of the survey proposed folding `support.py`
+into `tests/conftest.py` as the cheap fix, from a reading of that module's imports rather than of
+the module. Its docstring records the move as already rejected there, for two failure modes it marks
+confirmed live: a tier-local `tests/integration/conftest.py` shadows `tests/conftest.py` for that
+tier only, surfacing as a silent direction-dependent `ImportError`; and that repo has a **second**
+`tests/conftest.py` under `template/`, which wins outright whenever pytest falls back to searching
+from the working directory — precisely what the shipped `testpaths = tests/unit` triggers in a repo
+that has not split its tests. So `from conftest import X` is ambiguous there in two independent
+ways, and a distinct module name is the existing fix rather than the problem. The general lesson is
+narrower than the specific one: a helper's _shape_ is a property of the repo it lives in, and two
+repos solving "shared test world" differently is not evidence that either could adopt the other's
+solution.]
+
 [PITFALL: `scaffoldapy`'s route is the one with the latent problem, and it is exactly the basename
 rule. `tests/conftest.py` does a bare `from support import BASE_ANSWERS, TEMPLATE_DIR, Render` —
 which works only because `prepend` puts `tests/` at the **front** of `sys.path`, making a top-level
@@ -192,10 +206,23 @@ Three coherent positions, and choosing between them is the remaining decision:
 2. **Package `tests/` family-wide** — `__init__.py`, `extraPaths: ["."]`, the ruff `banned-api`
    guard. Measured to cost nothing mechanically. Buys `scaffoldapy` a real `tests.support` import
    and removes the shadowing hazard; costs a second import route that only a lint rule closes.
-3. **Fix `scaffoldapy` alone**, by moving `support.py`'s contents into its existing
-   `tests/conftest.py` as fixtures — the `ingesta` shape, no family-wide config change at all. The
-   cheapest option, and the one the evidence most directly supports.
+3. **Fix `scaffoldapy` alone, by renaming the module.** `support.py` → a name nothing else would
+   claim at the top of `sys.path` (`_scaffoldapy_test_support.py`). One `git mv` and three import
+   lines, no family-wide config change, and it commits that repo to no layout. It does not remove
+   the shadowing mechanism, only the realistic chance of a collision.
 
-Option 3 was not on the table when this plan was written, because nobody had looked at what the two
-repos actually do. It is `scaffoldapy`'s call to make, which is what the third open question is
-about.
+Option 3 first read "move it into conftest, the `ingesta` shape" — that is struck, per the pitfall
+above: the move is already rejected in `scaffoldapy` on evidence. Its replacement is weaker than
+what it replaced, which changes the balance:
+
+[DECISION: **the case for option 2 is stronger than the first pass of this survey concluded**, and
+the reason is that the cheap alternative turned out not to exist. The survey's conclusion was "the
+need is real but nothing needs packaging to serve it" — true for `ingesta`, false for `scaffoldapy`,
+whose only options are now a rename that mitigates rather than fixes, or packaging, which fixes it
+properly by giving `tests.support` a namespace instead of a `sys.path` position. That is not enough
+on its own to justify changing the shipped config for nine repos to serve one; it is enough that
+"change nothing" can no longer be defended as _equally_ correct.]
+
+Still `scaffoldapy`'s call, which is what the third open question is about — filed there 2026-08-30
+as `2026-08-30-scaffoldapy-shared-test-helper.md`, corrected 2026-08-31 when the conftest route
+turned out to be closed.
