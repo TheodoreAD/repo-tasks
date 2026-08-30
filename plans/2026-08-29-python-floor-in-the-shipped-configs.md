@@ -1,7 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-29
-depends_on: [scaffoldapy]
+updated: 2026-08-30
 ---
 
 # The shipped canonical configs decide every consumer's Python floor
@@ -61,11 +60,10 @@ Rough; the pyright half is the part with a real trade-off.
    the one changed case is, so the next reader does not restore it as an oversight. `configs.pull`
    materialised it into this repo's own `ruff.toml` in the same commit; `ruff check --show-settings`
    here still resolves 3.11, now from `requires-python` rather than from the pin.
-2. **Give basedpyright an explicit `pythonVersion`** — the bug fix `ingesta`'s plan already
-   identified as landable on its own. The tension is that it is per-project while the shipped file
-   is byte-identical. Three routes, measured 2026-08-29 and weighed below; **no decision taken** —
-   deliberately deferred, since the tier question this depends on is `scaffoldapy`'s and may make
-   the choice cheaper once it lands.
+2. **Give basedpyright an explicit `pythonVersion`, derived at pull time from the consumer's
+   `requires-python`** — route B below, **chosen 2026-08-30**. The tension that made this look
+   expensive (per-project value, byte-identical shipped file) dissolves once derivation is
+   distinguished from preservation; see the decision block after the routes table.
 3. **Leave the tier question itself to `scaffoldapy`**, per the owning plan — a generation-time
    answer that fans out to `requires-python` and CI. Nothing here should grow its own notion of
    which tier a repo is in.
@@ -107,9 +105,58 @@ Measured 2026-08-29 on basedpyright 1.39.10, in the same scratch projects as the
   the repo is in, which is `scaffoldapy`'s question rather than this one. It also only helps the
   type checker: nothing else about the tier follows from it.
 
-[DEFERRED: pick between A, B and C. Not blocked on measurement — all three are understood — but on
-`scaffoldapy`'s tier answer, which C needs outright and which changes what B has to derive from.
-Revisit when this plan's `depends_on` clears.]
+## The decision: route B, plus a per-run override
+
+[DECISION: **route B — `configs.pull` derives `pythonVersion` from the consumer's own
+`requires-python`.** Taken 2026-08-30. It is the only route where the editor and CI read the same
+answer, which is the entire point of the plan; A explicitly fails that column and C buys it only by
+making dev run the floor. The two objections that had it deferred both turned out to be weaker than
+they read:
+
+- **It is not blocked on `scaffoldapy`.** The tier question fans _out_ to `requires-python`, and
+  `requires-python` is exactly what B reads — so B is correct before the tier mechanism lands and
+  stays correct after, with nothing to redo. Only C genuinely needs the tier, because only C has to
+  decide what a venv is built with. This plan's `depends_on: [scaffoldapy]` was removed on that
+  basis.
+- **Its cost is not the cost a per-repo append pays**, which is what
+  `2026-08-29-pytest-ini-anyio-mode.md` assumed when it said the two should be decided together.
+  Derivation and preservation are different mechanisms: a derived file is still fully determined by
+  the canonical copy plus one declared input, so `configs.diff` applies the same derivation and
+  still compares exactly, and "why does this repo's config differ" keeps a single answer — its
+  `requires-python` differs. Preservation is the one that gives that question two answers and leaves
+  `diff` nothing to check against. Both plans are answered the same way after all, just not with the
+  mechanism either of them expected: **pulled configs are derived from declared facts about the
+  consumer, never preserved hand-edits.**]
+
+### The matrix case, which is what nearly forced a blunt answer
+
+The objection raised against putting any floor in the config: a repo running a Python matrix in CI
+wants static analysis at more than one version, and a config file holds one. Answered — **both tools
+take a per-run override that beats the config**, measured 2026-08-30 on basedpyright 1.39.10 and
+ruff 0.16.3, over `def identity[T](value: T) -> T`:
+
+| run                                                          | result                                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `pyrightconfig.json` pins `"pythonVersion": "3.11"`, no flag | `error: Function type parameter syntax requires Python 3.12 or newer` |
+| same file, `basedpyright --pythonversion 3.12`               | 0 errors, 0 warnings                                                  |
+| `requires-python = ">=3.11"`, no `ruff.toml`                 | `invalid-syntax: Cannot use type parameter lists on Python 3.11`      |
+| same, `ruff check --target-version py312`                    | All checks passed                                                     |
+
+So the floor lives in the config, where the editor can see it, and a matrix job overrides per entry.
+`quality.type-check` and the ruff tasks grow an optional `--python-version` that forwards to each
+tool's own flag.
+
+[DECISION: **CI does not wire that flag in by default.** Static analysis checks source against the
+_declared floor_, and the floor is one value however many interpreters the tests run on — a second
+version only catches a `sys.version_info`-gated branch. Real, but narrow enough that paying for it
+everywhere is the wrong default. The flag exists so a repo that wants it can ask; nothing in the
+shipped workflow asks on its behalf. Taken 2026-08-30 under an explicit "simplicity first"
+instruction.]
+
+[PITFALL: `pyrightconfig.json` is JSONC and this repo's copy is roughly half comments, each one
+carrying the rationale for a rule. Deriving a value into it must be a one-line rewrite of a
+placeholder the canonical file already carries — parsing and re-dumping the JSON destroys every
+comment, which is most of the file's value.]
 
 ## Open questions
 
