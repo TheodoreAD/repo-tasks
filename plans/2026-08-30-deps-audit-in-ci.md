@@ -110,8 +110,16 @@ Change either and the test fails naming the other.
   `Found no known vulnerabilities and no
   adverse project statuses in 62 packages`, 0.72s.
 
-[UNVERIFIED: no run has happened on GitHub yet — everything above is local. The first push to `main`
-is what proves the reusable-workflow call resolves and that the check appears as its own entry.]
+Confirmed on GitHub, first push to `main` (commit `9933e2a`, run `33339113208`, 2026-08-31):
+
+- The reusable-workflow call resolved — the job reports as `audit / audit`, the caller/callee naming
+  GitHub gives a `workflow_call`.
+- **`CI` and `Security` appear as two independent runs against the same commit**, both green. That
+  is the separate signal this design is for, working: one can go red without the other.
+- The whole job took **9s**, of which the audit step was ~1.4s: `Resolved 64 packages in 0.72ms`,
+  `Found no known vulnerabilities and no adverse project statuses in 62 packages`.
+- The experimental-feature warning appears in the log as expected and as `deps.py` intends — left
+  visible rather than silenced with a flag that would break when uv graduates the command.
 
 ## What is left
 
