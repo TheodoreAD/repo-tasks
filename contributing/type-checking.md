@@ -193,8 +193,14 @@ error with `extraPaths` removed and nothing else changed.
 The supported alternative is pytest's own: no `__init__.py`, and a shared helper imported bare
 (`import conftest`), which its
 [good integration practices](https://docs.pytest.org/en/stable/explanation/goodpractices.html) page
-recommends for exactly this `src`-layout shape. The cost of that layout is the unique-basename
-requirement, written down in [`test-tiers.md`](test-tiers.md) under Conftest layout.
+says "should just work" for exactly this `src`-layout shape. The cost of that layout is the
+unique-basename requirement, written down in [`test-tiers.md`](test-tiers.md) under Conftest layout.
+
+**This is a choice between three documented options, not a forced move**, and the decision above
+settles only the `extraPaths` half. pytest also "highly recommends" packaging tests under the
+`prepend` mode this repo uses, and `--import-mode=importlib` removes the basename requirement
+outright while making shared test helpers impossible. Which one this family should ship is open in
+`plans/2026-08-30-tests-import-layout.md`, with the community survey and the per-tool measurements.
 
 ## Rolling this out to a consumer
 

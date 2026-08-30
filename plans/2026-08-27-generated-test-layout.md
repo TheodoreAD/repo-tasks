@@ -63,12 +63,11 @@ who would want it. Against: a generated repo full of commented-out code is its o
 
 [NEEDS CLARIFICATION: whether `test.untested-modules`, the `_integration` suffix and the
 basename-uniqueness rule need saying in the generated `AGENTS.md`. All three are gate-visible rules
-a generated repo inherits without being told, and the third is now a **standing requirement** rather
-than a stopgap: a packaged `tests/` was measured and rejected 2026-08-30
-([`../contributing/type-checking.md`](../contributing/type-checking.md), "Why `tests/` may not be a
-package"), so nothing will make the basename collision impossible later. That settles the question
-this used to be paired with and leaves only the template half — which is this plan's own subject, so
-it is now one decision rather than two.]
+a generated repo inherits without being told. The third depends on an unsettled question: a packaged
+`tests/` was measured and rejected on 2026-08-30, but the framing was too narrow and the layout is
+reopened in [`2026-08-30-tests-import-layout.md`](2026-08-30-tests-import-layout.md) — which owns
+whether the basename rule exists at all, since `--import-mode=importlib` removes it. Decide that
+first; what the generated `AGENTS.md` should state follows from it.]
 
 ## Recommended direction
 

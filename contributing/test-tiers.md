@@ -159,7 +159,9 @@ A packaged `tests/` would make the collision impossible and the suffix purely de
 **not permitted**: it needs `extraPaths: ["."]` in the shipped `pyrightconfig.json`, which also
 makes `src.<pkg>` resolve as a second import route to the same code. Measured and settled 2026-08-30
 — see [`type-checking.md`](type-checking.md), "Why `tests/` may not be a package". So the basename
-rule above is the standing requirement, not a stopgap.
+rule above is what this repo currently lives with. It is not unavoidable, though:
+`--import-mode=importlib` removes it outright, at the cost of making shared test helpers impossible.
+Which layout the family should ship is open in `plans/2026-08-30-tests-import-layout.md`.
 
 ## Unit tier: mocked `c.run`
 
