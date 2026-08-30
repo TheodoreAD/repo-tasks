@@ -91,6 +91,18 @@ are inert until something asks for them (`--cov`, `disable_socket()`). Standardi
 nothing and removes a dependency edit from the path of any repo that later wants either. What stays
 per-repo is whether a test tree uses them.]
 
+[DECISION: `pytest-timeout` joined them 2026-08-30, and is the only plugin the family-wide survey
+adopted. It is inert on the same terms — nothing without `--timeout`, a `timeout` ini key or the
+marker — and it answers the one concern the survey found nothing covering: a hung test in the
+integration tier, which drives real subprocesses, Docker and a package index. Without it such a hang
+ends as a CI job killed at `timeout-minutes` with nothing naming the test that stopped. Nothing sets
+a timeout by default; a tier that wants one opts in, the same seam as the socket guard.]
+
+[PITFALL: `pytest_socket` raises `SocketBlockedError` **and** emits a `UserWarning` carrying the
+same message. Under this repo's `filterwarnings = error` a test written to prove the guard works
+fails on the promoted warning rather than passing on the exception, unless it filters the warning
+too. Measured 2026-08-30 while checking the guard against HTTP-mocking plugins.]
+
 [DECISION: verified compatible with the `db-defaults` skill's picks before adopting, since that
 skill's whole point is real local backing services rather than mocks. Every default there is
 in-process or file-backed — `sqlite3`, `sqlalchemy`, `duckdb`, `tinydb`, `diskcache`, FTS5, `huey`,
