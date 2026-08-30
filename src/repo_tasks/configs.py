@@ -10,7 +10,8 @@ default, or from `--source git:<url>`/`local:<path>` to stage a candidate from e
 The reverse direction — promoting a repo's own tuned root config into the shipped baseline — is
 `configs.promote` in repo-tasks' own `tasks.py`, not exported here: every consumer's `check`
 still runs unconditionally against whatever `pull` last wrote, no per-repo `configs.local.toml`
-override exists today (see plans/2026-08-14-python-repo-scaffolding.md §D).
+override exists today (the distribution mechanism is documented in `power-user-linux-setup`'s
+`contributing/repo-family-architecture.md`).
 
 This module also owns the other half of what a consumer snapshots: the `repo-tasks-quality`
 dependency manifest. `ensure_deps` splices it in, `diff` reports what a consumer has fallen behind
