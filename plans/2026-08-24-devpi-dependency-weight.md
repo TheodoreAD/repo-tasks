@@ -1,82 +1,62 @@
 ---
-status: idea
-updated: 2026-08-26
+status: landed
+updated: 2026-08-30
 ---
 
-## Context
+# devpi's weight in the dev group
 
-Split out of the now-retired test-tier plan, which folded every dependency group into `dev`. That
-decision is right and lands independently; this plan is only about the one uncomfortable
-consequence, deliberately deferred.
+## Migrated to
 
-`devpi-server` and `devpi-client` exist solely to give `tests/integration/test_dist_integration.py`
-a real PEP 691/503 package index to run `dist.py`'s `versions`/`publish` against. Measured
-2026-08-24:
+- [`../contributing/test-tiers.md`](../contributing/test-tiers.md), "Package index: a real server
+  for the HTML branch, a stub for the JSON one" — the reversal and its numbers, the 409-on-re-upload
+  pitfall, and the decision that a stub covers more of `_json_versions` than any real index does.
+  The "What this tier caught" section now says which server found the two original bugs, and the
+  closing lesson gained the half this plan supplied: re-ask a tool choice when its _cost_ changes,
+  not only when the candidates do.
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md) — the no-suppression decision
+  gained the worked example it lacked: an advisory really did block work, the rule held, and the fix
+  was removing the dependency rather than suppressing its finding.
+- [`2026-08-30-deps-audit-in-ci.md`](2026-08-30-deps-audit-in-ci.md) — the `[DEFERRED:]` CI audit
+  step, which this plan blocked and which is now unblocked. Filed as its own plan rather than left
+  as a sentence in `quality-gate.md`.
 
-| dependency       | packages resolved standalone |
-| ---------------- | ---------------------------- |
-| `devpi-server`   | 43                           |
-| `devpi-client`   | 18                           |
-| `testcontainers` | 10                           |
+**Not migrated:** the original per-package resolution table (43 + 18 + 10). It measured a dependency
+set that no longer exists; the numbers that matter now (98 → 63 packages, 61 → 4 for the index) are
+in `test-tiers.md`.
 
-Folding them into `dev` takes a plain `uv sync` from 39 packages to roughly 82 — most of it devpi's
-pyramid/zope stack, for two tests.
+## What it was
 
-**Explicitly not urgent** as originally filed: it works today, disk is not a constraint, and `uv` is
-fast enough that the install cost is not felt. Filed because it was untidy, not because it hurt.
+`devpi-server` and `devpi-client` existed solely to give
+`tests/integration/test_dist_integration.py` a real PEP 691/503 package index to run `dist.py`'s
+`versions`/`publish` against. Filed 2026-08-24 because that was untidy — 61 resolved packages of
+pyramid/zope stack for two tests — and explicitly _not_ urgent: it worked, disk was not a
+constraint, and `uv` made the install cost unnoticeable.
 
-**That changed 2026-08-26 — devpi now costs something concrete.** `inv deps.audit` (added by the
-quality-gate coverage sweep; see
-[`../contributing/quality-gate.md`](../contributing/quality-gate.md)) reports two advisories against
-`setuptools` 81.0.0, fixed upstream in 83.0.0, and the lock cannot move:
+It stopped being about tidiness on 2026-08-26, when `inv deps.audit` reported two advisories against
+`setuptools` 81.0.0 that the lock could not move away from: `devpi-server` requires `setuptools<=81`
+and its `pyramid` dependency `<82`. That blocked a decision already taken — the push-triggered
+`deps.audit` CI step — because it would have been red from its first run.
 
-- `devpi-server` requires `setuptools<=81`
-- `pyramid` (a devpi-server dependency) requires `setuptools<82`
+## How it was settled
 
-`uv lock --upgrade-package setuptools` is a no-op against those pins, so as long as devpi is in
-`dev`, this repo's dependency set carries a known-vulnerable transitive that nothing here can fix.
+Measured 2026-08-30 rather than argued, which reversed the plan's own expectations twice.
 
-Two things follow. The advisory itself is low-impact — an sdist `MANIFEST.in` exclusion bypass via
-Unicode normalization collision on macOS APFS/HFS+, in a package used here only to build a local
-test index on Linux. But it blocks a design decision that was already taken: `deps.audit` was to run
-in CI on push to `main`, and cannot, because it would be red from the first run.
+The plan's third question — whether `uv publish` could work against a stub at all — guessed that the
+upload might be what kept a real server necessary. Measured, the upload is the easy half:
+`uv publish` uploads to pypiserver without complaint. What nothing lightweight does is the **JSON**
+half. pypiserver still serves no PEP 691 at all (it answers `text/html` whatever the `Accept` header
+says), and `simple-repository-server`, which does implement PEP 691, pulls `fastapi` +
+`uvicorn[standard]` + `httpx` and accepts no uploads. So the split is per-test as the plan
+suspected, but on the opposite axis.
 
-[DEFERRED: the CI audit step (`inv deps.audit` on push to `main`, designed by the quality-gate sweep
-and the one part of it that never landed). Deferred rather than worked around — narrowing the CI
-step's scope, or building the advisory-suppression list that
-[`../contributing/quality-gate.md`](../contributing/quality-gate.md) deliberately decided against,
-would both bake a workaround for devpi into shipped code. It lands when this plan does.]
+The plan's second question — what a stub would lose — turned out to have a better answer than
+"something". `_json_versions` has three sub-paths, and no real index emits all three: PyPI takes the
+top-level `versions` key and omits the per-file `version` key entirely, devpi took the
+filename-derivation path, and **nothing produces the middle one**, which was therefore mock-only for
+as long as devpi was the fixture. A stub serves all three, over a real socket, and can assert the
+JSON media type actually reached the wire — which a mocked `_get` cannot show and a real server
+cannot be made to report. Coverage went up, not down: 2 tests became 5.
 
-This does not decide the plan on its own: the "is the discovery value recurring" question below is
-still the real one. It does mean the cost side is no longer only tidiness.
-
-## Open questions
-
-[NEEDS CLARIFICATION: can a stub HTTP server replace devpi outright? What the two tests actually
-need is an endpoint serving PEP 691 JSON on the right `Accept` header and PEP 503 HTML otherwise —
-`http.server` in a thread can do both, with no dependency at all.
-[`contributing/test-tiers.md`](../contributing/test-tiers.md) records devpi being chosen over
-`pypiserver` specifically because `pypiserver` serves only the HTML index, leaving `dist.py`'s JSON
-branch untested — that argument is about `pypiserver`, not about stubs, and a stub controls both
-branches directly.]
-
-[NEEDS CLARIFICATION: what would be lost? devpi is a real implementation, and the tier's stated
-value is catching what mocked fixtures cannot — it found two genuine `dist.py` bugs on first run (a
-missing PEP 691 `version` key, and `#sha256=` fragments in HTML hrefs), both now pinned by unit
-regressions. A stub written today would encode what we already know and would not have found those.
-The honest question is whether that discovery value recurs, or whether it was a one-time payoff
-already banked.]
-
-[NEEDS CLARIFICATION: is `uv publish` exercisable against a stub at all? `dist.publish` is half of
-what this tier covers, and a stub would need to accept a real upload. That may be the piece that
-keeps a real server necessary even if `versions` moves to a stub — in which case the split is
-per-test, not per-tier.]
-
-## Recommended direction
-
-Leave it alone until one of two things changes: the install weight starts being felt, or the
-integration tier stops earning its keep. Revisit then with the questions above answered by
-measurement rather than argument — particularly the third, which likely decides the whole thing.
-
-If it is revisited and a stub wins, the replacement belongs next to the tests it serves, not as a
-fixture in `conftest.py` shared with unrelated modules.
+Outcome: 98 packages to 63, `setuptools` gone from the lock entirely, `inv deps.audit` at zero
+vulnerabilities, and the integration tier still doing a real build → real `uv publish` → real HTML
+parse round trip against a real index.
