@@ -1,0 +1,36 @@
+name: Security
+
+# Separate from CI on purpose, and the separation is the point: a failure here means the dependency
+# set has a known advisory, not that the code is wrong. GitHub reports each workflow as its own
+# check run with its own name and badge, so `CI ✓` next to `Security ✗` reads as "the code is fine,
+# the dependencies are not" with nothing further to configure.
+#
+# The alternative — SARIF uploaded to code scanning, so findings land in the Security tab — was
+# rejected: it needs a GitHub Code Security licence on private repositories, and this family is
+# mixed public and private, so it could not be the same everywhere. `uv audit` also emits only text
+# and json, so that route would need a SARIF converter nobody maintains.
+# Push-triggered, deliberately not scheduled. contributing/quality-gate.md, "Nothing here runs on a
+# schedule, and that is the decision", settled 2026-08-30: a red scheduled run has no audience in a
+# repo that pushes straight to main and reviews no PRs, and an unwatched scheduled job looks like
+# coverage without being it. That decision explicitly ruled out a schedule and not a trigger, and
+# named this workflow as the trigger it was leaving open.
+#
+# The residual gap is real and accepted: an advisory that lands with no push here is not seen until
+# the next push. See plans/2026-08-30-deps-audit-in-ci.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    # This repo hosts the reusable workflow, so it calls its own copy by path; every other repo in
+    # the family calls it as TheodoreAD/repo-tasks/.github/workflows/security-reusable.yml@main.
+    uses: ./.github/workflows/security-reusable.yml

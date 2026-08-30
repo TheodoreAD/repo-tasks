@@ -1,0 +1,35 @@
+name: Security (reusable)
+
+# The dependency audit, defined once for the whole family. Every repo calls this rather than
+# copying it, so "is the audit the same everywhere" stops being a question anyone has to track —
+# see contributing/quality-gate.md, "The dependency audit runs as its own workflow".
+#
+# Callable from a private repo because this repo is public: on Free/Pro/Team a reusable workflow
+# must live in the same repo or a public one. The reverse (hosting it in a private repo) would need
+# Enterprise, which is why this file is here and not somewhere more obvious.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # No dependency install, so this is generous rather than tight.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.0.1
+      # No `./bootstrap.sh` and no venv, deliberately: `uv audit --locked` reads uv.lock and queries
+      # OSV, and needs nothing installed. Measured on a clean checkout with no .venv at all — 0.72s
+      # wall. That is also why there is nothing here worth caching between jobs.
+      #
+      # The raw command rather than `inv deps.audit`, which is exactly `uv audit --locked`
+      # (src/repo_tasks/deps.py). Running the task would mean bootstrapping the whole dev group to
+      # shell out to one uv subcommand, and it would restrict this workflow to repos that use
+      # repo-tasks — where the command form works for any uv project. The cost is that the command
+      # is written in two places; test_deps.py asserts they agree.
+      - run: uv audit --locked

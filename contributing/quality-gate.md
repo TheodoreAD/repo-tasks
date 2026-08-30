@@ -142,6 +142,44 @@ still-wanted design that a push already gives a reader — open in
 **Run `inv ci.status` before pushing.** It is the habit the decision above rests on, and the only
 thing standing between a failed push-triggered run and nobody noticing.
 
+### The dependency audit runs as its own workflow
+
+`security.yml` runs the audit on push to `main` and on manual dispatch; `security-reusable.yml`
+holds the actual job and every other repo in the family calls it.
+
+[DECISION: a separate workflow, not a step in `ci.yml`. The separation is the signal, not tidiness:
+GitHub gives every workflow its own check run, its own name against the commit, and its own badge,
+so `CI ✓` beside `Security ✗` says "the code is fine, the dependencies are not" with nothing further
+to configure. Folding it into `ci.yml` would also put a network call inside the workflow whose whole
+point is that `quality.check` runs offline, and would run it on every feature-branch push.]
+
+[DECISION: **a red `main` on an unfixable advisory is the intended outcome**, per the user
+2026-08-31. There is no suppression list and no acknowledge-and-move-on, so an advisory on a
+transitive with no fixed version keeps `main` red until someone acts. This repo has been in that
+exact state before — `devpi-server` pinned `setuptools<=81` for four days. Accepted, because the
+alternative is a suppression file that outlives the advisory it silenced.]
+
+[DECISION: SARIF uploaded to code scanning, so findings land in the Security tab, was **rejected on
+uniformity**. It needs a GitHub Code Security licence on private repositories, and this family is
+mixed — five public repos and four private ones, measured 2026-08-31 — so it could not be the same
+everywhere, which was the requirement. `uv audit` also emits only `text` and `json`, so that route
+would additionally need a SARIF converter nobody maintains. A separate workflow gets the same
+"security is separate from correctness" reading for free, on every plan.]
+
+[DECISION: the reusable workflow lives in **this** repo because this repo is public. On Free, Pro
+and Team a reusable workflow must be in the same repository or a public one, so a public host is
+callable from the family's private repos while a private host would need Enterprise. Callers pin
+`@main` rather than a SHA: pinning would mean bumping the ref in every consumer, which is precisely
+the "hard to keep track of the differences" problem the reusable workflow exists to remove, and both
+ends of the call are owned by the same person.]
+
+[PITFALL: the job installs nothing and caches nothing, and that is not an oversight to "fix" later.
+`uv audit --locked` reads `uv.lock` and queries OSV — measured 2026-08-31 on a clean checkout with
+no `.venv` at all, 0.72s wall. Adding `./bootstrap.sh` to give it `inv deps.audit` would install the
+whole dev group to shell out to one uv subcommand, and would restrict the workflow to repos that use
+`repo-tasks`. The cost of the raw command is that the string lives in two places;
+`test_deps.py::test_audit_command_matches_the_reusable_workflow` fails if they diverge.]
+
 ## What the gate's shipped configs commit every consumer to
 
 `pytest.ini`, `ruff.toml`, and `zizmor.yml` exist twice: the root copy governs this repo and

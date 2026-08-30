@@ -1,6 +1,8 @@
 """Tests for repo_tasks.deps: asserts the exact command string each task builds via invoke's
 MockContext — the only real logic here is flag-to-flag command construction."""
 
+from pathlib import Path
+
 import pytest
 from invoke import Exit, MockContext, Result
 
@@ -53,6 +55,26 @@ def test_check():
 def test_audit(c):
     deps.audit.body(c)
     c.run.assert_called_once_with("uv audit --locked", echo=True)
+
+
+def test_audit_command_matches_the_reusable_workflow():
+    """The security workflow runs the audit command directly rather than through `inv deps.audit`,
+    so it needs nothing installed — see the reasoning in security-reusable.yml. That makes the
+    command string live in two places, and this is what keeps them from drifting apart: change one
+    and this fails naming the other."""
+    c = MockContext(run=True)
+    deps.audit.body(c)
+    command = c.run.call_args[0][0]  # pyright: ignore[reportAttributeAccessIssue]
+
+    # Anchored to this file, not to cwd: the tier's `tmp_cwd` fixture means cwd is not dependable,
+    # and this is the repo's own workflow rather than a scratch fixture.
+    repo_root = Path(__file__).parents[2]
+    workflow = (repo_root / ".github/workflows/security-reusable.yml").read_text()
+
+    assert f"- run: {command}\n" in workflow, (
+        f"deps.audit runs {command!r}, which security-reusable.yml does not. Update the workflow's "
+        f"`run:` step to match, or the audit CI performs stops being the audit this task defines."
+    )
 
 
 def test_list_default(c):
