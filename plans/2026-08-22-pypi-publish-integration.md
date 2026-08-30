@@ -56,15 +56,69 @@ consulted when a command names it directly (`inv dist.publish --index testpypi`,
 ### 3. Auth: Trusted Publishing (OIDC) primary, API token as the manual/local fallback
 
 Trusted Publishing is PyPI's own current recommended default — no long-lived secret stored anywhere
-to leak or rotate. `uv publish` already supports it natively (confirmed via `uv publish --help`):
-`--trusted-publishing {automatic,always,never}`, where `automatic` detects a supported CI OIDC
-environment (GitHub Actions) and exchanges its short-lived ID token for a short-lived PyPI upload
-token itself.
+to leak or rotate. `uv publish` supports it natively:
+`--trusted-publishing {automatic,always,never}`.
 
-Setup is a one-time manual step on both `test.pypi.org` and `pypi.org`'s web UI — create a "pending
-publisher" tied to `TheodoreAD/repo-tasks`, a specific workflow filename, and (optionally) a named
-GitHub Environment. This can't be automated from `inv`/CI; it's tracked here as an explicit
-checklist item, done once, by a human, before the first CI-driven publish.
+#### What the exchange actually does
+
+Read from uv's source 2026-08-30 (`crates/uv-publish/src/trusted_publishing.rs` and
+`trusted_publishing/pypi.rs`; clone at `$RESEARCH_HOME/repos/github.com--astral-sh--uv`), because
+the mechanism decides several of the failure modes below and "it uses OIDC" does not.
+
+1. **uv decides whether to try**, in `check_trusted_publishing`. Under `automatic` it skips silently
+   if any explicit credential is present — see the pitfall below for what counts.
+2. **Ask CI for an identity token.** On GitHub Actions that reads `ACTIONS_ID_TOKEN_REQUEST_URL` and
+   its companion token, which exist **only** when the job declares `permissions: id-token: write`.
+   uv's error names exactly that:
+
+   ```
+   Failed to obtain OIDC token: is the `id-token: write` permission missing?
+   ```
+
+   Supported providers, from uv's own claims enum: **GitHub, GitLab, Buildkite**.
+3. **Ask the index which audience to request** — `GET https://<registry authority>/_/oidc/audience`,
+   returning e.g. `{"audience": "pypi"}`. The audience is _discovered, not hardcoded_, which is why
+   the identical code path works against TestPyPI: it answers with its own.
+4. **CI mints a signed JWT** for that audience, whose claims are the identity. uv deserialises
+   `sub`, `repository`, `repository_owner`, `repository_owner_id`, `job_workflow_ref`, `ref` and an
+   optional `environment`.
+5. **Trade it for an upload token** — `POST https://<registry authority>/_/oidc/mint-token` with
+   `{"token": "<the JWT>"}`, returning a short-lived token scoped to that project. PyPI verifies the
+   signature and matches the claims against the registered publisher.
+6. **Upload with it**, as an ordinary `__token__` username plus that token as the password
+   (`crates/uv/src/commands/publish.rs`). Nothing else in the flow differs from a token upload.
+
+On rejection uv prints the token's claims beside the error — "Token claims, which must match the
+publisher configuration" — which is the thing to read first when a mint request is refused, since
+the mismatch is almost always one claim.
+
+#### The one-time manual setup
+
+A "pending publisher" on both `test.pypi.org` and `pypi.org`'s web UI, tied to
+`TheodoreAD/repo-tasks`, a specific workflow filename, and (optionally) a named GitHub Environment.
+The two indexes share nothing, so this is done twice. It can't be automated from `inv`/CI; it's an
+explicit checklist item, done once, by a human, before the first CI-driven publish.
+
+This registration is what makes the identity unforgeable: another repo's JWT carries a different
+`repository` claim and is refused, so there is no credential that can be stolen and replayed
+elsewhere.
+
+[PITFALL: **four ways trusted publishing silently does not fire**, three of them producing no error
+at all because `automatic` treats "not applicable" as "skip".
+
+- Missing `permissions: id-token: write` — the request env vars simply do not exist.
+- Any explicit credential: `--token`, `--username`/`--password`, **or merely enabling keyring**.
+  `keyring_provider != Disabled` is in the same condition as a supplied password
+  (`uv-publish/src/lib.rs:421`), which is why that setting must never reach a committed file — see
+  [`2026-08-30-ci-secrets-for-non-oidc-registries.md`](2026-08-30-ci-secrets-for-non-oidc-registries.md).
+- **Renaming the workflow file**, which changes `job_workflow_ref` so it no longer matches the
+  registered publisher. This one fails loudly at mint time rather than silently, but the cause is
+  not obvious from the message alone — the printed claims are what shows it.
+- Running locally: there is no ambient OIDC token off CI, by design. That is precisely why the local
+  path is keyring and the CI path is OIDC, and why the two must not share a config file.
+
+`--trusted-publishing always` converts the silent skips into hard errors and is the setting to reach
+for when debugging why a run fell back to something else.]
 
 API-token auth stays the fallback for a human publishing manually from their own machine outside CI
 (e.g. an early manual TestPyPI push before CI exists yet) — the token lives in the human's own
