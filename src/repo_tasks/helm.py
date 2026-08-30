@@ -116,13 +116,19 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     retyped. Runs under a pty so helm can prompt. No-ops cleanly in a repo with no [[helm]]
     entries.
 
-    [UNVERIFIED: helm keeps its own registry config (`--registry-config`, defaulting to
-    `~/.config/helm/registry/config.json`) rather than reading `~/.docker/config.json`, and helm 4
-    exposes no credential-helper option at all — so unlike docker.login this does not currently
-    reach the OS secret store, and the credential lands base64-encoded in that file. Whether
-    pointing `--registry-config` at docker's config makes helm honour a `credsStore` there is
-    untested and is what plans/2026-08-30-helm-credentials-outside-the-os-store.md exists to
-    settle.]"""
+    helm stores this in its own registry config, but that config honours a `credsStore` exactly as
+    docker's does — helm resolves credentials through oras, whose store checks `credHelpers`, then
+    `credsStore`, then a detected platform default. So the credential reaches the OS secret store
+    wherever the machine has a credential helper installed.
+
+    Reading is wider than writing: helm searches its own config **and** falls back to
+    `~/.docker/config.json`, keyed by registry host. A chart registry on the same host as an image
+    registry is therefore already covered by `docker.login`, and this task is what a chart registry
+    on its own host needs.
+
+    [UNVERIFIED: that any of this reaches the keyring on this machine, which currently has no
+    credential helper installed — see plans/2026-08-30-registry-credentials-in-the-os-store.md,
+    blocked on the machine setup that installs one.]"""
     chart = _resolve_chart(c, project)
     if chart is None:
         print(f"[helm.login] {_NO_CHARTS}")
