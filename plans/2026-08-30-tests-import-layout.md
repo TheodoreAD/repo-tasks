@@ -130,11 +130,33 @@ inert there rather than wrong — but "inert in some consumers" is a property wo
 deliberately, and the shipped configs otherwise avoid per-repo values. A generic message would fix
 the naming half.]
 
-[NEEDS CLARIFICATION: is the shared-helper use case real for this family, or was it one consumer
-once? It is the entire reason any of this came up (`ingesta`, 2026-08-27, wanting a synthetic-world
-helper imported across several unit modules). If the honest answer is that helpers belong in the
-application package — which is `importlib`'s position and a defensible one — then the current
-unpackaged layout is fine and only the false "standing requirement" claim needed correcting.]
+**The shared-helper question is answered — measured 2026-08-30, and the answer is "real, recurring,
+and already served two different ways, neither of them packaging."**
+
+Every personal repo with a `tests/` tree was surveyed for a non-test, non-conftest module under it.
+Nine repos have tests; **two have the shared-helper need, and they solve it differently**:
+
+| repo          | tests | how the shared world is expressed                                                               |
+| ------------- | ----- | ----------------------------------------------------------------------------------------------- |
+| `scaffoldapy` | 3     | `tests/support.py`, imported by four files across `tests/`, `tests/unit/`, `tests/integration/` |
+| `ingesta`     | 16    | a 159-line `tests/conftest.py` of session-scoped fixtures                                       |
+| the other 7   | 2–29  | no helper module at all                                                                         |
+
+`repo-tasks` itself has none: the only `__init__.py` and the only non-test module under its `tests/`
+belong to `tests/fixtures/sample-service`, a fixture _project_, not the test tree.
+
+[DECISION: the use case is not "one consumer once" — but it is also not evidence for packaging. Of
+the two repos that have it, the one that **raised** the question (`ingesta`) answered it with
+conftest fixtures, which is pytest's own mechanism, needs no `__init__.py`, no `extraPaths` and no
+ruff guard, and works identically under all three import modes. That is the cheapest answer
+available and it is already in production in the repo the requirement came from.]
+
+[PITFALL: `scaffoldapy`'s route is the one with the latent problem, and it is exactly the basename
+rule. `tests/conftest.py` does a bare `from support import BASE_ANSWERS, TEMPLATE_DIR, Render` —
+which works only because `prepend` puts `tests/` at the **front** of `sys.path`, making a top-level
+module named `support` shadow anything else by that name for the whole session. `support` is about
+as collidable as a module name gets. So the repo that would benefit most from a packaged `tests/` is
+the one already relying hardest on the property packaging would remove.]
 
 [NEEDS CLARIFICATION: whichever way this goes, does `scaffoldapy` generate it? The layout reaches
 new projects only through that template, and that repo's own
@@ -155,5 +177,25 @@ That means taking `extraPaths` after all, with the ruff `banned-api` guard along
 second import route is blocked rather than merely unwatched. The measurements above say that
 combination costs nothing that any tool here can detect.
 
-Do not treat this as settled: the second open question could reasonably kill the whole thing, and it
-is the cheapest one to answer.
+**That was written before the second open question was answered, and the answer weakens it.** The
+survey above found the shared-helper need in two of nine repos, and in neither case is packaging
+what serves it: `ingesta` uses conftest fixtures, `scaffoldapy` a bare top-level import. So the case
+for `extraPaths` no longer rests on an unmet need — it rests on `scaffoldapy`'s
+`from support import` being judged too fragile to leave alone, which is a narrower and more honest
+reason than the one this plan started with.
+
+Three coherent positions, and choosing between them is the remaining decision:
+
+1. **Change nothing.** The false "standing requirement" claim is already corrected in
+   `contributing/type-checking.md`, which was the only thing that had to happen. Both repos with the
+   need are working. The basename rule stays, documented rather than implied.
+2. **Package `tests/` family-wide** — `__init__.py`, `extraPaths: ["."]`, the ruff `banned-api`
+   guard. Measured to cost nothing mechanically. Buys `scaffoldapy` a real `tests.support` import
+   and removes the shadowing hazard; costs a second import route that only a lint rule closes.
+3. **Fix `scaffoldapy` alone**, by moving `support.py`'s contents into its existing
+   `tests/conftest.py` as fixtures — the `ingesta` shape, no family-wide config change at all. The
+   cheapest option, and the one the evidence most directly supports.
+
+Option 3 was not on the table when this plan was written, because nobody had looked at what the two
+repos actually do. It is `scaffoldapy`'s call to make, which is what the third open question is
+about.
