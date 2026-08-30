@@ -181,10 +181,13 @@ Two further questions surfaced here and were **rehomed 2026-08-30**, because nei
 to answer and carrying them here blocked a plan that cannot resolve them:
 
 - **What a 3.11 floor means for skills**, which run as bare `python3` with no resolver in the
-  picture — filed for `ingesta` as `2026-08-30-python-floor-wording-for-skills.md`, since that
-  repo's `2026-08-29-python-version-floors.md` owns the rule's wording. Rehoming it turned up one
-  correction worth having: bare `python3` resolves to an active venv's interpreter, not the
-  distro's, so the machine-version framing this plan used was only true of the system reading.
+  picture — filed for `power-user-linux-setup` as `2026-08-30-python-floor-wording-for-skills.md`,
+  whose `2026-08-29-python-floor-rule-in-the-global-agents-md.md` is taking the rule to a permanent
+  home in `~/AGENTS.md`. (Filed for `ingesta` first, on the grounds that its
+  `2026-08-29-python-version-floors.md` owns the tier design; moved the same day, because this is a
+  question about the rule's wording rather than its mechanism.) Rehoming it turned up one correction
+  worth having: bare `python3` resolves to an active venv's interpreter, not the distro's, so the
+  machine-version framing this plan used was only true of the system reading.
 - **Whether an application-tier repo gets a single-version CI matrix** or keeps this repo's
   3.11–3.14 range ([`../contributing/quality-gate.md`](../contributing/quality-gate.md)) — filed for
   `scaffoldapy` as `2026-08-30-application-tier-ci-matrix.md`, a template question rather than this
