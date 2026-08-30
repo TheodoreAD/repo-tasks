@@ -45,8 +45,12 @@ repo-tasks-quality = [
 # and no task takes a --group flag.
 dev = [
   { include-group = "repo-tasks-quality" },
-  "devpi-client>=7.3.0",
-  "devpi-server>=6.20.3",
+  # The integration tier's real package index: `uv publish` uploads to it and `dist.list_versions`
+  # reads the PEP 503 HTML back, sha256 fragments and all. Chosen over devpi, which served the JSON
+  # branch too but cost 61 resolved packages against pypiserver's 4 — and pinned `setuptools<=81`
+  # (via pyramid's `<82`), holding two advisories open that nothing here could fix. The JSON branch
+  # is served by a stub instead; see contributing/test-tiers.md.
+  "pypiserver>=2.4.1",
   "testcontainers>=4.15.0",
 ]
 

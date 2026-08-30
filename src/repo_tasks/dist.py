@@ -73,8 +73,10 @@ def _json_versions(payload: bytes, normalized_name: str) -> list[str]:
         if "version" in f:
             versions.add(str(f["version"]))
             continue
-        # PEP 691's per-file "version" key is optional — devpi, among others, omits it, so fall
-        # back to deriving it from the filename exactly like the HTML path already does.
+        # PEP 691's per-file "version" key is optional and widely omitted — PyPI itself does not
+        # emit it (measured 2026-08-30), and neither did devpi. PyPI is only saved from this branch
+        # by supplying the top-level "versions" key above; an index that omits both lands here, so
+        # fall back to deriving the version from the filename as the HTML path already does.
         filename = f.get("filename")
         if isinstance(filename, str) and (v := _version_from_filename(filename, normalized_name)) is not None:
             versions.add(v)
@@ -82,7 +84,7 @@ def _json_versions(payload: bytes, normalized_name: str) -> list[str]:
 
 
 def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
-    # Real PEP 503 indices (devpi, PyPI itself) commonly append a #sha256=... fragment to the
+    # Real PEP 503 indices (PyPI itself, pypiserver, devpi) commonly append a #sha256=... fragment to the
     # href — stop the capture at '#' too, or the fragment rides along and _version_from_filename
     # never matches the (now-mangled) "filename".
     filenames = cast(list[str], re.findall(r'href="[^"]*/([^"/#]+)', payload.decode()))

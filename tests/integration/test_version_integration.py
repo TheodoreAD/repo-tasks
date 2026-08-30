@@ -6,7 +6,7 @@ tests/test_version.py already pins the *generated config* — the one piece of r
 chart half of a bump had never actually been executed: whether bump-my-version finds those exact
 search strings in a real Chart.yaml was an assumption. This is the tier that settles it.
 
-Needs neither Docker nor devpi-server, unlike its siblings here — bump-my-version is a runtime
+Needs neither Docker nor a package index, unlike its siblings here — bump-my-version is a runtime
 dependency of this package, so this module never skips. It lives in the integration tier anyway
 because it shells out for real (git commits, git tags, a subprocess), which is precisely what the
 unit tier promises not to do.
