@@ -25,9 +25,10 @@ pyramid/zope stack, for two tests.
 **Explicitly not urgent** as originally filed: it works today, disk is not a constraint, and `uv` is
 fast enough that the install cost is not felt. Filed because it was untidy, not because it hurt.
 
-**That changed 2026-08-26 — devpi now costs something concrete.** `inv deps.audit` (added by
-[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §1) reports two advisories
-against `setuptools` 81.0.0, fixed upstream in 83.0.0, and the lock cannot move:
+**That changed 2026-08-26 — devpi now costs something concrete.** `inv deps.audit` (added by the
+quality-gate coverage sweep; see
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md)) reports two advisories against
+`setuptools` 81.0.0, fixed upstream in 83.0.0, and the lock cannot move:
 
 - `devpi-server` requires `setuptools<=81`
 - `pyramid` (a devpi-server dependency) requires `setuptools<82`
@@ -40,11 +41,11 @@ Unicode normalization collision on macOS APFS/HFS+, in a package used here only 
 test index on Linux. But it blocks a design decision that was already taken: `deps.audit` was to run
 in CI on push to `main`, and cannot, because it would be red from the first run.
 
-[DEFERRED: the CI audit step (`inv deps.audit` on push to `main`,
-[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §11). Deferred rather than
-worked around — narrowing the CI step's scope, or building the advisory-suppression list §1
-deliberately did not build, would both bake a workaround for devpi into shipped code. It lands when
-this plan does.]
+[DEFERRED: the CI audit step (`inv deps.audit` on push to `main`, designed by the quality-gate sweep
+and the one part of it that never landed). Deferred rather than worked around — narrowing the CI
+step's scope, or building the advisory-suppression list that
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md) deliberately decided against,
+would both bake a workaround for devpi into shipped code. It lands when this plan does.]
 
 This does not decide the plan on its own: the "is the discovery value recurring" question below is
 still the real one. It does mean the cost side is no longer only tidiness.

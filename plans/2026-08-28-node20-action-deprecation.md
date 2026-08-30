@@ -43,7 +43,7 @@ both cases, so this is a catch-up, not a nudge.
 
 Two of those call sites are different in kind: `repo-tasks`'s `publish.yml` hash-pins
 `actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4` (twice), per the pinning decision
-in [`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §11 and the `unpinned-uses`
+in [`../contributing/quality-gate.md`](../contributing/quality-gate.md) and the `unpinned-uses`
 policy in the shipped `zizmor.yml`. Those need a re-resolved SHA rather than a version bump —
 `v7.0.1` is `3d3c42e5aac5ba805825da76410c181273ba90b1`, resolved 2026-08-28, and worth re-resolving
 at the time of the change rather than trusting this line.
@@ -105,9 +105,11 @@ from instinct, because the framing hides two different questions with different 
 
 **The hard constraint first:** currency cannot be a gate step. Answering "is this behind?" requires
 asking a remote registry, and `quality.check` is offline and deterministic in every consumer by
-design. Anything here is a standalone `@requires(NETWORK)` task, the same shape as the deferred §11
-`deps.audit` — which is worth noting as a sibling: both are network-only currency checks that the
-gate cannot host, and if either gets built the other's design should follow it.
+design. Anything here is a standalone `@requires(NETWORK)` task, the same shape as the
+still-deferred CI `deps.audit` step
+([`2026-08-24-devpi-dependency-weight.md`](2026-08-24-devpi-dependency-weight.md)) — which is worth
+noting as a sibling: both are network-only currency checks that the gate cannot host, and if either
+gets built the other's design should follow it.
 
 **Question A — "is anything deprecated or warning?"** GitHub already computes this and hands it over
 free, as run annotations. `ci.status` (`src/repo_tasks/ci.py`) already calls `gh run list --json`

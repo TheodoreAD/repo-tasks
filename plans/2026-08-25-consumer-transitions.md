@@ -170,10 +170,10 @@ forgotten — that distinction is the whole reason this section exists rather th
 
 ## The second unswept change (2026-08-29) — the sweep is now batched
 
-`8f384d7` added `ignore:unclosed file:ResourceWarning` to the shipped `pytest.ini`
-([`2026-08-26-integration-tier-version-fixture.md`](2026-08-26-integration-tier-version-fixture.md)
-has why). The sweep was deferred again, deliberately and at the user's direction: more work is
-landing here first, and one sweep covering everything accumulated is cheaper than one per change.
+`8f384d7` added `ignore:unclosed file:ResourceWarning` to the shipped `pytest.ini` (that file's own
+comment has why, in full — invoke's `Local` runner never closes its subprocess pipes). The sweep was
+deferred again, deliberately and at the user's direction: more work is landing here first, and one
+sweep covering everything accumulated is cheaper than one per change.
 
 So the pending consumer transition is now **two items, not one**, and they are different kinds:
 

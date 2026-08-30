@@ -96,8 +96,9 @@ It is not a config refresh. Measured 2026-08-27, sweeping one release that added
   as a warning filter turned copier's `DirtyLocalWarning` into 21 failures in `scaffoldapy` and
   starlette's `TestClient` deprecation into a collection error in every generated web service. Both
   fixes belong in the consumer (a scoped `catch_warnings`, a dependency migration) — never in the
-  shipped file, whose §9 decision assumed a family-uniform dependency set that a consumer's own
-  dependencies break.
+  shipped file, whose "ignores go in the shared copy" decision
+  ([`quality-gate.md`](quality-gate.md)) assumed a family-uniform dependency set that a consumer's
+  own dependencies break.
 - `scaffoldapy`'s e2e is the only thing that tests the generator's output, and it earned that
   billing: it found a defect in **repo-tasks itself** (`untested-modules` demanding a `test_init.py`
   for a docstring-only `__init__.py`, which every generated repo has). Fixing it meant a second push

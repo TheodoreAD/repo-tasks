@@ -8,9 +8,10 @@ updated: 2026-08-27
 ## Context
 
 `repo-tasks-quality` now ships two pytest plugins — `pytest-cov` and `pytest-socket` — and the
-reasoning that put the second one there was never a survey. Each arrived from a specific `[§]` of
-[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md), answering one concern at a
-time. The complementary question has not been asked, exactly as that plan's own framing had it for
+reasoning that put the second one there was never a survey. Each arrived from a specific section of
+the quality-gate coverage sweep (now retired; its settled half is
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md)), answering one concern at a
+time. The complementary question has not been asked, exactly as that sweep's own framing had it for
 gate tooling: **which pytest plugins is the family missing entirely, and which of the well-known
 ones has it deliberately not taken?**
 

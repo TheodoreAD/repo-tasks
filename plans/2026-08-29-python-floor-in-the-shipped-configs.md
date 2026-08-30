@@ -185,10 +185,10 @@ machines a skill runs on, not about what a dependency resolver will accept. Whet
 wherever the rule ends up recorded.]
 
 [NEEDS CLARIFICATION: this repo's CI already runs a 3.11–3.14 unit matrix
-(`2026-08-26-quality-tool-gaps.md` §11) whose stated purpose is to make `requires-python = ">=3.11"`
-true rather than aspirational. Whether a consumer in the application tier should get a
-single-version matrix from the same template, or keep the range, is a template question rather than
-this one — but the two answers have to agree.]
+([`../contributing/quality-gate.md`](../contributing/quality-gate.md)) whose stated purpose is to
+make `requires-python = ">=3.11"` true rather than aspirational. Whether a consumer in the
+application tier should get a single-version matrix from the same template, or keep the range, is a
+template question rather than this one — but the two answers have to agree.]
 
 ## Verification
 

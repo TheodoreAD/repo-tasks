@@ -86,7 +86,8 @@ Rough, and deliberately not settled — the questions above come first.
    `quality.check`" gets proved, and where a flat-layout combination would prove the fallback works
    end to end rather than only in this repo's subprocess test.
 
-[DEFERRED: this supersedes the narrower deferred item in
-[`2026-08-26-quality-tool-gaps.md`](2026-08-26-quality-tool-gaps.md) §13, which assumed seeding the
-fixture would be what moved `pytest-socket` into the exported manifest. The manifest move happened
-first and on its own merits, so what is left is only the generated tree.]
+[DEFERRED: this supersedes a narrower item from the now-retired quality-gate sweep plan, which
+assumed seeding the fixture would be what moved `pytest-socket` into the exported manifest. The
+manifest move happened first and on its own merits (see
+[`../contributing/test-tiers.md`](../contributing/test-tiers.md)), so what is left is only the
+generated tree.]
