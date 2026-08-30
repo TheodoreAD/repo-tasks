@@ -66,9 +66,33 @@ publisher" tied to `TheodoreAD/repo-tasks`, a specific workflow filename, and (o
 GitHub Environment. This can't be automated from `inv`/CI; it's tracked here as an explicit
 checklist item, done once, by a human, before the first CI-driven publish.
 
-API-token auth (`--token`/`UV_PUBLISH_TOKEN`) stays documented as the fallback for a human
-publishing manually from their own machine outside CI (e.g. an early manual TestPyPI push before CI
-exists yet) — the token lives in the human's own secret manager, never committed to this repo.
+API-token auth stays the fallback for a human publishing manually from their own machine outside CI
+(e.g. an early manual TestPyPI push before CI exists yet) — the token lives in the human's own
+secret manager, never committed to this repo.
+
+**What that secret manager is, settled 2026-08-30:** the OS secret store, per the household rule
+that anything needing a password goes through each tool's own native integration. `uv` has one, and
+it is the "call the `keyring` CLI" shape the rule asks for rather than a library dependency — `uv`
+supports keyring in **subprocess mode only**. Confirmed against `uv 0.11.19`'s own
+`uv publish --help`: `--keyring-provider <disabled|subprocess>`, also settable as
+`keyring-provider = "subprocess"` in `uv.toml`/`[tool.uv]` or `UV_KEYRING_PROVIDER`.
+
+The human stores the token once, against the publish URL as the service and the literal `__token__`
+as the username, and `uv publish --keyring-provider=subprocess --username=__token__` reads it back.
+Nothing here ever handles the token.
+
+[PITFALL: two traps, and either one makes this look configured while doing nothing. **`uv` consults
+keyring only when the index URL carries a username** — for PyPI that username is the literal
+`__token__`, and without it the lookup silently never happens. And `--keyring-provider=subprocess`
+combined with `--token` fails outright with "a value is required for '--token <TOKEN>' but none was
+supplied": [astral-sh/uv#9227](https://github.com/astral-sh/uv/issues/9227), open since 2024 and
+labelled documentation rather than fixed. `--username=__token__` **instead of** `--token` is the
+working invocation, not an addition to it.]
+
+The machine-side half of this — the `uv.toml` key, and the human-facing instruction for what to
+store where — is filed for `power-user-linux-setup` as
+`2026-08-30-os-secret-store-for-registries-and-pypi.md`, since a task cannot configure the machine
+it runs on.
 
 ### 4. CI workflow
 
