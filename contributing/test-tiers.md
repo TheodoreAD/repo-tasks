@@ -266,6 +266,31 @@ This module used to be uncollectable in practice: `tests/integration/conftest.py
 so the whole directory failed to import without it — including this module, which needs nothing from
 it. Folding every group into `dev` removed the cause rather than working around it.
 
+### A fixture's stand-in version has to be a real version
+
+Two fixtures hand a version string to code that then validates it — `clean_os_container` in
+`tests/integration/conftest.py`, and `test_build_and_push_round_trip` in
+`test_docker_integration.py`, both monkeypatching `current_version`. `version.py` rejects anything
+that is not `X.Y.Z`, `X.Y.ZrcN`, or a dev build, so a literal `"test"` takes down eight tests at
+fixture setup.
+
+[PITFALL: `"0.0.0.dev0+gtest"` is not a valid stand-in either. `_PEP440`'s commit group is
+`[0-9a-f]+`, and `test` is not hex — a dev build needs a real hex placeholder such as `+gdeadbee`.]
+
+[PITFALL: the two fixtures cannot take the same value. `clean_os_container` starts its container
+from `:latest`, and `docker.release` deliberately skips the `latest` tag for a pre-release, so a dev
+build there produces an image that is never tagged and a fixture that fails one step later. It takes
+the final `"0.0.0"`. Only `test_build_and_push_round_trip`, which calls `build`/`push` directly,
+takes the dev build — and there it earns its keep, since asserting the pushed tag is
+`0.0.0-dev.0.gdeadbee` is what proves the PEP 440 `+` local segment never reaches a registry.]
+
+[PITFALL: an opt-in tier lets one failure hide another indefinitely. The tier sat red on this for
+long enough that `pytest.ini`'s `filterwarnings = error` was adopted on a "baseline is zero across
+both tiers" claim that was only true of the unit tier — the integration tier's cost (invoke's
+unclosed subprocess pipes, now the `ignore:unclosed file:ResourceWarning` line there) was invisible
+behind a fixture erroring at setup. Nobody's commit runs this tier by design; whether that earns a
+periodic run is `plans/2026-08-30-scheduled-checks-cadence.md`.]
+
 ## Clean-OS tier: testing user-wide effects
 
 Several tasks mutate a real `$HOME`, not just the consumer repo — `selfinstall.py`
