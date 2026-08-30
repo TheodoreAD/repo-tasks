@@ -42,6 +42,53 @@ either; the real-index job is skipped for any tag containing `rc`, so a candidat
 approval click away from pypi.org, where a version number can never be reused. `docker.release`
 gates itself the same way: an rc or dev build is pushed under its own tag and never as `latest`.
 
+## How a credential reaches CI: OIDC first, an env var second, a file never
+
+Both sections above solve this the same way without saying so generally, and the general rule is
+what a reader configuring a new target needs.
+
+[DECISION: the ordering is **no secret at all, else a secret injected as an environment variable,
+never a file.** No keyring, no `.netrc`, no local-dev hidden-file mechanism on a runner. The reasons
+are mechanical rather than stylistic: `secretservice` needs a D-Bus session and an unlocked
+collection, and a runner has neither — so a keyring lookup there cannot succeed, only fail or
+silently return nothing. And a file-based secret on a runner is _written from_ a CI secret, making a
+second copy of the same value on disk where a later step or a cached artifact can read it. It adds
+exposure and buys nothing. Stated 2026-08-30.]
+
+This is the exact inverse of the local rule, where every tool reaches the OS secret store through
+its own native integration (`plans/2026-08-30-registry-credentials-in-the-os-store.md`). Local and
+CI disagree on purpose.
+
+| target                         | OIDC available              | fallback when it is not                                  |
+| ------------------------------ | --------------------------- | -------------------------------------------------------- |
+| PyPI (`uv publish`)            | **yes**, and already in use | `UV_PUBLISH_TOKEN`, or `UV_PUBLISH_USERNAME`/`_PASSWORD` |
+| GHCR (`docker push`)           | **yes**, `GITHUB_TOKEN`     | `docker/login-action` with a repository secret           |
+| an OCI chart registry (`helm`) | depends on the registry     | `helm registry login --password-stdin`, reading from env |
+
+So no target in this family currently needs a secret at all: PyPI uses Trusted Publishing and GHCR
+uses the job's own token. The rule is written down for the store that offers neither, and the
+workflows deliberately carry no secret plumbing until such a target exists — commented-out
+configuration for a speculative need is worse than a documented pattern.
+
+[PITFALL: setting `keyring-provider` anywhere a consumer's CI can read it **disables Trusted
+Publishing, silently.** In `uv-publish/src/lib.rs`'s `check_trusted_publishing`, with
+`trusted-publishing = "automatic"` the guard
+`username.is_some() || password.is_some() || keyring_provider != Disabled` returns
+`TrustedPublishResult::Skipped` before any OIDC exchange is attempted; with `"always"` the same
+condition becomes a hard `MixedCredentials` error. The local convenience and the CI path are in
+direct tension, and the resolution is placement: `keyring-provider` belongs in the per-user
+`~/.config/uv/uv.toml`, **never** in a committed `pyproject.toml` or `uv.toml`. Read from uv's
+source 2026-08-30. The failure mode is the dangerous kind — "trusted publishing stopped working"
+with no error naming the cause.]
+
+Helm's fallback is the one that does not fully satisfy the rule:
+`helm registry login
+--password-stdin` keeps the secret off the command line and out of the process
+table, but writes it into helm's registry config on the runner — a file. Whether that matters on an
+ephemeral runner, or whether the login should be avoided entirely, is deliberately undecided; see
+`plans/2026-08-30-ci-secrets-for-non-oidc-registries.md`. Do helm's case last if a non-OIDC target
+ever arrives.
+
 ## Why `docker-release.yml` is dispatched by hand
 
 A registry push is a real external side effect, so the workflow is `workflow_dispatch`-only
