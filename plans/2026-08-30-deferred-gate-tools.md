@@ -63,13 +63,20 @@ is suppressible per occurrence. The `repo_tasks` self-import — the one finding
 this repo's dogfooding — is the suppressible kind.
 
 [PITFALL: `uv run --with deptry` **deleted and recreated this repo's `.venv`**, and neither `--with`
-nor deptry is the cause. `uv run` in a project directory resolves the interpreter by uv's **own
-default choice**, not from the venv already sitting there — and when the two differ it silently
-removes and recreates the environment. Isolated in a scratch project 2026-08-30: a 3.13.13 venv
-under `requires-python = ">=3.11"` is destroyed by a bare `uv run --with cowsay` because uv picks
-3.14.5, while the identical command against a 3.14 venv prints nothing at all and touches nothing.
-`--python <the venv's version>` also leaves it intact. The original note here blamed "the tool's
-resolution", which was wrong and would have sent the next reader looking at deptry.
+nor deptry is the cause. `uv run` in a project directory resolves an interpreter and, when the
+result differs from the venv already sitting there, silently removes and recreates it. **What made
+them differ is this machine: `~/.zshenv` exports `UV_PYTHON=3.14`**, which uv reports as
+`Using Python request 3.14 from explicit request` — so every uv invocation here asks for 3.14
+regardless of what the project declares. Isolated in a scratch project 2026-08-30: a 3.13.13 venv
+under `requires-python = ">=3.11"` is destroyed by a bare `uv run --with cowsay`; the identical
+command against a 3.14 venv prints nothing at all; `--python <the venv's version>` leaves it intact;
+and with `UV_PYTHON` unset a `.python-version` of 3.11 protects it completely.
+
+This note has now been wrong twice. It first blamed "the tool's resolution" (deptry's), then "uv's
+own default choice" — both plausible, both written from inference rather than measurement, and the
+second was published before the real cause was found. The root cause belongs to
+`power-user-linux-setup`, where it is filed; what belongs here is only that a bare `uv run` in this
+directory is not safe, and `env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project …` is.
 
 `uv sync --all-groups` restored it and the gate came back green, but between the two the dev
 environment is broken for every parallel session sharing the tree. A one-off measurement of a tool
