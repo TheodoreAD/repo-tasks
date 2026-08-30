@@ -75,9 +75,9 @@ coupling `test-tiers.md` already flags.]
 
 [NEEDS CLARIFICATION: whether this survey should cover the _generated_ repo's plugins separately.
 `scaffoldapy` picks dependencies per interface, so an async plugin for `web_service`/`mcp_server`
-may belong in the template rather than in the shared manifest — the same split
-[`2026-08-27-generated-test-layout.md`](2026-08-27-generated-test-layout.md) is working out for the
-test tree itself.]
+may belong in the template rather than in the shared manifest — the same split that repo is working
+out for the test tree itself, in its own `plans/2026-08-30-generated-test-layout.md` (filed there
+from here on 2026-08-30).]
 
 ## Recommended direction
 

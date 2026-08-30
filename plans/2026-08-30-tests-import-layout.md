@@ -137,9 +137,11 @@ application package — which is `importlib`'s position and a defensible one —
 unpackaged layout is fine and only the false "standing requirement" claim needed correcting.]
 
 [NEEDS CLARIFICATION: whichever way this goes, does `scaffoldapy` generate it? The layout reaches
-new projects only through that template, and
-[`2026-08-27-generated-test-layout.md`](2026-08-27-generated-test-layout.md) already owns the
-generated `tests/` tree. Same coupling the retired plan had, unresolved for the same reason.]
+new projects only through that template, and that repo's own
+`plans/2026-08-30-generated-test-layout.md` already owns the generated `tests/` tree — it was filed
+there from here on 2026-08-30, and explicitly waits on this plan before writing anything about
+basenames into the generated `AGENTS.md`. Same coupling the retired plan had, now at least pointing
+the right way round.]
 
 ## Recommended direction
 

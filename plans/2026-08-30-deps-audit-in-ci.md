@@ -43,9 +43,10 @@ makes it visible, so it is worth confirming rather than discovering.]
 [NEEDS CLARIFICATION: does this ship to consumers? `deps.audit` reaches every consumer through
 `repo-tasks-quality`, and `scaffoldapy` generates the workflows. A generated repo inheriting a
 push-triggered audit inherits the red-`main` behaviour above along with it, without having chosen
-the no-suppression stance. Same shape as the question in
-[`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md), and probably
-wants the same answer.]
+the no-suppression stance. Same shape as the question in `scaffoldapy`'s own
+`plans/2026-08-30-scheduled-checks-cadence.md` (filed there from here on 2026-08-30), and probably
+wants the same answer — that plan points back here for what a red `main` on an unfixable advisory
+actually costs, so whichever is decided first should inform the other.]
 
 ## Recommended direction
 

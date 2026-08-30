@@ -335,9 +335,9 @@ will: [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Not
 schedule", records the decision for all three items that carried this trade-off — no scheduled
 workflow, `ci.status` as a deliberate pre-push step, `ci.check-actions` run by hand when a workflow
 is edited, and the residual staleness accepted rather than left pending. The consumer-side half of
-the question is still open in
-[`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md), because a
-generated repo with actual reviewers has the reader this one lacks.
+the question is still open, in `scaffoldapy`'s own `plans/2026-08-30-scheduled-checks-cadence.md`
+(filed there from here on 2026-08-30), because a generated repo with actual reviewers has the reader
+this one lacks.
 
 [DEFERRED: **SHA-pinning every workflow, plus dependabot to keep the pins fresh.** Only
 `publish.yml` is pinned today, by the decision now recorded in
