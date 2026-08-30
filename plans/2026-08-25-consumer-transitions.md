@@ -233,4 +233,12 @@ session that wrote it:
   nothing was checking. That is the finding, not a regression, but it is the reason this item wants
   running first and alone.
 - `b79b76a` — `quality.type-check --python-version`. Additive and unused by default; nothing to
-  check beyond it being present.]
+  check beyond it being present.
+- `de596ce` — `venv.check` and `venv.recreate`. Additive: nothing runs either on a consumer's
+  behalf, and `venv.create` still lets uv choose. Expect `venv.check` to report a mismatch in
+  **every** consumer on its first run, because uv has always built each venv with the newest
+  interpreter satisfying that repo's floor — that is the pre-existing state being made visible, not
+  something the sweep broke. Whether to `venv.recreate` each one is a per-repo call: it is what
+  makes local test runs agree with the `pythonVersion` the same sweep derives into
+  `pyrightconfig.json`, and this repo's own gate passes whole on 3.11, but it also means developing
+  on the floor rather than the newest.]
