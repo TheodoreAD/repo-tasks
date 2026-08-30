@@ -155,9 +155,11 @@ nothing in the tooling prevents it. Checked 2026-08-30: zero duplicate `test_*.p
 the tree, maintained entirely by that naming convention. It reads as a style preference and is not
 one.]
 
-Whether to permit a packaged `tests/` instead — which would make the collision impossible and the
-suffix purely descriptive — is open, and costs a change to the shipped `pyrightconfig.json`. See
-[`../plans/2026-08-27-tests-package-layout.md`](../plans/2026-08-27-tests-package-layout.md).
+A packaged `tests/` would make the collision impossible and the suffix purely descriptive, but it is
+**not permitted**: it needs `extraPaths: ["."]` in the shipped `pyrightconfig.json`, which also
+makes `src.<pkg>` resolve as a second import route to the same code. Measured and settled 2026-08-30
+— see [`type-checking.md`](type-checking.md), "Why `tests/` may not be a package". So the basename
+rule above is the standing requirement, not a stopgap.
 
 ## Unit tier: mocked `c.run`
 

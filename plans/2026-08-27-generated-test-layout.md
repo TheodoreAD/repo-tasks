@@ -61,12 +61,14 @@ rather than nothing at all. The user's instruction is not to force it; a comment
 one line saying what uncommenting buys is not forcing, and it puts the option in front of the person
 who would want it. Against: a generated repo full of commented-out code is its own smell.]
 
-[NEEDS CLARIFICATION: whether `test.untested-modules` and the `_integration` suffix convention need
-saying in the generated `AGENTS.md`. Both are gate-visible rules a generated repo inherits without
-being told — [`2026-08-27-tests-package-layout.md`](2026-08-27-tests-package-layout.md) makes the
-same point about the basename-uniqueness rule, and that plan's own `[DEFERRED:]` names this same
-generated `tests/` tree. The two should be decided together rather than each editing the template
-alone.]
+[NEEDS CLARIFICATION: whether `test.untested-modules`, the `_integration` suffix and the
+basename-uniqueness rule need saying in the generated `AGENTS.md`. All three are gate-visible rules
+a generated repo inherits without being told, and the third is now a **standing requirement** rather
+than a stopgap: a packaged `tests/` was measured and rejected 2026-08-30
+([`../contributing/type-checking.md`](../contributing/type-checking.md), "Why `tests/` may not be a
+package"), so nothing will make the basename collision impossible later. That settles the question
+this used to be paired with and leaves only the template half — which is this plan's own subject, so
+it is now one decision rather than two.]
 
 ## Recommended direction
 

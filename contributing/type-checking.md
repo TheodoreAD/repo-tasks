@@ -161,6 +161,40 @@ field.]
   against those rules when working with untyped or partially-typed libraries (microsoft/pyright
   discussion #6243) — but the alternative he offers in the same breath is a local stub for the
   offending library, which is what `invoke-stubs` is. The stub was the better half of that advice.
+- **`extraPaths: ["."]` in the tests execution environment**, which would permit a packaged `tests/`
+  tree (`__init__.py` files, `from tests.conftest import ...`). See the decision below.
+
+### Why `tests/` may not be a package
+
+The tests execution environment sets `root: "tests"`, which makes `tests/` the search root for files
+beneath it — so `conftest` resolves and `tests.conftest` cannot. A consumer wanting a shared test
+helper imported by name across tiers meets `Import "tests.conftest" could not be resolved`, and
+`extraPaths: ["."]` is the one-line fix.
+
+[DECISION: not taken. Adding `.` to the type checker's search path also makes `src.<pkg>` resolve —
+a second, blessed import route to the same code, which is precisely what a `src` layout exists to
+prevent. `import src.repo_tasks.version` and `import repo_tasks.version` yield **different module
+objects with separate state** at runtime, and this setting is exactly what stops the type checker
+from flagging that. The cost lands in a file every consumer inherits, to buy a layout one consumer
+wanted. Settled 2026-08-30.]
+
+Measured here, four runs (basedpyright 1.39.10, this repo, two tiers):
+
+| setup                                               | result                                             |
+| --------------------------------------------------- | -------------------------------------------------- |
+| `extraPaths` alone, unpackaged tree                 | 0 errors — no structural cost on the current shape |
+| packaged tree, no `extraPaths`                      | `Import "tests.conftest" could not be resolved`    |
+| packaged tree + `extraPaths`                        | 0 errors, all 520 tests still collected            |
+| `from src.repo_tasks import version` + `extraPaths` | **resolves clean** — the reason it was rejected    |
+
+That last row is the finding, and it is causal: the identical import is a `reportMissingImports`
+error with `extraPaths` removed and nothing else changed.
+
+The supported alternative is pytest's own: no `__init__.py`, and a shared helper imported bare
+(`import conftest`), which its
+[good integration practices](https://docs.pytest.org/en/stable/explanation/goodpractices.html) page
+recommends for exactly this `src`-layout shape. The cost of that layout is the unique-basename
+requirement, written down in [`test-tiers.md`](test-tiers.md) under Conftest layout.
 
 ## Rolling this out to a consumer
 
