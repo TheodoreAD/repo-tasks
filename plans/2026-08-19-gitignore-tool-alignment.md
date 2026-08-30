@@ -53,21 +53,62 @@ appears — the exact gap `examples/sample-service` sat in before it moved under
 as the fixed `git check-ignore` check above, and the two probably want to be one task. Moved here
 from the now-retired `plans/2026-08-23-configs-round-trip-divergence.md`.]
 
-[NEEDS CLARIFICATION: is basedpyright's `extends` a better distribution mechanism than copying the
-file at all? A consumer's `pyrightconfig.json` could be three lines extending the canonical copy
-shipped inside the installed `repo_tasks` package. Blockers to check: `extends` resolves relative
-paths against the config file's own location, and the docs say nothing about pointing into an
-installed package; the path would also vary by environment. If it works it dissolves the whole
-pull/promote round trip for this one file — the highest-leverage thing on this list. Note this got
-harder, not easier, since it was written: `configs.py` now derives `pythonVersion` per consumer
-(`c514bd9`), so an `extends` shape would need somewhere to put a derived value that the canonical
-copy cannot carry.]
-
 [NEEDS CLARIFICATION: how much of the "community-standard excludes" set is already covered by each
 tool's own sane defaults, versus genuinely needing to be added somewhere? The likely real answer is
 "never let a config replace a tool's already-sensible default list" rather than "add more excludes"
 — which is what the basedpyright and pytest findings in the migrated audit both say. Confirm per
 tool before assuming any new rule is needed.]
+
+## The `extends` spike: answered, and the answer is no
+
+Time-boxed spike run 2026-08-30, basedpyright 1.39.10 / pyright 1.1.412, against a scratch consumer
+whose `pyrightconfig.json` extends a copy of this package's `configs/pyrightconfig.json` sitting at
+a path standing in for site-packages. Every claim below is a measured run, not the documentation.
+
+The hoped-for shape was a three-line consumer config extending the canonical copy shipped inside the
+installed package, dissolving the pull/promote round trip for this one file. It does not work, and
+the way it fails is worse than not working.
+
+[DECISION: keep copying the file. `extends` inherits **rule settings** correctly but **not the two
+blocks that decide what gets checked**, so the consumer has to re-declare exactly the parts whose
+absence is undetectable. What it would save is the rule list; what it would cost is a new silent
+failure mode the copy has never had.]
+
+What does inherit, confirmed working:
+
+- Every rule severity. `reportAny` fired as an **error** in the extending project, its shipped
+  value, not basedpyright's default of warning.
+- `pythonVersion`. A `type Alias = int` statement in the consumer drew
+  `Type alias statement requires Python 3.12 or newer` from the inherited `"3.11"`.
+- A child scalar overrides the parent: setting `"pythonVersion": "3.13"` in the extending file
+  cleared that error. **So the derived-value blocker this plan worried about is not a blocker** —
+  `configs.py`'s per-consumer `pythonVersion` would go in the child, which is the natural place for
+  a derived value anyway. That is the one thing the spike found in `extends`' favour.
+
+[PITFALL: **relative paths inside the extended config resolve against the extended file's own
+directory, not the extending one** — and the failure is silent-green. With only `"extends"` in the
+consumer's config, `include: ["src*", "tests*", "tasks*"]` was resolved inside the package's
+`configs/` directory: `filesAnalyzed: 0`, exit 0. A consumer in that state type-checks **nothing**
+and its gate passes. Proved causal rather than inferred — dropping a file at
+`<package>/configs/src/oops.py` made basedpyright analyze _that_ file, from the consumer's working
+directory, and report its `reportAny` errors.]
+
+[PITFALL: `executionEnvironments[].root` resolves the same way, and fails in the opposite direction.
+The shipped `root: "tests"` relaxation pointed at a `tests/` beside the packaged config, so the
+consumer's own tests were checked under the full profile — `reportUnusedFunction` came back as an
+error on a test helper, which is red on correct input. Re-declaring the `executionEnvironments`
+block verbatim in the extending file cleared it, confirming the cause.]
+
+Together those two mean the consumer's file must carry `extends`, the whole `include` list, **and**
+the whole `executionEnvironments` block — the two largest structures in the file and the two
+carrying the most rationale in their comments. The inheritable remainder is the flat rule list.
+
+[PITFALL: a broken `extends` path does not abort — basedpyright prints
+`Config file "..." could not be read.` and **continues with default settings**, silently discarding
+the entire profile (`reportAny` degraded from error to warning, `failOnWarnings` gone). It does exit
+3, so CI catches it; an editor's language server or a local run whose exit code nobody reads does
+not. This matters because the path is the part that varies: pointing into a venv means embedding the
+interpreter version, `.venv/lib/python3.11/site-packages/...`, which breaks on the next floor bump.]
 
 ## Recommended direction
 
@@ -76,5 +117,7 @@ it together with the include-coverage question above if both are wanted, since t
 wearing two hats: both ask "is a path this repo cares about actually visible to the tools that
 should see it".
 
-The `extends` question is the one with real leverage and real risk of being a dead end; time-box a
-spike rather than designing it.
+The `extends` question is closed — the spike above ran and the answer is to keep copying the file.
+What is left of this plan is the `git check-ignore` check, the include-coverage question it pairs
+with, and the per-tool excludes confirmation. None of the three has real leverage; this plan is a
+candidate for retirement once the check is either built or consciously dropped.
