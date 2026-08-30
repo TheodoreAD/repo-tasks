@@ -107,7 +107,7 @@ no maintained plugin exists at all.]
 PyPI metadata read from each project's own JSON, 2026-08-30 — never from a search summary, per
 `~/AGENTS.md`. "KB" is the largest wheel for the current release.
 
-### Adopt into the manifest
+### Adopt into the manifest — landed 2026-08-30
 
 | candidate        | version / date    | KB   | why                                                                                                                                                                                        |
 | ---------------- | ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -193,10 +193,15 @@ recommendations, thirteen recorded rejections.
 
 ## Recommended direction
 
-Adopt `pytest-timeout` into `repo-tasks-quality` and nothing else. Write the recommendation and
-rejection tables into `contributing/test-tiers.md` at retirement — the rejections are the more
-valuable half, since the adoption is one line and the "why not `pytest-sugar`" answer is what stops
-this being surveyed again.
+`pytest-timeout` is in the manifest as of 2026-08-30, with its rationale and the `pytest-socket`
+warning pitfall in [`../contributing/test-tiers.md`](../contributing/test-tiers.md). Nothing else is
+adopted.
+
+What is left of this plan is the **recommendation and rejection tables**, which still have no
+permanent home: they belong in `contributing/test-tiers.md` at retirement, and they are the more
+valuable half — the adoption was one line, while the "why not `pytest-sugar`" answer is what stops
+this being surveyed a third time. Retiring is blocked only on the two open questions above, of which
+the second is really `scaffoldapy`'s to answer.
 
 [DEFERRED: this plan proposes no change to the two already shipped. `pytest-cov` and `pytest-socket`
 were decided separately and on their own merits; nothing here revisits them.]
