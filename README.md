@@ -61,7 +61,8 @@ diff/replace one file cleanly instead of risking a monolithic block.
 **Recommended: the global daily-driver tool.** One install serves every repo in the family,
 decoupled from any single repo's own dependency groups — the point of the runtime/dev-venv split
 (see `power-user-linux-setup`'s
-[`plans/2026-08-20-runtime-dev-venv-split.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/plans/2026-08-20-runtime-dev-venv-split.md)):
+[`contributing/repo-family-architecture.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/contributing/repo-family-architecture.md),
+"The runtime/dev-venv split"):
 
 ```shell
 uv tool install --with-executables-from invoke 'repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks'
