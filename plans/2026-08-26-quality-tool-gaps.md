@@ -527,3 +527,48 @@ than a workaround, `web_service` with `fetch_strategy = none` pulls in no other 
 adds exactly one package, and it was verified in a scratch venv — FastAPI's `TestClient` with
 `httpx2` installed passes under `-W error`. Suppression would have left every generated web service
 on a deprecated path with a filter hiding the notice.]
+
+## Migrated to
+
+Design rationale:
+
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md) — new file, and the main
+  destination. Every §'s in-gate-or-beside-it decision and its evidence: `deps.check`, zizmor folded
+  into `workflow_check` (with the `--offline` pitfall), hadolint vs `docker build --check`,
+  hand-rolled `link_check` vs `lychee-bin`, `untested_modules` as the gate half and coverage as the
+  report half, `deps.audit`'s `--locked` and its refusal to build a suppression list, `verify_types`
+  and `test_types.py`, `ci.status` staying out of gitflow, why `zizmor.yml` had to become a shipped
+  config, §9's family-wide `filterwarnings` coupling and the two consumer failures that proved where
+  it stops holding, the `httpx2` decision, `ruff`'s `PT`/`FURB`/`PGH`, the `publish.yml`-only
+  pinning decision, the `enable-cache` non-gap, and §14's rejected list.
+- [`../contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — §12
+  landed there when it was built, and in a better form than this plan designed: `@requires(...)`
+  from `requirements.py` with a derived enforcement test, rather than a docstring convention.
+- [`../contributing/test-tiers.md`](../contributing/test-tiers.md) — §13's socket guard, as the
+  third structural enforcement of the unit tier's three promises. That file also carries the
+  decision that later **reversed** §13's: `pytest-socket` is in the exported manifest after all,
+  measured at an 8.7 KB pure-python wheel. Read it there, not here.
+
+Open work, moved to plans that stay:
+
+- [`2026-08-30-deferred-gate-tools.md`](2026-08-30-deferred-gate-tools.md) — deptry (with what it
+  found, including that `python-dotenv` is deliberately unused and not to be cleaned up) and the
+  `S602`/`S603`/`S607` slice.
+- [`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md) — §15's
+  scheduled `deps.audit` cadence, merged with the two other plans that had deferred the same
+  trade-off.
+- [`2026-08-28-node20-action-deprecation.md`](2026-08-28-node20-action-deprecation.md) — §15's
+  SHA-pin-everything-plus-dependabot item.
+- [`2026-08-29-link-check-indented-code-blocks.md`](2026-08-29-link-check-indented-code-blocks.md) —
+  §15's external link and anchor checking, which is the same task's scope question.
+- [`2026-08-24-devpi-dependency-weight.md`](2026-08-24-devpi-dependency-weight.md) already owns
+  §11's blocked `deps.audit` CI step, and
+  [`2026-08-27-generated-test-layout.md`](2026-08-27-generated-test-layout.md) already owns and
+  widens §13's `scaffoldapy` seeding item. Neither needed anything moved.
+
+Deliberately not migrated: the two landed tables, `## Files touched`, and the per-§ verification log
+— those describe a state the code, the tests and this file's history already record. The consumer
+sweep transcript goes with them, apart from the §9 coupling it exposed, which is the one durable
+thing in it. The hadolint-py packaging pitfall is not repeated either: "judge a PyPI wrapper from
+its own file list, not a search summary" is already a rule in `~/AGENTS.md`, which is where it
+belongs rather than in one repo's docs.

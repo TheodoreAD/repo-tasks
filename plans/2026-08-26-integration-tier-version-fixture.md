@@ -117,3 +117,22 @@ indefinitely, and whether it earns a periodic run is the scheduled-run trade-off
 [DEFERRED: drop the `ResourceWarning` ignore once invoke closes its pipes. Nothing tracks invoke
 releases for this, so it will be noticed whenever someone next reads `pytest.ini` — cheap to leave,
 and the comment there names the condition.]
+
+## Migrated to
+
+- [`../contributing/test-tiers.md`](../contributing/test-tiers.md), "A fixture's stand-in version
+  has to be a real version" — both fixture pitfalls (the hex commit group, and why the two fixtures
+  cannot share a value), plus what the outage showed about an opt-in tier hiding one failure behind
+  another.
+- The shipped `pytest.ini` already carries the whole `ignore:unclosed file:ResourceWarning`
+  rationale inline, including the reproduction and the condition for dropping it — landed with the
+  fix in `8f384d7`, so nothing about invoke's unclosed pipes needed migrating.
+- [`2026-08-30-scheduled-checks-cadence.md`](2026-08-30-scheduled-checks-cadence.md) — the open
+  question about whether an opt-in tier nobody's commit runs earns a periodic run, now merged with
+  the two other instances of the same trade-off.
+- [`2026-08-29-pytest-ini-anyio-mode.md`](2026-08-29-pytest-ini-anyio-mode.md) — the deferred
+  removal of that ignore once invoke closes its pipes.
+
+Deliberately not migrated: the incident narrative (which commit was red, what the baseline was with
+and without the pytest change), and the verification log. Both are answered by this file's own
+history and by the tier being green.
