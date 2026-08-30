@@ -6,10 +6,21 @@ consumer repo even though image names/registries legitimately differ per repo.""
 from invoke import Collection, Context, task
 
 from .projects import discover_docker_images
-from .requirements import DOCKER, requires
+from .requirements import DOCKER, NETWORK, requires
 from .version import Version, current_version, set_dev
 
 _NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
+
+
+def _registry_host(image: str) -> str:
+    """The registry `docker login` has to name, from an image reference. Docker's own rule: the
+    first path segment is a registry only when it looks like a host — it contains a dot or a port,
+    or it is exactly `localhost`. Anything else is a Docker Hub namespace, and Docker Hub is what a
+    bare `docker login` targets."""
+    first, _, rest = image.partition("/")
+    if rest and ("." in first or ":" in first or first == "localhost"):
+        return first
+    return "docker.io"
 
 
 def _resolve_image(c: Context, project: str | None):
@@ -128,4 +139,21 @@ def release(c: Context, project: str | None = None):
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as docker.set-dev (contributing/task-module-conventions.md).
-ns = Collection(check, build, push, release)
+@requires(DOCKER, NETWORK)
+@task(help={"project": "Image whose registry to log in to (default: the sole/first discovered image)"})
+def login(c: Context, project: str | None = None):
+    """Log in to the registry an image pushes to (docker login), prompting for the credentials.
+
+    This task never reads, stores, forwards or echoes a credential — docker prompts for it, and
+    where `~/.docker/config.json` names a `credsStore` docker's own helper puts it in the OS
+    secret store. The only thing being automated is the registry host, which comes from
+    repo-tasks.toml rather than being retyped. Runs under a pty because docker refuses to prompt
+    from a non-TTY device. No-ops cleanly in a repo with no images."""
+    image = _resolve_image(c, project)
+    if image is None:
+        print(f"[docker.login] {_NO_IMAGES}")
+        return
+    c.run(f"docker login {_registry_host(image.image)}", echo=True, pty=True)
+
+
+ns = Collection(check, build, push, release, login)

@@ -9,16 +9,17 @@ runs the repo's GitHub Actions locally through [act](https://github.com/nektos/a
 (`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle, CI/docker-aware), `deps`
 (`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write `uv.lock`), `dist`
 (`clean`/`build`/`publish`/`versions` — build a wheel, publish it, and query a package index for a
-project's released versions), `docker` (`check`/`build`/`push`/`release` — image name/Dockerfile
-resolved from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged from the version-grouping
-model), `helm` (`lint`/`package`/`push` — charts resolved from `repo-tasks.toml`'s `[[helm]]`
-entries, versioned by that same grouping model), `direnv` (`allow` — idempotent shell
-auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell execution to pick up
-the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap composing all of the
-above), `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/)), `ci`
-(`status`/`check-actions` — GitHub Actions read through `gh`: the previous push's conclusion, the
-warning annotations a green run hides, and which pinned actions are behind their latest release),
-`configs` (`pull`/`diff` — materializes
+project's released versions), `docker` (`check`/`build`/`push`/`release`/`login` — image
+name/Dockerfile resolved from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged from the
+version-grouping model; `login` names the registry for you and lets docker prompt and store the
+credential itself), `helm` (`lint`/`package`/`push`/`login` — charts resolved from
+`repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
+idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
+execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap
+composing all of the above), `docs` (`clean`/`build`/`serve`, wrapping
+[zensical](https://zensical.org/)), `ci` (`status`/`check-actions` — GitHub Actions read through
+`gh`: the previous push's conclusion, the warning annotations a green run hides, and which pinned
+actions are behind their latest release), `configs` (`pull`/`diff` — materializes
 `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
 package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
 `update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,

@@ -18,6 +18,12 @@ _CHART_DIST_DIR = Path("dist/helm")
 _NO_CHARTS = "no repo-tasks.toml [[helm]] entries — nothing to do"
 
 
+def _registry_host(registry: str) -> str:
+    """The host `helm registry login` has to name, from a chart's oci:// registry reference —
+    `oci://ghcr.io/org/charts` is pushed to, `ghcr.io` is logged in to."""
+    return registry.removeprefix("oci://").split("/", 1)[0]
+
+
 def _resolve_chart(c: Context, project: str | None):
     """The chart to act on, or None when the repo has no charts at all — tasks no-op cleanly on
     None (a chartless repo is a normal state), but an explicit --project naming nothing is an
@@ -94,6 +100,39 @@ def push(c: Context, project: str | None = None, registry: str | None = None, pl
     c.run(cmd, echo=True)
 
 
+@requires(NETWORK)
+@task(
+    help={
+        "project": "Chart whose registry to log in to (default: the sole/first discovered chart)",
+        "registry": "OCI registry override, oci://-prefixed (default: the [[helm]] entry's own registry)",
+    }
+)
+def login(c: Context, project: str | None = None, registry: str | None = None):
+    """Log in to the OCI registry a chart pushes to (helm registry login), prompting for the
+    credentials.
+
+    Like docker.login, nothing here reads, stores, forwards or echoes a credential — helm prompts
+    and writes the result itself. The registry host comes from repo-tasks.toml rather than being
+    retyped. Runs under a pty so helm can prompt. No-ops cleanly in a repo with no [[helm]]
+    entries.
+
+    [UNVERIFIED: helm keeps its own registry config (`--registry-config`, defaulting to
+    `~/.config/helm/registry/config.json`) rather than reading `~/.docker/config.json`, and helm 4
+    exposes no credential-helper option at all — so unlike docker.login this does not currently
+    reach the OS secret store, and the credential lands base64-encoded in that file. Whether
+    pointing `--registry-config` at docker's config makes helm honour a `credsStore` there is
+    untested and is what plans/2026-08-30-helm-credentials-outside-the-os-store.md exists to
+    settle.]"""
+    chart = _resolve_chart(c, project)
+    if chart is None:
+        print(f"[helm.login] {_NO_CHARTS}")
+        return
+    resolved_registry = registry or chart.registry
+    if resolved_registry is None:
+        raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
+    c.run(f"helm registry login {_registry_host(resolved_registry)}", echo=True, pty=True)
+
+
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as helm.set-dev (contributing/task-module-conventions.md).
-ns = Collection(lint, package, push)
+ns = Collection(lint, package, push, login)

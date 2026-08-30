@@ -92,9 +92,46 @@ def test_resolve_chart_raises_when_project_not_found(c, monkeypatch):
         helm.lint.body(c, project="nonexistent")
 
 
-@pytest.mark.parametrize("task_name", ["lint", "package", "push"])
+@pytest.mark.parametrize("task_name", ["lint", "package", "push", "login"])
 def test_tasks_no_op_cleanly_with_zero_charts(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(helm, "discover_helm_charts", lambda c: [])
     getattr(helm, task_name).body(c)  # pyright: ignore[reportAny]
     c.run.assert_not_called()
     assert "nothing to do" in capsys.readouterr().out
+
+
+def test_login_targets_the_registry_host_not_the_push_reference(c, monkeypatch):
+    # helm push takes the full oci:// reference; helm registry login takes the bare host.
+    _stub(monkeypatch)
+    helm.login.body(c)
+    c.run.assert_called_once_with("helm registry login ghcr.io", echo=True, pty=True)
+
+
+def test_login_registry_flag_overrides_the_entry_registry(c, monkeypatch):
+    _stub(monkeypatch)
+    helm.login.body(c, registry="oci://localhost:5000/charts")
+    c.run.assert_called_once_with("helm registry login localhost:5000", echo=True, pty=True)
+
+
+def test_login_never_puts_a_credential_in_the_command(c, monkeypatch):
+    _stub(monkeypatch)
+    helm.login.body(c)
+    assert c.run.call_args.args == ("helm registry login ghcr.io",)
+
+
+def test_login_errors_when_the_chart_has_no_registry(c, monkeypatch):
+    _stub(monkeypatch, chart=_stub_chart(registry=None))
+    with pytest.raises(ValueError, match="no registry"):
+        helm.login.body(c)
+
+
+@pytest.mark.parametrize(
+    ("registry", "expected"),
+    [
+        ("oci://ghcr.io/org/charts", "ghcr.io"),
+        ("oci://localhost:5000/charts", "localhost:5000"),
+        ("oci://registry.example.com", "registry.example.com"),
+    ],
+)
+def test_registry_host_strips_the_oci_scheme_and_the_path(registry, expected):
+    assert helm._registry_host(registry) == expected

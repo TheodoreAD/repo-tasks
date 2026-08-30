@@ -143,7 +143,7 @@ def test_check_narrows_to_one_project(c, monkeypatch):
     c.run.assert_called_once_with("docker build --check -f services/api/Dockerfile services/api", echo=True)
 
 
-@pytest.mark.parametrize("task_name", ["check", "build", "push", "release"])
+@pytest.mark.parametrize("task_name", ["check", "build", "push", "release", "login"])
 def test_tasks_no_op_cleanly_with_zero_images(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
     getattr(docker, task_name).body(c)  # pyright: ignore[reportAny]
@@ -156,3 +156,34 @@ def test_explicit_project_still_errors_with_zero_images(c, monkeypatch):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
     with pytest.raises(ValueError, match="nonexistent"):
         docker.build.body(c, project="nonexistent")
+
+
+def test_login_targets_the_registry_the_image_pushes_to(c, monkeypatch):
+    _stub(monkeypatch)
+    docker.login.body(c)
+    # pty because docker refuses to prompt for a password from a non-TTY device.
+    c.run.assert_called_once_with("docker login ghcr.io", echo=True, pty=True)
+
+
+def test_login_never_puts_a_credential_in_the_command(c, monkeypatch):
+    # The whole point of letting docker prompt: c.run echoes its command, so anything
+    # interpolated here would be printed to the terminal and into any CI log.
+    _stub(monkeypatch)
+    docker.login.body(c)
+    assert c.run.call_args.args == ("docker login ghcr.io",)
+
+
+@pytest.mark.parametrize(
+    ("image", "expected"),
+    [
+        ("ghcr.io/org/sample-service", "ghcr.io"),
+        ("localhost:5000/sample-service", "localhost:5000"),
+        ("localhost/sample-service", "localhost"),
+        ("registry.example.com:5000/org/thing", "registry.example.com:5000"),
+        # No dot, no port, not localhost: a Docker Hub namespace, not a registry.
+        ("org/sample-service", "docker.io"),
+        ("sample-service", "docker.io"),
+    ],
+)
+def test_registry_host_follows_dockers_own_rule(image, expected):
+    assert docker._registry_host(image) == expected
