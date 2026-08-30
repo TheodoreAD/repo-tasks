@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-29
+updated: 2026-08-30
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---
 
@@ -42,17 +42,34 @@ collected 1 item
 
 Exit code 4, no test executed — because `--strict-config` is already in the file's own `addopts`,
 which is what turns the unread key into a fatal error rather than a warning. The same project with
-AnyIO 4.14.2 added and nothing else changed collects and passes. So shipping the line family-wide
-breaks every consumer that does not depend on AnyIO, which is most of them.
+AnyIO 4.14.2 added and nothing else changed collects and passes.
 
-[PITFALL: this is only measurable in a genuinely isolated environment. The first run —
-`uv run --no-project --with pytest` from a shell with this repo's venv active — reported
-`plugins: anyio-4.14.2, socket-0.8.1, cov-7.1.0` and passed cleanly: the active `VIRTUAL_ENV` leaked
-its site-packages in, so the probe measured a machine that had AnyIO all along and produced exactly
-the "it is inert" answer being tested for.
-`env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project
---python 3.11 --with pytest==9.1.1` is what
-actually isolates it. Any future probe of "is this dependency absent" has the same hole.]
+**What decides which of the two a consumer gets is not whether it writes async tests.** AnyIO
+registers its own pytest plugin through a `pytest11` entry point — `anyio -> anyio.pytest_plugin`,
+verified in this repo's env — so the key is known wherever the package is importable, direct
+dependency or not. And AnyIO arrives transitively: `bump-my-version` (a main dependency of
+`repo-tasks`) pulls `httpx2`, which pulls `anyio`. So the split falls along how a consumer installs
+this package, which nobody chose with pytest in mind:
+
+| consumer                 | how it gets `repo-tasks`      | `anyio` in its lock | `anyio_mode` in a pulled `pytest.ini` |
+| ------------------------ | ----------------------------- | ------------------- | ------------------------------------- |
+| `power-user-linux-setup` | project dependency (git)      | yes, transitively   | accepted, silently                    |
+| `scaffoldapy`            | global `uv tool`, absent here | no                  | fatal, exit 4                         |
+
+Measured against both repos' `uv.lock` and `pyproject.toml` on 2026-08-30. That is the real hazard
+in shipping the line: not that it breaks everyone, but that whether it breaks a given consumer turns
+on a transitive dependency of a version-bumping tool, invisible from the config file and liable to
+change the next time that graph moves.
+
+[PITFALL: this is only measurable in a genuinely isolated environment, and the first attempt was not
+one. `uv run --no-project --with pytest` from a shell with this repo's venv active reported
+`plugins: anyio-4.14.2, socket-0.8.1, cov-7.1.0` and passed cleanly. `--with` layers an ephemeral
+overlay over the active environment rather than replacing it — `sys.prefix` in that run was this
+repo's own `.venv` — so the probe measured a machine that had AnyIO all along and produced exactly
+the "it is inert" answer being tested for. Nothing here is a uv defect; the flag does what it
+documents. `env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --python 3.11 --with pytest==9.1.1`
+is what actually isolates. Any future probe of the form "is this dependency absent" has the same
+hole, and a plugin that auto-registers is the kind that hides in it.]
 
 [NEEDS CLARIFICATION: Whether pulled configs should support a per-repo append at all — a
 `pytest.local.ini` merged in, a marked block the pull preserves, or a documented "these keys are
@@ -75,7 +92,11 @@ What that leaves, in rough order of cost:
 
 1. **Ship AnyIO as a `repo-tasks-quality` dependency, then ship the line.** Restores the
    byte-identical file at the price of putting an async framework into every consumer's dev
-   environment for a key most of them will never use. Cheapest mechanically, worst on principle.
+   environment for a key most of them will never use. Cheaper than it first looks — the manifest is
+   already the place the family standardises pytest plugins, and the consumers that take
+   `repo-tasks` as a project dependency have AnyIO anyway — but it makes deliberate a coupling that
+   is currently accidental, and the argument for it ("it is already there") is exactly the
+   accidental part.
 2. **Build a per-repo append** — the second open question above. Now the leading candidate rather
    than a hypothetical, and its cost is the same one route B in
    `2026-08-29-python-floor-in-the-shipped-configs.md` pays: a pull that preserves anything stops
