@@ -1,58 +1,46 @@
 ---
-status: idea
-updated: 2026-08-26
-depends_on: [invoke-stubs]
+status: landed
+updated: 2026-08-30
 ---
 
 # Two loose ends from the type-checking rollout
 
-Both carried over from the now-retired `plans/2026-08-25-type-check-warning-noise.md`, whose settled
-content lives in [`contributing/type-checking.md`](../contributing/type-checking.md). Neither blocks
-anything; both are small and both would delete code if they land.
+## Migrated to
 
-## Context
+- `invoke-stubs`' own `plans/2026-08-30-stub-gaps-and-upstream.md`, filed there 2026-08-30 — the
+  upstream-pyinvoke question and the `task(klass=..., **kwargs)` overload gap. Both are about that
+  distribution, not about this repo; they only lived here because this is where the rollout that
+  found them happened.
+- Nothing, for the third item — see below. It was already finished.
 
-The rollout got both repos to zero warnings with `failOnWarnings: true` family-wide. Two things were
-consciously scoped out at the time and are still true as of 2026-08-26.
+## What it was
 
-## Open questions
+Three items carried over from the now-retired `plans/2026-08-25-type-check-warning-noise.md`, whose
+settled content lives in [`../contributing/type-checking.md`](../contributing/type-checking.md). The
+title said two; there were three, which is part of why the mixed ownership went unnoticed for four
+days.
 
-- [DEFERRED: offer the `@task` signature upstream to pyinvoke — the stub's `ParamSpec` overloads for
-  `task()` plus an `__all__` (or `import X as X` re-exports) in `invoke/__init__.py`. invoke's
-  `main` is unchanged as of 2026-08-25. If a released invoke ever carries it, `invoke-stubs` is
-  deleted outright and the `repo-tasks-quality` entry with it — which is the whole reason it is
-  worth offering rather than maintaining a stub indefinitely. `invoke-stubs` is one commit old
-  (`ad052ca`), so there is no divergence to reconcile yet.]
+Two were `invoke-stubs` work and have moved. The third was the `sample-service` fixture's
+`reportImplicitOverride`: `typing.override` is 3.12+, the fixture declares
+`requires-python =
+">=3.11"` and has no dependencies to pull `typing_extensions` from, so the choice
+was to raise the fixture's floor or keep a line-level suppression.
 
-[NEEDS CLARIFICATION: is an upstream PR actually wanted, given it means owning a contribution
-against a project that has not moved on this? The cheap middle option is opening an issue with the
-stub as the proposed shape and letting the maintainers decide, rather than a PR that may sit.]
+**That one was never open.** The plan's own recommendation was to keep the line, and the code
+already does exactly that, with the reasoning attached at the site
+(`tests/fixtures/sample-service/src/sample_service/__main__.py`):
 
-- [DEFERRED: a `task(klass=..., **kwargs)` overload in `invoke-stubs`. invoke's own extension point
-  for task metadata is a `Task` subclass plus custom keywords, and the stub types `klass` but has no
-  overload accepting the extra keywords that subclass exists to receive — so
-  `@task(klass=Custom,
-  thing=...)` matches nothing, `@task` degrades to an untyped decorator, and
-  the decorated function's `.body` becomes `Any` with `reportUntypedFunctionDecorator` firing.
-  Measured 2026-08-26 while designing `requirements.py`, which routed around it with a
-  separately-typed decorator instead (see `contributing/task-module-conventions.md`). Nothing needs
-  the stub change today; it is recorded because it is the second real gap found in the stub, which
-  is this plan's own stated trigger for revisiting the upstream question.]
+```python
+# No `@override`: `typing.override` is 3.12+, this fixture declares >=3.11 and has no dependencies
+# to pull `typing_extensions` from. Suppressed per line so the shared config's
+# `failOnWarnings` can stay on.
+```
 
-- [DEFERRED: the `sample-service` fixture's `reportImplicitOverride`. `typing.override` is 3.12+ and
-  the fixture declares `requires-python = ">=3.11"` with no dependencies, so it currently carries a
-  line-level `# pyright: ignore[reportImplicitOverride]` with a comment saying why
-  (`tests/fixtures/sample-service/src/sample_service/__main__.py`). Either raise the fixture's floor
-  to 3.12 and use `@override`, or keep the one line. Not worth an `exclude` — the shipped config's
-  own comment explains why an exclude list is the wrong shape.]
+A decision that is implemented, and documented where a reader meets it, is not deferred work. It was
+tagged `[DEFERRED:]` because it _could_ be revisited, which is not the same thing — and that is the
+tagging mistake worth remembering: the tag marks work still wanted, not options still theoretically
+open.
 
-## Recommended direction
-
-Leave both. The `override` one is a single suppressed line with its reasoning attached, which is the
-end state the config's own policy asks for — raising the fixture's floor to 3.12 would trade a real
-property of the fixture (it is the lowest-common-denominator consumer, deliberately) for cosmetics.
-The upstream one only becomes worth doing if the stub starts needing maintenance; one commit in, it
-does not.
-
-Revisit if `invoke-stubs` grows past the two narrowings it ships today, or if invoke releases
-anything touching `tasks.py`'s signatures.
+Raising the floor to 3.12 stays the wrong trade for its own reason, also already recorded: the
+fixture is deliberately the lowest-common-denominator consumer, and that is a real property to keep
+rather than spend on cosmetics.
