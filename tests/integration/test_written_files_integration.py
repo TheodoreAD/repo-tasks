@@ -48,7 +48,13 @@ def test_ensure_deps_output_is_dprint_clean(scratch: Path, empty_array: str):
 
 
 def _run_pytest_under_shipped_config(where: Path) -> subprocess.CompletedProcess[str]:
-    shutil.copy(_CONFIGS_DIR / "pytest.ini", where / "pytest.ini")
+    # Derived, not copied: the canonical pytest.ini carries `anyio_mode = auto`, which `--strict-config`
+    # makes fatal wherever AnyIO is absent. `where` has no uv.lock, so the derivation drops the line
+    # and these tests assert on the file a consumer without AnyIO actually gets. Copying the raw file
+    # would pass only because this repo's own venv happens to carry AnyIO transitively — a hidden
+    # dependency on the runner's environment, which is the whole hazard the derivation addresses.
+    derived = configs._derive_for_project("pytest.ini", (_CONFIGS_DIR / "pytest.ini").read_text(), where)
+    (where / "pytest.ini").write_text(derived)
     (where / "tests").mkdir(parents=True, exist_ok=True)
     return subprocess.run([sys.executable, "-m", "pytest"], cwd=where, capture_output=True, text=True, check=False)
 

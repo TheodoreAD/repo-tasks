@@ -8,7 +8,7 @@ from typing import cast
 from invoke import Collection, Context, Exit, task
 
 from repo_tasks import ns
-from repo_tasks.configs import _CONFIG_FILES  # pyright: ignore[reportPrivateUsage] — this repo's own dev task
+from repo_tasks.configs import _CONFIG_FILES, restore_derived_lines  # pyright: ignore[reportPrivateUsage] — dev task
 
 __all__ = ["ns"]
 
@@ -25,26 +25,40 @@ def promote(c: Context, file: str | None = None, apply: bool = False):
     package once a root-level tuning is ready to ship to every consumer. Never more than the file
     named: the print-only diff lists everything that differs so a second in-flight tuning is seen,
     not promoted alongside. The other direction from `configs.pull`: this repo is the one place
-    root and package are allowed to diverge in-flight (see AGENTS.md)."""
+    root and package are allowed to diverge in-flight (see AGENTS.md).
+
+    The lines `configs.pull` derives per consumer never promote — they are resolved against
+    whichever repo ran the pull, so shipping this one's values back as canonical would put this
+    repo's Python floor into every consumer's config. `restore_derived_lines` puts them back to the
+    package's own values first, and refuses outright when the two sides disagree about whether such
+    a line is there at all."""
     package_dir = Path("src/repo_tasks/configs")
     if file is not None and file not in _CONFIG_FILES:
         raise Exit(f"[configs.promote] --file must be one of {', '.join(_CONFIG_FILES)}, got {file!r}")
     if apply:
         if file is None:
             raise Exit("[configs.promote] --apply writes exactly one file — name it with --file <name>")
-        root_text = Path(file).read_text()
         package_path = package_dir / file
-        if package_path.exists() and package_path.read_text() == root_text:
+        package_text = package_path.read_text() if package_path.exists() else ""
+        promotable = restore_derived_lines(Path(file).read_text(), package_text)
+        if promotable is None:
+            raise Exit(
+                f"[configs.promote] {file}: root and package disagree about a line configs.pull derives "
+                "per consumer — promote it by hand, or run `inv configs.pull` first if the root copy is stale"
+            )
+        if package_text == promotable:
             print(f"[configs.promote] {file} already matches package")
             return
-        package_path.write_text(root_text)
+        package_path.write_text(promotable)
         print(f"[configs.promote] {file}: root -> package")
         return
     changed = False
     for name in _CONFIG_FILES if file is None else [file]:
-        root_text = Path(name).read_text()
         package_path = package_dir / name
         package_text = package_path.read_text() if package_path.exists() else ""
+        # The derived lines are normalized out of the comparison too, so a repo whose floor differs
+        # from the packaged placeholder does not report drift on every run with nothing to promote.
+        root_text = restore_derived_lines(Path(name).read_text(), package_text) or Path(name).read_text()
         if root_text == package_text:
             continue
         changed = True

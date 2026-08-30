@@ -15,14 +15,103 @@ from repo_tasks import configs
 _MINIMAL_PYPROJECT = '[project]\nname = "x"\nversion = "0.1.0"\n\n[dependency-groups]\n'
 
 
-def test_pull_materializes_every_file_verbatim_from_installed_package(c, tmp_cwd):
+def test_pull_materializes_every_underived_file_verbatim_from_installed_package(c, tmp_cwd):
     configs.pull.body(c, source=None)
-    # Verbatim, pyrightconfig.json included: its `include` used to be filtered per consumer to
-    # the entries that existed (a literal path that doesn't exist is a hard basedpyright error),
-    # which made root and package diverge and let `configs.promote` ship the narrowed list back
-    # as canonical. The shipped globs tolerate absence, so nothing is resolved any more.
+    # Verbatim for everything `_derive_for_project` does not touch, pyrightconfig.json's `include`
+    # among it: that used to be filtered per consumer to the entries that existed (a literal path
+    # that doesn't exist is a hard basedpyright error), which made root and package diverge and let
+    # `configs.promote` ship the narrowed list back as canonical. The shipped globs tolerate
+    # absence, so nothing about `include` is resolved any more.
     for name in configs._CONFIG_FILES:
-        assert (tmp_cwd / name).read_text() == (configs._source_dir(None) / name).read_text()
+        pulled = (tmp_cwd / name).read_text()
+        canonical = (configs._source_dir(None) / name).read_text()
+        assert pulled == configs._derive_for_project(name, canonical, tmp_cwd)
+        if name not in {"pyrightconfig.json", "pytest.ini"}:
+            assert pulled == canonical
+
+
+def test_pull_derives_python_version_from_the_consumers_requires_python(c, tmp_cwd):
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\nrequires-python = ">=3.13"\n')
+    configs.pull.body(c, source=None)
+    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text()
+
+
+def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(c, tmp_cwd):
+    # Not "fall back to repo-tasks' own floor": that is the failure the shipped ruff.toml's
+    # `target-version` pin was deleted for — a floor nobody in that project chose. With the key
+    # absent basedpyright infers the interpreter it finds, which is what it did before this
+    # derivation existed, and a package with no `requires-python` is broken independently of us.
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    configs.pull.body(c, source=None)
+    text = (tmp_cwd / "pyrightconfig.json").read_text()
+    assert "pythonVersion" not in text
+    # The removal must not strand a comma or leave the JSON otherwise unparseable.
+    assert '"typeCheckingMode": "recommended",\n' in text
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (">=3.11", "3.11"),
+        (">=3.11.2", "3.11"),
+        (">=3.12,<4.0", "3.12"),
+        ("~=3.13", "3.13"),
+        ("==3.14", "3.14"),
+        (">= 3.11", "3.11"),
+        # An upper bound alone declares no floor — the answer is None, not "4.0".
+        ("<4.0", None),
+    ],
+)
+def test_requires_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, spec, expected):
+    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n')
+    assert configs._requires_python_floor(tmp_cwd) == expected
+
+
+def test_requires_python_floor_is_none_without_a_pyproject(tmp_cwd):
+    assert configs._requires_python_floor(tmp_cwd) is None
+
+
+def test_pull_emits_anyio_mode_only_when_the_consumers_lock_resolves_anyio(c, tmp_cwd):
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n')
+    configs.pull.body(c, source=None)
+    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text()
+
+
+def test_pull_drops_anyio_mode_when_the_consumer_has_no_lock(c, tmp_cwd):
+    # The shipped `addopts` carries --strict-config, so an unrecognised key is exit 4 with no test
+    # executed rather than a warning — this is the branch that keeps a global-uv-tool consumer's
+    # suite runnable at all.
+    configs.pull.body(c, source=None)
+    text = (tmp_cwd / "pytest.ini").read_text()
+    assert "anyio_mode" not in text
+    assert "addopts = -ra --strict-markers --strict-config\n" in text
+
+
+def test_project_resolves_anyio_is_not_fooled_by_a_prefixed_package_name(tmp_cwd):
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio-extras"\nversion = "1.0"\n')
+    assert configs._project_resolves_anyio(tmp_cwd) is False
+
+
+def test_restore_derived_lines_keeps_the_packages_own_python_version():
+    # The promote guard. A root copy pulled in a repo whose floor is 3.13 must not carry that 3.13
+    # back into the packaged placeholder every consumer then derives from.
+    package = '{\n  "pythonVersion": "3.11",\n  "reportAny": "error"\n}\n'
+    root = '{\n  "pythonVersion": "3.13",\n  "reportAny": "warning"\n}\n'
+    restored = configs.restore_derived_lines(root, package)
+    assert restored == '{\n  "pythonVersion": "3.11",\n  "reportAny": "warning"\n}\n'
+
+
+def test_restore_derived_lines_refuses_when_one_side_lacks_the_line_entirely():
+    # Presence differing means the promoting repo declares no floor while the package does; nothing
+    # here knows where in the file the missing line belongs, so the caller has to refuse.
+    root = '{\n  "reportAny": "error"\n}\n'
+    package = '{\n  "pythonVersion": "3.11",\n  "reportAny": "error"\n}\n'
+    assert configs.restore_derived_lines(root, package) is None
+
+
+def test_restore_derived_lines_leaves_an_underived_file_untouched():
+    text = "line-length = 120\n"
+    assert configs.restore_derived_lines(text, "line-length = 100\n") == text
 
 
 def test_shipped_pyright_include_entries_tolerate_absence():
@@ -77,6 +166,25 @@ def test_diff_reports_up_to_date_when_matching(c, tmp_cwd, capsys):
     _write_up_to_date_dev_group(tmp_cwd)
     configs.diff.body(c, source=None)
     assert "up to date" in capsys.readouterr().out
+
+
+def test_diff_applies_the_same_derivation_so_a_derived_file_never_reports_drift(c, tmp_cwd, capsys):
+    # The invariant the whole derivation rests on. `pull` writes a pyrightconfig.json and pytest.ini
+    # that differ from the packaged copies by construction, so a `diff` comparing against those
+    # copies would report drift forever and the next `pull` would "fix" nothing. Both declarations
+    # are non-default here (3.13, and a lock with AnyIO) so the test fails if either side silently
+    # falls back to the packaged text.
+    deps = "".join(f'  "{dep}",\n' for dep in configs._quality_deps())
+    (tmp_cwd / "pyproject.toml").write_text(
+        f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = ">=3.13"\n\n'
+        f"[dependency-groups]\ndev = [\n{deps}]\n"
+    )
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n')
+    configs.pull.body(c, source=None)
+    configs.diff.body(c, source=None)
+    assert "up to date" in capsys.readouterr().out
+    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text()
+    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text()
 
 
 def test_diff_exits_nonzero_and_prints_unified_diff_when_differing(c, tmp_cwd, capsys):

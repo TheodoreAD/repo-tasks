@@ -1,9 +1,11 @@
 """Canonical tool config distribution — ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/
 zizmor.yml/.editorconfig, shipped as package data so a fix or improvement lands once and reaches every
 consumer deliberately (a pinned dependency bump), instead of being hand-copied and silently
-drifting per repo. Every file is copied verbatim — nothing is resolved per consumer, so a pulled
-root is byte-identical to the package copy (pyrightconfig.json's `include` globs are what make
-that possible; see the comment in that file). `pull`/`diff` read from the installed package by
+drifting per repo. Every file is copied verbatim but for two lines, each derived from something the
+consumer itself declares — pyrightconfig.json's `pythonVersion` from its `requires-python`, and
+pytest.ini's `anyio_mode` from whether its lock resolves AnyIO (see `_derive_for_project`).
+Everything else is byte-identical to the package copy, pyrightconfig.json's `include` globs
+included; see the comment in that file. `pull`/`diff` read from the installed package by
 default, or from `--source git:<url>`/`local:<path>` to stage a candidate from elsewhere instead.
 The reverse direction — promoting a repo's own tuned root config into the shipped baseline — is
 `configs.promote` in repo-tasks' own `tasks.py`, not exported here: every consumer's `check`
@@ -65,6 +67,87 @@ def _source_dir(source: str | None) -> Path:
     if source.startswith("local:"):
         return Path(source.removeprefix("local:")).expanduser()
     raise ValueError(f"--source must start with 'git:' or 'local:', got {source!r}")
+
+
+# The two lines in the shipped configs that are correct for some consumers and wrong for others.
+# Both are anchored to a whole line including its newline, so removing one leaves no blank behind
+# and no dangling comma in the JSON (each sits between other keys, never last).
+_PYTHON_VERSION_RE = re.compile(r'^(?P<indent>[ \t]*)"pythonVersion": "[^"]*",\n', re.MULTILINE)
+_ANYIO_MODE_RE = re.compile(r"^anyio_mode = auto\n", re.MULTILINE)
+
+
+def _requires_python_floor(root: Path) -> str | None:
+    """The `major.minor` a project declares as its lowest supported Python, or None when it declares
+    nothing at all. Read from the consumer's own pyproject.toml, never from repo-tasks' — this
+    package runs the tools, it does not decide what they target."""
+    pyproject = root / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    project = cast(dict[str, object], tomllib.loads(pyproject.read_text()).get("project", {}))
+    spec = project.get("requires-python")
+    if not isinstance(spec, str):
+        return None
+    # `>=3.11`, `>=3.11.0`, `~=3.11`, `>=3.11,<4` — the floor is the first lower bound whichever
+    # operator states it. An upper bound alone (`<4`) declares no floor and is correctly no match.
+    match = re.search(r"(?:>=|~=|==)\s*(\d+\.\d+)", spec)
+    return match.group(1) if match else None
+
+
+def _project_resolves_anyio(root: Path) -> bool:
+    """Whether a project's lock resolves AnyIO, and so whether its pytest will recognise the
+    `anyio_mode` key at all.
+
+    The lock rather than an import check, deliberately: `importlib.util.find_spec` would answer for
+    whichever interpreter is running repo_tasks, and for a consumer installing this package as a
+    global `uv tool` that is the tool's own environment — which carries AnyIO via
+    bump-my-version -> httpx2 and would therefore answer "yes" for every consumer, including the
+    ones whose venv has none. The lock is a fact about the target project, needs no interpreter,
+    and is readable before any venv exists (pull runs during bootstrap). See
+    plans/2026-08-29-pytest-ini-anyio-mode.md."""
+    lock = root / "uv.lock"
+    # The closing quote is what keeps this off a package merely prefixed `anyio-`.
+    return lock.exists() and 'name = "anyio"' in lock.read_text()
+
+
+def _derive_for_project(name: str, text: str, root: Path) -> str:
+    """A canonical config file's text with its per-consumer lines resolved against `root`.
+
+    Derivation, not preservation: the result stays fully determined by the packaged copy plus
+    something the project itself declares, so `diff` applies this same function before comparing and
+    a correctly-derived file never reports drift — and "why does this repo's config differ" keeps
+    one answer. A pull that preserved hand-edits would give that question two, and leave `diff`
+    nothing to check against. Every other shipped file is still copied verbatim."""
+    if name == "pyrightconfig.json":
+        floor = _requires_python_floor(root)
+        if floor is None:
+            return _PYTHON_VERSION_RE.sub("", text)
+        return _PYTHON_VERSION_RE.sub(lambda m: f'{m.group("indent")}"pythonVersion": "{floor}",\n', text)
+    if name == "pytest.ini" and not _project_resolves_anyio(root):
+        return _ANYIO_MODE_RE.sub("", text)
+    return text
+
+
+def restore_derived_lines(root_text: str, package_text: str) -> str | None:
+    """`root_text` with every derived line put back to the packaged copy's own value — or None when
+    the two disagree about whether such a line is present at all.
+
+    The guard for the promote direction (`configs.promote` in this repo's tasks.py). `pull` resolves
+    those lines against whatever the repo running it declares, so promoting a root file verbatim
+    would ship *this* repo's floor, and its AnyIO situation, to every consumer as the new canonical
+    value — reintroducing "one repo decides everyone's floor", the exact bug the derivation exists
+    to end, by the back door. Everything else in the file promotes normally.
+
+    None rather than a guess when a line is present on one side only: that means the promoting repo
+    declares no floor (or no AnyIO) while the package declares one, and nothing here knows where in
+    the file to re-insert the missing line. The caller refuses and says so."""
+    for pattern in (_PYTHON_VERSION_RE, _ANYIO_MODE_RE):
+        root_match = pattern.search(root_text)
+        package_match = pattern.search(package_text)
+        if (root_match is None) != (package_match is None):
+            return None
+        if root_match is not None and package_match is not None:
+            root_text = root_text[: root_match.start()] + package_match.group(0) + root_text[root_match.end() :]
+    return root_text
 
 
 def _own_pyproject_data() -> dict[str, object]:
@@ -176,10 +259,11 @@ def require_tool(tool: str) -> None:
 @task(help={"source": _SOURCE_HELP})
 def pull(c: Context, source: str | None = None):
     """Materialize ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/zizmor.yml/.editorconfig
-    from the canonical source into this repo's root, verbatim. Overwrites unconditionally."""
+    from the canonical source into this repo's root. Overwrites unconditionally. Verbatim, except
+    for the two lines `_derive_for_project` resolves against what this project declares."""
     src_dir = _source_dir(source)
     for name in _CONFIG_FILES:
-        Path(name).write_text((src_dir / name).read_text())
+        Path(name).write_text(_derive_for_project(name, (src_dir / name).read_text(), Path()))
         print(f"[configs.pull] {name} pulled")
 
 
@@ -187,7 +271,7 @@ def _diff_config_files(source: str | None) -> bool:
     src_dir = _source_dir(source)
     changed = False
     for name in _CONFIG_FILES:
-        src_text = (src_dir / name).read_text()
+        src_text = _derive_for_project(name, (src_dir / name).read_text(), Path())
         dst_path = Path(name)
         dst_text = dst_path.read_text() if dst_path.exists() else ""
         if src_text == dst_text:
