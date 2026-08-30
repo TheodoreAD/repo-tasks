@@ -30,6 +30,9 @@ included (`dprint` reflows prose, and a skipped gate is the most common red CI r
   every consumer to, and what was considered and not adopted.
 - [`contributing/test-tiers.md`](contributing/test-tiers.md) — the unit / integration / clean-OS
   split and its fixtures.
+- [`contributing/file-discovery.md`](contributing/file-discovery.md) — which tools respect
+  `.gitignore` and which are blind to it, why the shipped configs are include-shaped rather than
+  carrying exclude lists, and who owns `.gitignore` itself.
 - [`contributing/type-checking.md`](contributing/type-checking.md) — why the basedpyright profile is
   tiered rather than relaxed, why `invoke-stubs` exists and ships the way it does, every rule level
   that deviates from `recommended`, and what `failOnWarnings` demands of new code.

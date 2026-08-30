@@ -32,7 +32,7 @@ because that is the only directory it names.
 [DECISION: an include, not an exclude. This was `--ignore=tests/integration` in `addopts`, which is
 the brittle shape — a _new_ directory under `tests/` joins the default run the moment somebody adds
 one, and nobody remembers to update an exclude. With `testpaths`, a new tier is invisible until it
-is named. Same rule of thumb as `plans/2026-08-19-gitignore-tool-alignment.md`.]
+is named. Same rule of thumb as [`file-discovery.md`](file-discovery.md).]
 
 [PITFALL: `testpaths` must list `tests/unit` **alone**. Listing `tests/unit tests` looks like a
 tidier fallback for a repo without the split, but measured, with both directories present it

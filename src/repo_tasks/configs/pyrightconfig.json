@@ -31,7 +31,7 @@
   // (`src*` means ./src, never any directory named src, so it can never wander into a .venv and
   // consequently needs no `exclude` at all), and is recursive below itself once it matches. The
   // widening is only to top-level siblings sharing the prefix, and no repo in the family has one.
-  // See plans/2026-08-19-gitignore-tool-alignment.md.
+  // See repo-tasks' contributing/file-discovery.md.
   "include": ["src*", "tests*", "tasks*"],
   // A warning fails the run. Flipped 2026-08-25 once every repo in the family was at zero: with
   // thousands of warnings the count was output nobody read; at zero, this is what keeps it there.
