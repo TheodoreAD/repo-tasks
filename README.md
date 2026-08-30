@@ -145,6 +145,27 @@ inv venv.sync --no-install-project     # deps-only venv, for a Docker/CI layer c
                                         # just pyproject.toml + uv.lock, before any repo code lands
 ```
 
+Neither `venv.sync` nor `venv.create` says which Python to build against, so uv takes the newest
+interpreter satisfying `requires-python` — a repo declaring `>=3.11` develops on 3.14, while
+`configs.pull` derives `pythonVersion` from that same line and has basedpyright checking 3.11.
+`inv
+venv.check` reports that split (read-only, nonzero on a mismatch) and `inv venv.recreate`
+closes it, rebuilding `.venv` on the declared floor:
+
+```shell
+inv venv.check                  # .venv is on Python 3.14, but this project declares 3.11
+inv venv.recreate               # rebuild on the declared floor
+inv venv.recreate --python 3.13 # ...or on a version you name
+```
+
+`recreate` is one `uv sync --python <version>`, not a delete followed by a create: uv resolves the
+interpreter before swapping the venv, so a version it cannot obtain leaves the existing one intact
+rather than stranding the repo with no `.venv` and no `inv` inside it. Nothing runs it for you.
+`venv.create` still lets uv choose, because that is what CI's unit matrix steers through
+`setup-uv`'s `python-version` — a floor hardcoded there would collapse four interpreters into four
+runs of the same one — and `venv.check` is deliberately not part of `quality.check` for the same
+reason: the gate job's own venv is whatever uv picked.
+
 A wheel-based prod image builds on top of that deps-only layer: `inv dist.build` to produce
 `dist/*.whl`, then `inv venv.install-wheel` (`uv pip install --no-deps`) to add just the project
 package to the same `.venv` — no re-resolution, so the shipped container runs exactly the wheel that

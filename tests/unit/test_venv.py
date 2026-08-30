@@ -1,7 +1,8 @@
 """Tests for repo_tasks.venv: asserts the exact command string each task builds via invoke's
 MockContext, plus `delete`'s real filesystem exists-check/rmtree behavior against tmp_path."""
 
-from invoke import MockContext, Result
+import pytest
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import venv
 
@@ -73,3 +74,79 @@ def test_sync_registers_venv_bin_on_github_path_when_set(c, tmp_cwd, monkeypatch
     monkeypatch.setenv("GITHUB_PATH", str(github_path_file))
     venv.sync.body(c)
     assert github_path_file.read_text() == f"{(tmp_cwd / '.venv' / 'bin').resolve()}\n"
+
+
+def test_sync_python_names_the_interpreter(c):
+    venv.sync.body(c, python="3.11")
+    c.run.assert_called_once_with("uv sync --locked --python 3.11", echo=True)
+
+
+def _declare(tmp_cwd, spec: str) -> None:
+    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = "{spec}"\n')
+
+
+def _venv_on(tmp_cwd, version: str) -> None:
+    (tmp_cwd / ".venv").mkdir(exist_ok=True)
+    (tmp_cwd / ".venv" / "pyvenv.cfg").write_text(f"implementation = CPython\nversion_info = {version}\n")
+
+
+def test_check_passes_when_the_venv_matches_the_declaration(c, tmp_cwd, capsys):
+    _declare(tmp_cwd, ">=3.11")
+    _venv_on(tmp_cwd, "3.11.15")
+    venv.check.body(c)
+    assert "as declared" in capsys.readouterr().out
+
+
+def test_check_reports_and_exits_nonzero_on_a_mismatch(c, tmp_cwd, capsys):
+    # The silent state this task exists for: uv builds with the newest interpreter satisfying the
+    # floor, so a repo declaring >=3.11 runs its tests on 3.14 while the type checker, deriving
+    # pythonVersion from that same line, checks 3.11.
+    _declare(tmp_cwd, ">=3.11")
+    _venv_on(tmp_cwd, "3.14.5")
+    with pytest.raises(Exit) as exc_info:
+        venv.check.body(c)
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "on Python 3.14, but this project declares 3.11" in out
+    assert "inv venv.recreate" in out  # the fix, not just the finding
+
+
+def test_check_reports_a_missing_venv(c, tmp_cwd, capsys):
+    _declare(tmp_cwd, ">=3.11")
+    with pytest.raises(Exit):
+        venv.check.body(c)
+    assert "no .venv" in capsys.readouterr().out
+
+
+def test_check_has_nothing_to_check_without_a_declaration(c, tmp_cwd, capsys):
+    _venv_on(tmp_cwd, "3.14.5")
+    venv.check.body(c)  # no Exit — a project declaring no floor is not in a wrong state
+    assert "nothing to check against" in capsys.readouterr().out
+
+
+def test_check_never_writes(c, tmp_cwd):
+    _declare(tmp_cwd, ">=3.11")
+    _venv_on(tmp_cwd, "3.14.5")
+    before = sorted(p.name for p in tmp_cwd.iterdir())
+    with pytest.raises(Exit):
+        venv.check.body(c)
+    assert sorted(p.name for p in tmp_cwd.iterdir()) == before
+
+
+def test_recreate_targets_the_declared_floor(c, tmp_cwd):
+    _declare(tmp_cwd, ">=3.11")
+    venv.recreate.body(c)
+    c.run.assert_called_once_with("uv sync --locked --python 3.11", echo=True)
+
+
+def test_recreate_python_overrides_the_declared_floor(c, tmp_cwd):
+    _declare(tmp_cwd, ">=3.11")
+    venv.recreate.body(c, python="3.13")
+    c.run.assert_called_once_with("uv sync --locked --python 3.13", echo=True)
+
+
+def test_recreate_refuses_without_a_declaration_or_an_explicit_version(c, tmp_cwd):
+    # Nothing to target, and guessing would be the "one repo decides everyone's floor" failure in
+    # miniature. Refuse and name the flag instead.
+    with pytest.raises(Exit, match="no requires-python"):
+        venv.recreate.body(c)
