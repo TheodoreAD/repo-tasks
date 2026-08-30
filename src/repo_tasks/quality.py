@@ -70,11 +70,23 @@ def format_apply(c: Context):
     c.run("dprint fmt --config-discovery=ignore-descendants", echo=True)
 
 
-@task
-def type_check(c: Context):
-    """Run basedpyright's type checker."""
+@task(help={"python_version": "Check against this Python instead of pyrightconfig.json's (e.g. 3.13)"})
+def type_check(c: Context, python_version: str | None = None):
+    """Run basedpyright's type checker.
+
+    The version checked normally comes from pyrightconfig.json, which `configs.pull` derives from
+    this project's `requires-python` — one answer an editor's language server and CI both read.
+    `--python-version` overrides it for one run, which is the escape hatch for a repo running a
+    Python matrix in CI and wanting each entry checked. Verified against basedpyright 1.39.10: the
+    flag beats the config file, it does not merely fill in for an absent value.
+
+    Nothing wires this into the shipped workflow, and that is deliberate — static analysis checks
+    source against the *declared floor*, and the floor is one value however many interpreters the
+    tests run on. A second version only catches a `sys.version_info`-gated branch, which is real but
+    too narrow to pay for everywhere. See plans/2026-08-29-python-floor-in-the-shipped-configs.md."""
     require_tool("basedpyright")
-    c.run("basedpyright", echo=True)
+    override = f" --pythonversion {python_version}" if python_version else ""
+    c.run(f"basedpyright{override}", echo=True)
 
 
 @task

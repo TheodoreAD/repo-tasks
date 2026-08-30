@@ -58,6 +58,14 @@ def test_type_check(c):
     c.run.assert_called_once_with("basedpyright", echo=True)
 
 
+def test_type_check_forwards_an_explicit_python_version(c):
+    # The matrix escape hatch: pyrightconfig.json's derived `pythonVersion` is what an editor and CI
+    # normally agree on, and this overrides it for one run. Verified against basedpyright 1.39.10
+    # that the flag beats the config file rather than only filling in for an absent value.
+    quality.type_check.body(c, python_version="3.13")
+    c.run.assert_called_once_with("basedpyright --pythonversion 3.13", echo=True)
+
+
 def test_sh_files_empty():
     c = MockContext(run=Result(stdout="", exited=0))
     assert quality._sh_files(c) == []  # testing the one piece of real logic directly
