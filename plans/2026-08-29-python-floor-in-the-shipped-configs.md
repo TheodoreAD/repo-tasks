@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: blocked on the batched consumer sweep, which is the only thing that can verify the derived configs at a consumer
 updated: 2026-08-30
 ---
 
@@ -177,18 +177,18 @@ _no version at all_ and accepts the newest syntax, while the formatter and `anal
 this one case and nowhere else. Deliberately not fixed by keeping the pin: a package with no
 `requires-python` is broken independently of ruff, and the shipped comment now says so.
 
-[NEEDS CLARIFICATION: a 3.11 floor for skills has a consequence the rule's wording does not settle.
-`agent-skills` ships stdlib scripts run as bare `python3` on whatever the machine has — that
-interpreter is 3.12 on Ubuntu 24.04 and 3.10 on 22.04, so a 3.11 floor is a claim about which
-machines a skill runs on, not about what a dependency resolver will accept. Whether the rule means
-"write 3.11 syntax" or "declare >=3.11 and stop supporting 22.04" is worth stating explicitly
-wherever the rule ends up recorded.]
+Two further questions surfaced here and were **rehomed 2026-08-30**, because neither is this repo's
+to answer and carrying them here blocked a plan that cannot resolve them:
 
-[NEEDS CLARIFICATION: this repo's CI already runs a 3.11–3.14 unit matrix
-([`../contributing/quality-gate.md`](../contributing/quality-gate.md)) whose stated purpose is to
-make `requires-python = ">=3.11"` true rather than aspirational. Whether a consumer in the
-application tier should get a single-version matrix from the same template, or keep the range, is a
-template question rather than this one — but the two answers have to agree.]
+- **What a 3.11 floor means for skills**, which run as bare `python3` with no resolver in the
+  picture — filed for `ingesta` as `2026-08-30-python-floor-wording-for-skills.md`, since that
+  repo's `2026-08-29-python-version-floors.md` owns the rule's wording. Rehoming it turned up one
+  correction worth having: bare `python3` resolves to an active venv's interpreter, not the
+  distro's, so the machine-version framing this plan used was only true of the system reading.
+- **Whether an application-tier repo gets a single-version CI matrix** or keeps this repo's
+  3.11–3.14 range ([`../contributing/quality-gate.md`](../contributing/quality-gate.md)) — filed for
+  `scaffoldapy` as `2026-08-30-application-tier-ci-matrix.md`, a template question rather than this
+  one. The two answers still have to agree with the floor derived by `configs.pull`.
 
 ## Verification
 
