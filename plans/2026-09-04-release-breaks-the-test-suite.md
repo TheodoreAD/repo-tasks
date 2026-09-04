@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-04
 ---
 
@@ -45,20 +45,32 @@ literal.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: which fix? (a) a fixture that stubs the resolved project's version to a fixed
-synthetic value, so every affected test asserts against a version the repo will never actually have
-— the version becomes test data rather than a fact about the repo; (b) compute the expected value in
-the test from `next_version(current_version(...))`, which keeps the tests self-consistent but makes
-them tautological, asserting the function against itself; (c) point the affected tests at a fixture
-`pyproject.toml` under `tests/fixtures/` with a pinned version, which is (a) with the stub living in
-a file. (a) or (c) look right and (b) does not, since the arithmetic is exactly what those tests
-exist to pin.]
+**Answered 2026-09-04 by the user: (a).** A `pinned_version` fixture in `tests/unit/conftest.py`
+replaces the resolved project's version with a fixture value, so the assertions stop depending on a
+fact about this repo. Landed in `cd3d9ba`.
 
-[NEEDS CLARIFICATION: should something stop this recurring? The class of bug is "a test asserts a
-literal derived from mutable repo state", and the version is unlikely to be the only such value —
-the repo name, the Python floor and the dependency-group contents have the same shape. A test that
-fails only when the repo changes in a normal way is a test that will be edited to match rather than
-questioned, which is how the assertion quietly stops meaning anything.]
+[DECISION: scoped to _this repo's own_ version rather than to every resolution, which the first
+attempt got wrong. `set_dev`'s test writes a `pyproject.toml` into `tmp_cwd` and asserts against the
+version it put there, so blanket-replacing whatever `_resolve_project` returned broke it. The
+fixture reads the real version once at import and swaps only that value.]
+
+[DECISION: autouse, not opt-in. The failure mode is a test _silently_ depending on the repo's
+version, and an opt-in fixture only protects the tests someone remembered to opt in.]
+
+Two tests are fixed rather than pinned, because the fixture cannot reach them and should not:
+`test_discover_python_projects_returns_repo_root_first` calls discovery directly and now asserts
+identity, which is what its name describes; `test_bump_...returns_new_version` reads through
+`discover_python_projects` and now asserts that the return value reports what the file says, which
+is what it always meant.
+
+Verified the way the bug was found rather than by reasoning: set the version to `0.9.0`, run the
+suite, revert. 552 pass at both values. `v0.2.0` was then cut, gated green, and pushed.
+
+[DEFERRED: should something stop this recurring? The class of bug is "a test asserts a literal
+derived from mutable repo state", and the version is unlikely to be the only such value — the repo
+name, the Python floor and the dependency-group contents have the same shape. A test that fails only
+when the repo changes in a normal way is a test that will be edited to match rather than questioned,
+which is how the assertion quietly stops meaning anything.]
 
 ## Recommended direction
 
