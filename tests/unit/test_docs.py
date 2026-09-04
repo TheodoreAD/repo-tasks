@@ -12,6 +12,11 @@ from invoke import Exit, MockContext, Result
 from repo_tasks import docs
 
 
+def _anchors_of(path):
+    """The resolver `link_check` builds, without its per-run cache — tests want no shared state."""
+    return docs._anchors(path.read_text())
+
+
 def test_clean_noop_when_site_dir_missing(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(docs, "_SITE_DIR", tmp_cwd / "site")
     docs.clean.body(c)
@@ -68,9 +73,11 @@ def test_relative_links_finds_inline_targets():
     assert docs._relative_links(text) == [(1, "contributing/guide.md"), (1, "../plans/x.md")]
 
 
-def test_relative_links_skips_external_and_pure_anchors():
+def test_relative_links_skips_external_but_keeps_a_same_file_anchor():
+    # A bare `#heading` is kept now that the fragment is checked — it is a link into this same
+    # document, and same-file was most of the fragment surface measured across the family.
     text = "[site](https://example.com) [mail](mailto:a@b.c) [here](#a-heading)\n"
-    assert docs._relative_links(text) == []
+    assert docs._relative_links(text) == [(1, "#a-heading")]
 
 
 def test_relative_links_skips_fenced_blocks():
@@ -111,12 +118,113 @@ def test_bad_link_reports_a_missing_target(tmp_cwd):
     assert docs._bad_link(source, "gone.md") == "gone.md"
 
 
-def test_bad_link_checks_the_file_not_the_fragment(tmp_cwd):
-    # file.md#heading verifies the file only: a renamed heading still passes, deliberately.
+def test_bad_link_checks_only_the_file_without_an_anchor_resolver(tmp_cwd):
+    # The path half stands alone: given no resolver, the fragment is not looked at. link_check
+    # always supplies one — this is the seam, not the shipped behaviour.
     (tmp_cwd / "target.md").write_text("hi")
     source = tmp_cwd / "source.md"
     assert docs._bad_link(source, "target.md#any-heading-at-all") is None
     assert docs._bad_link(source, "gone.md#heading") == "gone.md"
+
+
+def test_bad_link_reports_a_missing_file_before_looking_at_its_anchors(tmp_cwd):
+    # Order matters for the message: "gone.md" is the useful report, not "no such anchor in a file
+    # that does not exist".
+    source = tmp_cwd / "source.md"
+    assert docs._bad_link(source, "gone.md#heading", lambda _: frozenset()) == "gone.md"
+
+
+def test_anchors_slugs_a_heading_both_ways():
+    anchors = docs._anchors("## The New Heading\n")
+    assert "the-new-heading" in anchors
+
+
+def test_anchors_keeps_underscores_in_an_identifier():
+    # False positive #1 from the first real run: treating `_` as emphasis turns this into
+    # `configfiles`, an anchor no renderer emits.
+    assert "whole-file-configs-config_files" in docs._anchors("## Whole-file configs — config_files\n")
+
+
+def test_anchors_keeps_githubs_double_hyphen_from_a_dropped_ampersand():
+    # False positive #2: GitHub drops the `&` and keeps both surrounding spaces, so the anchor
+    # carries a double hyphen. Collapsing space runs reports this correct link as broken.
+    anchors = docs._anchors("## Bash & the CLI allowlist (cluster intro)\n")
+    assert "bash--the-cli-allowlist-cluster-intro" in anchors
+    # python-markdown's toc *does* collapse them, and both readings have to pass.
+    assert "bash-the-cli-allowlist-cluster-intro" in anchors
+
+
+def test_anchors_suffixes_duplicates_the_way_each_renderer_does():
+    anchors = docs._anchors("## Notes\n\ntext\n\n## Notes\n")
+    assert "notes" in anchors
+    assert "notes_1" in anchors  # python-markdown
+    assert "notes-1" in anchors  # github.com
+
+
+def test_anchors_takes_an_explicit_attr_list_id():
+    assert "custom-id" in docs._anchors("## Heading {#custom-id}\n")
+
+
+def test_anchors_takes_an_html_anchor():
+    assert "by-hand" in docs._anchors('<a id="by-hand"></a>\n\ntext\n')
+
+
+def test_anchors_flattens_code_and_links_in_a_heading():
+    assert "the-evolve-guide" in docs._anchors("## The `evolve` guide\n")
+    assert "see-the-plan" in docs._anchors("## See [the plan](a.md)\n")
+
+
+def test_anchors_skips_a_heading_inside_a_fenced_block():
+    # A `##` in a code sample is not a heading, the same reason _relative_links skips fences.
+    assert docs._anchors("```markdown\n## Not A Heading\n```\n") == frozenset()
+
+
+def test_bad_link_catches_a_renamed_heading_across_files(tmp_cwd):
+    """The plan's fixture, and the failure this exists for: a.md cites b.md's old anchor."""
+    (tmp_cwd / "b.md").write_text("## The new heading\n")
+    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n")
+    problem = docs._bad_link(tmp_cwd / "a.md", "b.md#the-old-heading", _anchors_of)
+    assert problem is not None
+    assert "no such anchor in b.md" in problem
+
+
+def test_bad_link_names_the_closest_surviving_anchor(tmp_cwd):
+    # A renamed heading is usually a near miss, and naming it turns the report into the fix.
+    (tmp_cwd / "b.md").write_text("## The new heading\n")
+    problem = docs._bad_link(tmp_cwd / "a.md", "b.md#the-new-headings", _anchors_of)
+    assert problem is not None
+    assert "closest is #the-new-heading" in problem
+
+
+def test_bad_link_accepts_a_same_file_anchor(tmp_cwd):
+    # 59 of the 79 fragment links measured across the family were same-file, so this is most of
+    # the surface rather than an edge case.
+    source = tmp_cwd / "page-a.md"
+    source.write_text("## Page A\n\nsee [above](#page-a)\n")
+    assert docs._bad_link(source, "#page-a", _anchors_of) is None
+
+
+def test_bad_link_catches_a_broken_same_file_anchor(tmp_cwd):
+    source = tmp_cwd / "page-a.md"
+    source.write_text("## Page A\n\nsee [above](#page-b)\n")
+    assert docs._bad_link(source, "#page-b", _anchors_of) is not None
+
+
+def test_bad_link_ignores_a_fragment_on_a_non_markdown_target(tmp_cwd):
+    # Nothing here knows how to enumerate anchors in a .py or an image, and a fragment on one is
+    # not this task's business.
+    (tmp_cwd / "script.py").write_text("x = 1\n")
+    assert docs._bad_link(tmp_cwd / "a.md", "script.py#L1", _anchors_of) is None
+
+
+def test_link_check_stops_on_a_dangling_anchor(tmp_cwd, capsys):
+    """End to end through the task, not just the helper — this is the gate step that has to fail."""
+    (tmp_cwd / "b.md").write_text("## The new heading\n")
+    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n")
+    c = MockContext(run=Result(stdout="a.md\nb.md\n", exited=0))
+    with pytest.raises(Exit):
+        docs.link_check.body(c)
+    assert "no such anchor in b.md" in capsys.readouterr().out
 
 
 def test_bad_link_rejects_a_target_outside_the_repository(tmp_cwd):
