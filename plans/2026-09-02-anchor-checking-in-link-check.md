@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-02
+status: landed
+updated: 2026-09-04
 source_repo: /home/tdumitrescu/projects/github.com-personal/power-user-linux-setup
 source_session: # transcript filename, or blank
 source_moment: # ISO timestamp of the turn
@@ -27,6 +27,14 @@ down, was still missed, and nothing mechanical caught it.
 at all, which is why it already runs in `check`; anchor resolution needs nothing more. The
 alternative — putting `zensical build --strict` in the gate — is slower, and covers only the one
 repo in the family that publishes a site.
+
+**That alternative landed anyway on 2026-09-04**, for its own reasons, from
+`2026-09-04-docs-build-in-the-quality-gate.md` (now retired). It does not make this redundant, and
+the reason is the sentence above: the strict build sees only a repo that _has_ a docs site and only
+the pages inside it, while this sees every tracked markdown file. `repo-tasks` has no site at all
+and 9 fragment links; `power-user-linux-setup`'s `plans/` and `contributing/` are outside its
+`docs/` tree. Neither subsumes the other in the other direction either — a strict build catches an
+unresolved nav entry, which no anchor checker would.
 
 ## Evidence
 
@@ -99,24 +107,23 @@ removed, `_` left alone (see the PITFALL above).
 
 ## Open questions
 
-[NEEDS CLARIFICATION: is the union too lenient? A link that resolves on github.com but not on the
-published site would pass, which is precisely the `docs/ssh.md` failure class this exists to catch.
-A sharper rule: when the repo has a site config (`mkdocs.yml`/zensical present), files under its
-docs directory are checked against the toc slugger alone, everything else against the union. That
-costs a config read and a directory rule, and only one repo in the family would exercise it — worth
-it or not is the open part.]
+~~Is the union too lenient?~~ **Left as the union, 2026-09-04**, per direction 3 below. A link that
+resolves on github.com but not on the published site would pass, and the sharper rule is available —
+when a repo has a site config, check files under its docs directory against the toc slugger alone
+and everything else against the union. It costs a config read and a directory rule, only one repo in
+the family would exercise it, and no such link has been found. Revisit when one is.
 
-[NEEDS CLARIFICATION: how much markdown flattening is enough? The measurement handled links, code
-spans and `*` emphasis and that was sufficient for 117 real links across the family. Footnote
-markers, HTML inside headings, and emoji shortcodes are all unhandled and none appear today. The
-cheap insurance against a future one is to report an unresolved fragment together with the candidate
-slugs it computed, so a false positive is diagnosable from the failure message rather than by
-reading this plan.]
+~~How much markdown flattening is enough?~~ **The cheap insurance was taken instead of an answer**,
+2026-09-04. Links, code spans and `*` emphasis cover every real link in the family; footnote
+markers, HTML inside headings and emoji shortcodes are still unhandled and still absent. Rather than
+guess at the next one, an unresolved fragment now reports the closest surviving anchor, so a future
+false positive is diagnosable from the failure message rather than from this file.
 
-[NEEDS CLARIFICATION: `power-user-linux-setup`'s gate still does not run `zensical build --strict`
-(its own plan records the reasoning as an open choice). Anchor checking removes the specific failure
-that motivated it, but not every strict-build failure — an unresolved nav entry, say. Whether that
-repo still wants the build in its gate afterwards is its call, not this one's.]
+~~Does `power-user-linux-setup` still want `zensical build --strict` in its gate?~~ **Moot, answered
+by events on 2026-09-04**: the strict build is now a step in the shared `quality.check` for every
+consumer that has an `mkdocs.yml`, so that repo gets it by pulling the update rather than by
+choosing. The two checks were landed for different failures and overlap only partially — see the
+Context section. Nothing here is waiting on that repo.
 
 ## Recommended direction
 
@@ -127,3 +134,63 @@ repo still wants the build in its gate afterwards is its call, not this one's.]
    opening the link.
 3. Leave the site-strictness question until a real link is found that works on GitHub and not on the
    site.
+
+## Landed, 2026-09-04
+
+All three steps, as written. The design needed no revision — the two sluggers, the flattening rules
+and the union were taken from this plan verbatim, and the throwaway implementation it was measured
+with turned out to be the right shape.
+
+Both remaining open questions were answered by doing it rather than by deciding:
+
+- **Is the union too lenient?** Left as the union, per direction 3. No link was found that resolves
+  on github.com and not on the site, so the sharper rule has no case to answer yet and would cost a
+  config read and a directory rule to serve one repo.
+- **How much flattening is enough?** The plan's own cheap insurance was taken: an unresolved
+  fragment reports the **closest surviving anchor** via `difflib`. A rename is usually a near miss,
+  so that turns the report into the fix — and when the miss is a slugger bug instead, the computed
+  neighbourhood is right there in the failure rather than in this file.
+
+[PITFALL: **a third slugger bug, and the tests found it rather than the family sweep.** One
+duplicate counter shared between the two sluggers counts every heading twice, so a second `## Notes`
+comes out as `notes_2`/`notes-3` — anchors no renderer emits, on the exact shape duplicate suffixing
+exists for. The family sweep could not have caught it: no repo here has a duplicate heading that is
+also linked. So the measurement-over-the-corpus habit that found the first two bugs is not
+sufficient on its own, and the fixture-shaped test is what covers the case the corpus lacks.]
+
+Verified three ways rather than by a clean run:
+
+- **The plan's own fixture**, as an end-to-end test through `link_check.body` — `a.md` cites
+  `b.md#the-old-heading`, `b.md` carries `## The new heading`, the task exits non-zero naming the
+  anchor. Only `git ls-files` is mocked.
+- **Both false-positive shapes** as regression tests, plus the duplicate-suffix, attr_list,
+  HTML-anchor, fenced-heading and same-file cases. 572 tests green.
+- **The family sweep re-run read-only**, and its counts line up with this plan's independently
+  measured table: `repo-tasks` 9 fragment links, `agent-skills` 29, `scaffoldapy` 0,
+  `power-user-linux-setup` 85 (79 when measured on 2026-09-02, grown since). **0 unresolved
+  everywhere**, so nothing in the family needs cleaning up and this could land straight into
+  `check`, exactly as the evidence section predicted. Two independent implementations agreeing on
+  the counts is the part worth noting — it is evidence about the sluggers, not just about the repos.
+
+What is **not** verified here: the original `docs/ssh.md` repro, in the repo where it happened. This
+plan carries `source_repo`, and a fix checked only where it was written has not met the case that
+produced it. Filed as `power-user-linux-setup`'s `2026-09-04-docs-build-gate-verification.md`, which
+covers both new checks in one pass since both land there together.
+
+## Migrated to
+
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "In the gate" — the union
+  decision, why this belongs in `link_check` rather than being left to the strict docs build, and
+  the three slugger bugs. Landing this also made two claims in that file's own `docs.build` entry
+  false, written hours earlier: that the strict build was the only thing in the family that could
+  see a dangling anchor, and that `link_check` exits 0 on that input. Both corrected, with the
+  anchor claim kept as dated history rather than a standing fact.
+- `src/repo_tasks/docs.py` — the two sluggers, the flattening rule and the fence skip carry their
+  own pitfall comments, since each exists because of a specific false positive and the code alone
+  reads like arbitrary regex choices.
+
+**Deliberately not migrated.** The per-repo measurement table stays here and dies with the plan: it
+was a baseline for deciding whether this could land without a cleanup pass, that question is
+answered, and a table of link counts is stale the day after it is written. The sweep script that
+produced it is a scratchpad throwaway, not a task — the standing version of that measurement is the
+gate step itself, now running on every commit in every consumer.
