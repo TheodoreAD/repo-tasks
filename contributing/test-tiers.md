@@ -207,6 +207,16 @@ never rereads `pyproject.toml`. That is an argument for cutting a release early 
 `tests/unit/conftest.py`'s autouse `pinned_version` fixture is the fix, and its docstring carries
 why it is autouse and why it is scoped to this repo's own version rather than to every resolution.]
 
+[DECISION: **the fixture is the whole answer, and the rule is a convention rather than a
+mechanism.** Decided 2026-09-05, retiring `plans/2026-09-04-tests-asserting-mutable-repo-state.md`.
+The same shape is open to any test that resolves the real project and asserts a literal about it —
+the repo's own name, the `requires-python` floor, the dependency groups — but one observed instance
+is not a class, and a detector would have to know where an expected value came from, which is a
+data-flow question a test cannot ask about itself. So the rule is stated here and enforced by
+review: a value read from this repo's own `pyproject.toml` is pinned by a fixture, never asserted
+literally, and `pinned_version` grows to cover the next such value when a test first reaches for it,
+not in advance.]
+
 That blind spot is exactly why the two coverage questions land on opposite sides of the gate.
 `inv test.untested-modules` — does every module under `src/` have a `tests/unit/test_<module>.py`? —
 is in `quality.check`: the question has a true answer regardless of how the tier is written. A
