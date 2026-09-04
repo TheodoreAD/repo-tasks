@@ -40,14 +40,27 @@ def _ctx(*, branch="main", dirty=False, behind="0", ahead="0"):
     )
 
 
-def test_cut_bumps_tags_and_pushes_both():
+def test_cut_bumps_and_tags_straight_to_a_final_version():
     c = _ctx()
     trunkflow.cut.body(c)
     calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     bump = next(cmd for cmd in calls if cmd.startswith("bump-my-version"))
-    # Straight to a final version: no rc in the target, and no --new-version needed for a plain minor.
     assert bump.startswith("bump-my-version bump minor --config-file ")
     assert "rc" not in bump
+
+
+def test_cut_pushes_nothing_by_default():
+    """The tag push is the release gate, so it is never a side effect of asking for a bump."""
+    c = _ctx()
+    trunkflow.cut.body(c)
+    calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert not [cmd for cmd in calls if cmd.startswith("git push")]
+
+
+def test_cut_pushes_both_when_asked():
+    c = _ctx()
+    trunkflow.cut.body(c, push=True)
+    calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert calls[-2:] == ["git push origin main", "git push origin v0.2.0"]
 
 
@@ -74,7 +87,8 @@ def test_cut_proceeds_when_ahead_of_the_remote():
     """Being ahead is the normal case — those commits are what the release contains."""
     c = _ctx(ahead="2")
     trunkflow.cut.body(c)
-    assert "git push origin main" in [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert any(cmd.startswith("bump-my-version") for cmd in calls)
 
 
 def test_cut_takes_a_named_branch():
@@ -91,5 +105,5 @@ def test_cut_takes_a_named_branch():
         },
         repeat=True,
     )
-    trunkflow.cut.body(c, branch="trunk")
+    trunkflow.cut.body(c, branch="trunk", push=True)
     assert "git push origin trunk" in [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]

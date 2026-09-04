@@ -8,8 +8,9 @@ exactly what having a second namespace avoids.
 
 One task, because that is genuinely all this model is. Where gitflow spends a branch, a PR and an rc
 cycle stabilising a release, trunk-based development ships whatever is on the trunk once it is
-green — so `cut` bumps, tags and pushes, and stops. Publishing the tag as a GitHub Release is
-`release.create`, deliberately separate: see that module for why.
+green — so `cut` bumps and tags, locally, and stops. Both publishing steps live in `release.py` and
+are deliberate acts of their own: `release.push-tag` sends the tag, `release.create` turns it into a
+GitHub Release. See that module for why they are not here.
 
 No rc cycle here by construction. A release candidate needs somewhere to live while it stabilises,
 and the whole point of this model is that there is no such place — a repo that wants one wants
@@ -58,14 +59,20 @@ def _require_in_sync(c: Context, branch: str):
         "bump": "Version part to bump: major, minor or patch",
         "branch": "The trunk to release from (default: main)",
         "group": "Version group to bump (default: the repo's own root project)",
+        "push": "Push the branch and tag as well. Off by default -- see the docstring",
     }
 )
-def cut(c: Context, bump: str = "minor", branch: str = "main", group: str | None = None):
-    """Bump the version on the trunk, tag it, and push both.
+def cut(c: Context, bump: str = "minor", branch: str = "main", group: str | None = None, push: bool = False):
+    """Bump the version on the trunk and tag it, locally.
 
     Straight to a final version — no release candidate, since this model has no branch to stabilise
-    one on. Stops at the tag: `inv release.create` publishes it as a GitHub Release when you want
-    one, which is not always and not always immediately.
+    one on.
+
+    **Nothing is pushed unless you ask.** Across this ecosystem the tag push *is* the release gate:
+    requests, flask and httpx all publish on a tag push, and PyPA's own guide tells you to push a
+    tagged commit to publish. So a bump that pushed its own tag would make publication a side effect
+    of asking for a version number. `--push` opts in; `inv release.push-tag` is the same act as its
+    own deliberate step, and is what the next-steps output points at.
 
     Which part to bump follows this repo's surface rule rather than SemVer's breakage rule — minor
     when anything a consumer inherits changed, patch when it did not. See
@@ -81,7 +88,13 @@ def cut(c: Context, bump: str = "minor", branch: str = "main", group: str | None
     print(f"[trunkflow.cut] {current_version(c, group)} -> {version}")
     _ = version_bump(c, bump, group=group, tag=True, rc=False)
 
-    c.run(f"git push origin {branch}", echo=True)
-    c.run(f"git push origin v{version}", echo=True)
-    print("\nNext steps:")
-    print(f"  - inv release.create --tag v{version}   # publish it as a GitHub Release, if wanted")
+    if push:
+        c.run(f"git push origin {branch}", echo=True)
+        c.run(f"git push origin v{version}", echo=True)
+        print("\nNext steps:")
+        print(f"  - inv release.create --tag v{version}   # publish as a GitHub Release, if wanted")
+        return
+
+    print("\nNothing pushed. Next steps:")
+    print(f"  - inv release.push-tag --tag v{version}   # publish the tag: this is the release gate")
+    print(f"  - inv release.create --tag v{version}     # then a GitHub Release, if wanted")
