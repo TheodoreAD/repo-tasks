@@ -11,6 +11,44 @@ messages. That is the load-bearing decision, not an incidental one: automatic in
 creates the gitflow problems described under "Tool choice" below, and not depending on it avoids
 them entirely rather than working around them.
 
+## What minor and patch mean here — the shipped surface, not breakage
+
+**They do not mean what SemVer's parts mean, and that difference is invisible from the number**, so
+it has to be read rather than assumed. `repo-tasks` is `0.x` and stays there until it is fully
+developed; under SemVer `0.x` already permits anything to change at any time, so classifying each
+change as breaking or not would buy a guarantee nobody is making, at the cost of a judgement call on
+every release. The parts are therefore free to carry a more useful signal:
+
+- **minor (`0.X.0`)** — a surface below moved. "Pulling this will change something in your repo."
+- **patch (`0.X.Y`)** — none did. "Upgrading is a no-op for you": internals, tests, docs, or a fix
+  behind an unchanged surface.
+
+[DECISION: the test is **"would a consumer's repo look different, or would any file they wrote stop
+working?"** — a question with a mechanical answer, not an assessment. That is what makes the rule
+enforceable later by a task diffing the paths below rather than by whoever remembers.]
+
+The surface, audited 2026-09-04. **Files this package writes into a consumer's repo:** the six
+`configs.pull` files (`ruff.toml`, `pyrightconfig.json`, `dprint.json`, `pytest.ini`, `zizmor.yml`,
+`.editorconfig`); the `repo-tasks-quality` entries `configs.ensure-deps` splices into their
+`pyproject.toml`; `tasks.py`; `bootstrap-repo-tasks.sh`; `.python-version`; `.claude/settings.json`
+and the `CLAUDE_ENV_FILE` it names. **Contracts they author or name:** the `repo-tasks.toml` schema;
+the `repo-tasks-quality` group's contents; `inv` task names; `from repo_tasks import ns`; every task
+module being importable, which makes **module names API**; `configure` staying unnested;
+`bootstrap.sh`. **Called by other repos:** `.github/workflows/security-reusable.yml`.
+
+[PITFALL: a first pass at this list had four entries and missed nine, all of them in the
+writes-into-a-consumer's-repo group. A rule checked against an under-counted surface reports "patch"
+for a release that rewrites `.python-version` in every consumer repo — worse than having no rule,
+because it would be trusted. When adding a task that writes a file into the calling repo, add it
+here in the same commit.]
+
+Because the surface is broad, **minors are common and patch is narrow.** That is the rule working,
+not a flaw in it.
+
+[DECISION: at 1.0 exactly one rule is added — breaking goes to major — and minor and patch keep the
+meanings consumers already learned. Nothing has to be re-explained, which is what makes this
+reinterpretation safe to adopt now rather than a debt.]
+
 ## Grouping: what bumps together
 
 Versions are per-_group_, not per-repo and not strictly per-project:

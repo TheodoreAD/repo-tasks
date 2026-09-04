@@ -1,8 +1,65 @@
 # Release flow
 
-How gitflow is applied in `src/repo_tasks/gitflow.py` — what each flow does, why it is shaped that
-way, and where it can leave you stuck. For what a version _number_ is and how it is written across
-python/docker/helm, see [`versioning.md`](versioning.md).
+How the two branching models are applied — `src/repo_tasks/gitflow.py` and
+`src/repo_tasks/trunkflow.py` — what each flow does, why it is shaped that way, and where it can
+leave you stuck. For what a version _number_ is and how it is written across python/docker/helm, see
+[`versioning.md`](versioning.md).
+
+## Two models ship, and a repo uses one
+
+| model       | namespace     | for                                                      |
+| ----------- | ------------- | -------------------------------------------------------- |
+| gitflow     | `gitflow.*`   | a repo with `develop`, staged releases, PRs, an rc cycle |
+| trunk-based | `trunkflow.*` | owner-direct-to-`main`, no release branch, no rc         |
+
+They are alternatives, never both. Which one a repo uses follows from whether it has a `develop`
+branch — this repo does not, so it uses `trunkflow`. The `-flow` suffix is the marker for the class;
+see [`task-module-conventions.md`](task-module-conventions.md), "A shared suffix marks a family of
+interchangeable modules".
+
+[DECISION: a second namespace, not a mode flag on `gitflow.*`. The two are not near-duplicate trees
+— gitflow is twelve tasks, trunkflow is one — so a `model = "..."` config key would leave ten task
+names advertised in `inv --list` and inert in a repo with no `develop`, which is a least-surprise
+failure. The existing PR-vs-local axis stays orthogonal to the model choice: a trunk repo can still
+want a PR.]
+
+### The trunk flow, end to end
+
+```shell
+inv trunkflow.cut --bump minor   # bump + tag, locally, nothing pushed
+inv release.push-tag             # the release gate
+inv release.create               # a GitHub Release, if one is wanted
+```
+
+Three commands rather than one, and the split is the design rather than an omission.
+
+[DECISION: **`trunkflow.cut` pushes nothing by default.** Pushing the tag is what publishes across
+this ecosystem — `requests`, `flask` and `httpx` all trigger their publish workflow on a tag push,
+and PyPA's own guide tells you to push a tagged commit to publish. So a bump that pushed its own tag
+would make publication a side effect of asking for a version number. `--push` opts back in for
+someone who genuinely wants one command. Researched from those projects' own workflow files,
+2026-09-04.]
+
+[PITFALL: this repo proved the point on itself. `publish.yml` used to fire on `push: tags: v*` with
+an **unconditional** TestPyPI job, so `inv trunkflow.cut` — as first written, pushing its own tag —
+meant "upload to TestPyPI and queue a PyPI approval". The unit tests could not catch it, because
+they mock every `c.run` and so know nothing about what a real push triggers. `publish.yml` is now
+disabled at its trigger; see the header comment in that file for what re-enabling needs.]
+
+[DECISION: both publication steps live in `release.py`, not in either flow, because neither is
+specific to a branching model — gitflow tags `main` after a PR merges, trunkflow tags it directly,
+and either tag is published identically. `release.push-tag` sends the branch first, then the tag, so
+the tagged commit arrives under a ref rather than reachable only from a tag; it refuses a tag that
+does not point at a commit on that branch, which is how a tag left on an abandoned branch would
+otherwise ship as the release.]
+
+### Which part to bump
+
+Not SemVer's breaking-vs-non-breaking, which under `0.x` guarantees nothing anyway and would cost
+judgement on every release. **Minor means the shipped surface moved; patch means it did not** — see
+[`versioning.md`](versioning.md) for the enumerated surface. The question it answers is the one a
+consumer actually has: whether they need to run `configs.pull` and read a diff, or can upgrade
+without looking.
 
 ## Why raw git, not the `git-flow` binary
 

@@ -199,6 +199,29 @@ A module that only composes other modules' tasks into a one-command entrypoint i
 nothing. Avoid naming a module after a composite's _purpose_ in a way that reads like it could own
 real responsibilities belonging to `venv`/`deps`/`dist`.
 
+## A shared suffix marks a family of interchangeable modules
+
+`gitflow.py` and `trunkflow.py` implement the two git branching models this package supports. The
+`-flow` suffix is what says they are the same kind of thing, and it is load-bearing rather than
+incidental: a third model joins as `githubflow` or `gitlabflow` and needs no other change.
+
+[DECISION: the suffix, not a shared parent namespace. `sdlc.gitflow.*`/`sdlc.trunkflow.*` was
+considered and rejected — SDLC spans requirements through maintenance, and **ten of this package's
+sixteen namespaces are already SDLC phases** sitting as siblings (`quality`, `test`, `dist`,
+`docker`, `helm`, `docs`, `ci`, `deps`, `venv`, `configs`), so the root would promise a scope that
+is visibly elsewhere. `workflow` collides outright with the GitHub Actions workflows three tasks
+here are about. And a root answers a discovery question asked once — "are these alternatives?" —
+while lengthening every command forever, since nobody ever types the model their repo does not use.]
+
+The general rule: **when two modules are alternatives rather than collaborators, say so in their
+names.** A parent namespace is the wrong tool, because interchangeable things are never used
+together — the reader needs to recognise the class once, not navigate into it every time.
+
+[PITFALL: do not pick such a name for where it sorts in `inv --list`. `git-trunk` and `githubflow`
+both land immediately beside `gitflow` and `trunkflow` does not, which is the only argument either
+had — and `githubflow` names a _different_ model (GitHub Flow branches and merges through a PR),
+while `git-trunk` is an invented compound. The listing is scanned, not bisected.]
+
 ## Import siblings as `from .sibling import name`
 
 Not `from . import sibling`, and not `import repo_tasks.sibling as sibling`. Every module here is
