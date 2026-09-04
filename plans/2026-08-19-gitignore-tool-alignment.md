@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-30
+status: landed
+updated: 2026-09-05
 ---
 
 # What is left of the `.gitignore` alignment work
@@ -24,7 +24,39 @@ so it is a named package-level mechanism, and the two workflow tools added since
 the property without anyone deciding they should. That is the right outcome, but it happened
 silently, which is the same shape as the gap the first open question below describes.
 
-## The one concrete thing still unbuilt
+## Resolved 2026-09-05: the check is dropped on measurement, and the plan retires
+
+The `git check-ignore` check below was the last thing this plan proposed building, and it was
+measured before being written: `uv venv` and Python 3.14's stdlib `venv` both write a `.gitignore`
+containing `*` inside the venv, and git honours it with no root entry at all — `check-ignore`
+reports `.venv/` ignored, `ls-files --others --exclude-standard` lists nothing from it.
+`venv.create` only uses uv, so the one path this package depends on being ignored is ignored by
+construction, and the check would pass everywhere for a reason unrelated to the consumer's
+`.gitignore`. Nearly inert is the worse answer for the same decision; the measurement and the
+decision are in `contributing/file-discovery.md`, "`.gitignore` itself is not this package's file".
+
+The two open questions:
+
+- The include-coverage check is a different question — pyright is blind to `.gitignore`, so its
+  include list is the only lever — and it is the one live thing this plan leaves. Filed as its own
+  idea, `plans/2026-09-05-pyright-include-coverage.md`, with the instance that motivated it.
+- The per-tool excludes question is answered by the audit that already migrated: the basedpyright
+  and pytest findings in `file-discovery.md` both say a config must never replace a tool's default
+  exclude list, and no new rule was needed for any tool surveyed.
+
+## Migrated to
+
+- [`../contributing/file-discovery.md`](../contributing/file-discovery.md) — the audit (2026-08-30);
+  now also the `.venv` self-ignore measurement and the decision not to build the check, and the
+  `extends` spike as "Why `pyrightconfig.json` is copied, not `extends`-ed", compressed to the
+  decision and the two pitfalls a future proposer would need.
+- `plans/2026-09-05-pyright-include-coverage.md` — the include-coverage question.
+
+Deliberately not migrated: the check's own design paragraph below, which describes a thing that is
+now decided against, and the spike's list of what does inherit, which only matters if `extends` is
+ever reconsidered — `archive --search extends` brings it back.
+
+## The one concrete thing that was still unbuilt, as designed
 
 [DECISION: `repo_tasks` warns about `.gitignore` interference, never owns or writes the file. Its
 own tool configs silently assume certain paths are gitignored — that is the entire basis of "ruff
@@ -44,20 +76,6 @@ symptom alone. Same shape and same `MockContext` test discipline as every other 
 code. Fuzzy, infrequent, and better served by an agent reading the actual diff than by a hard-coded
 rule applying itself. Likely lands as guidance in whatever skill ends up pairing with `scaffoldapy`,
 not as a `repo_tasks` task.]
-
-## Open questions
-
-[NEEDS CLARIFICATION: should anything detect a source tree no `include` entry covers? A check that
-every tracked `*.py` file is matched by some entry would catch a new top-level tree the moment it
-appears — the exact gap `examples/sample-service` sat in before it moved under `tests/`. Same shape
-as the fixed `git check-ignore` check above, and the two probably want to be one task. Moved here
-from the now-retired `plans/2026-08-23-configs-round-trip-divergence.md`.]
-
-[NEEDS CLARIFICATION: how much of the "community-standard excludes" set is already covered by each
-tool's own sane defaults, versus genuinely needing to be added somewhere? The likely real answer is
-"never let a config replace a tool's already-sensible default list" rather than "add more excludes"
-— which is what the basedpyright and pytest findings in the migrated audit both say. Confirm per
-tool before assuming any new rule is needed.]
 
 ## The `extends` spike: answered, and the answer is no
 
@@ -112,12 +130,5 @@ interpreter version, `.venv/lib/python3.11/site-packages/...`, which breaks on t
 
 ## Recommended direction
 
-The `git check-ignore` check is the only part of this worth building on its own, and it is small. Do
-it together with the include-coverage question above if both are wanted, since they are one task
-wearing two hats: both ask "is a path this repo cares about actually visible to the tools that
-should see it".
-
-The `extends` question is closed — the spike above ran and the answer is to keep copying the file.
-What is left of this plan is the `git check-ignore` check, the include-coverage question it pairs
-with, and the per-tool excludes confirmation. None of the three has real leverage; this plan is a
-candidate for retirement once the check is either built or consciously dropped.
+Retire. The check was consciously dropped on measurement, the `extends` question closed with the
+spike, and the include-coverage question has its own plan.
