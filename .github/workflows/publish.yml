@@ -15,12 +15,33 @@ name: publish
 # Release candidates (`vX.Y.ZrcN`, tagged on the release branch by `inv gitflow.release-candidate`)
 # reach TestPyPI only: the real-index job is skipped for any tag carrying `rc`, so a candidate is
 # never one approval click away from pypi.org. A final tag runs both.
+# DISABLED 2026-09-04, deliberately and declaratively: the tag trigger is removed, leaving only
+# manual dispatch, so nothing here fires on its own. Two reasons, and the second is why this is not
+# merely tidy-up.
+#
+# The blocking one: the "pending publisher" registration this file's Trusted Publishing depends on
+# has never been done on either index, so every run would fail at upload — see
+# plans/2026-08-22-pypi-publish-integration.md, still open on exactly that.
+#
+# The surprising one: with the tag trigger live, `inv trunkflow.cut` did not mean "bump the
+# version", it meant "upload to TestPyPI and queue a PyPI approval", because the TestPyPI job here
+# is unconditional. Pushing a tag is the release gate across this ecosystem — requests, flask and
+# httpx all publish on a tag push, and PyPA's own guide says to push a tagged commit to publish —
+# so a task that pushed a tag as a side effect of bumping was one command away from publishing.
+# `trunkflow.cut` no longer pushes by default; this removes the other half of that coupling.
+#
+# Re-enabling is this block plus the registration, and nothing else. Kept as a live workflow file
+# rather than renamed to `.disabled` so actionlint and zizmor keep checking it — a disabled file
+# that stops being linted is one that rots before anyone tries to switch it back on.
+#
+# One consequence to know before dispatching this by hand, pre-existing but now the only path: the
+# `pypi` job's `if: !contains(github.ref_name, 'rc')` reads a *tag* name under the trigger that was
+# just removed, and reads a *branch* name under dispatch. Dispatched from `main` it is therefore
+# always true, and the job would try to publish whatever version `pyproject.toml` currently holds
+# rather than a tagged release. The `pypi` environment's reviewer rule is what still stands between
+# that and pypi.org.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
 
 # Workflow-level grant is the floor every job inherits, so `id-token: write` is declared per job
 # rather than here — a job added later for something unrelated (a changelog step, a notification)
