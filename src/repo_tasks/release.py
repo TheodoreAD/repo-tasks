@@ -52,6 +52,54 @@ def _require_no_release(c: Context, tag: str):
         )
 
 
+def _require_tag_on_branch(c: Context, tag: str, branch: str):
+    """The tag must point at a commit the branch actually contains.
+
+    Without this, a tag left on an abandoned branch — or created before a reset — is pushable as
+    though it were the release, and a tag naming a commit nobody chose is the one release state that
+    cannot be cleanly undone once anything has fetched it.
+    """
+    contains = c.run(f"git branch --contains refs/tags/{tag} --format='%(refname:short)'", hide=True, warn=True)
+    if branch not in contains.stdout.split():
+        raise ValueError(
+            f"tag {tag} does not point at a commit on {branch} — it names something else, "
+            f"which is not what a release from {branch} should publish"
+        )
+
+
+@requires(NETWORK)
+@task(
+    help={
+        "tag": "Tag to push (default: the most recent tag reachable from HEAD)",
+        "branch": "The branch the tag must sit on, pushed alongside it (default: main)",
+    }
+)
+def push_tag(c: Context, tag: str | None = None, branch: str = "main"):
+    """Push a local tag, and the branch carrying it, to origin.
+
+    **This is the release gate**, and it is a task of its own for that reason. Across this ecosystem
+    pushing the tag is what publishes: `requests`, `flask` and `httpx` all trigger their publish
+    workflow on a tag push, and PyPA's guide tells you to push a tagged commit to publish. So this
+    is the moment a release stops being local and reversible, and it should be something someone
+    typed rather than a step inside a command that sounds like a version bump.
+
+    The branch goes first so the tagged commit exists upstream under a ref, rather than arriving as
+    a commit reachable only from a tag.
+    """
+    tag = tag or _latest_tag(c)
+    if not c.run(f"git rev-parse --verify --quiet refs/tags/{tag}", hide=True, warn=True).ok:
+        raise ValueError(f"tag {tag} does not exist locally — `inv trunkflow.cut` creates one")
+    if c.run(f"git ls-remote --exit-code --tags origin refs/tags/{tag}", hide=True, warn=True).ok:
+        print(f"[release.push-tag] {tag} is already on origin — nothing to push")
+        return
+    _require_tag_on_branch(c, tag, branch)
+
+    c.run(f"git push origin {branch}", echo=True)
+    c.run(f"git push origin {tag}", echo=True)
+    print("\nNext steps:")
+    print(f"  - inv release.create --tag {tag}   # publish it as a GitHub Release, if wanted")
+
+
 @requires(GH, NETWORK)
 @task(
     help={

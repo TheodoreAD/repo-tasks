@@ -82,3 +82,49 @@ def test_create_refuses_to_publish_over_an_existing_release():
     c = _ctx(view=0)
     with pytest.raises(ValueError, match="already exists"):
         release.create.body(c, tag=TAG)
+
+
+CONTAINS = f"git branch --contains refs/tags/{TAG} --format='%(refname:short)'"
+
+
+def _push_ctx(*, local=0, on_remote=1, contains="main"):
+    """`on_remote` defaults to 1 — absent — because that is the state a push starts from."""
+    return MockContext(
+        run={
+            DESCRIBE: Result(stdout=f"{TAG}\n", exited=0),
+            LOCAL: Result(exited=local),
+            REMOTE: Result(exited=on_remote),
+            CONTAINS: Result(stdout=f"{contains}\n", exited=0),
+            "git push origin main": Result(exited=0),
+            f"git push origin {TAG}": Result(exited=0),
+        }
+    )
+
+
+def test_push_tag_sends_the_branch_before_the_tag():
+    """The branch first, so the tagged commit arrives under a ref rather than reachable only
+    from a tag."""
+    c = _push_ctx()
+    release.push_tag.body(c)
+    calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert calls[-2:] == ["git push origin main", f"git push origin {TAG}"]
+
+
+def test_push_tag_is_a_no_op_when_the_tag_is_already_published():
+    c = _push_ctx(on_remote=0)
+    release.push_tag.body(c)
+    calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert not [cmd for cmd in calls if cmd.startswith("git push")]
+
+
+def test_push_tag_refuses_a_tag_that_does_not_exist_locally():
+    c = _push_ctx(local=1)
+    with pytest.raises(ValueError, match="does not exist locally"):
+        release.push_tag.body(c)
+
+
+def test_push_tag_refuses_a_tag_pointing_off_the_branch():
+    """A tag left on an abandoned branch is pushable as though it were the release."""
+    c = _push_ctx(contains="feature/x")
+    with pytest.raises(ValueError, match="does not point at a commit on main"):
+        release.push_tag.body(c)
