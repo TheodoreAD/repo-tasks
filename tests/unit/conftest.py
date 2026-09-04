@@ -6,12 +6,17 @@ result (a particular `Result`, or a dict of command → result) builds its own `
 instead; that is the intended split, not an oversight. See contributing/test-tiers.md.
 """
 
+import tomllib
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 from invoke import MockContext
 from pytest_socket import disable_socket, enable_socket
+
+from repo_tasks import projects, version
 
 
 @pytest.fixture(autouse=True)
@@ -69,3 +74,42 @@ def tmp_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     first line is something you have to remember every time."""
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+# The version the unit tier asserts against, pinned here rather than read from this repo's own
+# `pyproject.toml`. Any value works; this one is what the assertions already used.
+PINNED_VERSION = "0.1.0"
+
+# This repo's real version, read once. The fixture below swaps *this* value and nothing else, so a
+# test that builds its own project on disk keeps the version it chose.
+_REAL_VERSION: str = cast(
+    "str", tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())["project"]["version"]
+)
+
+
+@pytest.fixture(autouse=True)
+def pinned_version(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Make *this repo's* version a fixture value, so assertions stop depending on a mutable fact.
+
+    Several tests assert version strings derived from the real `pyproject.toml` — a branch named
+    `release/0.2.0`, a `--new-version` argument, a tag that must not already exist. Those were
+    correct only while the version never moved: bumping `0.1.0` to `0.2.0` made `next_version(...)`
+    return `0.3.0` and turned 11 of them red, found 2026-09-04 by cutting this repo's first real
+    release. See plans/2026-09-04-release-breaks-the-test-suite.md.
+
+    Autouse, because the failure mode is a test *silently* depending on the repo's own version, and
+    an opt-in fixture only protects the tests someone remembered to opt in.
+
+    Scoped to the repo's own version rather than to every resolution, which the first version of this
+    fixture got wrong: `set_dev`'s test writes a `pyproject.toml` into `tmp_cwd` and then asserts
+    against the version it put there, so blanket-replacing whatever `_resolve_project` returned broke
+    it. Everything else about the project is preserved either way — name, path, workspace members.
+    """
+    real = version._resolve_project
+
+    def pinned(c: object, group: str | None) -> projects.PythonProject:
+        project = real(c, group)  # pyright: ignore[reportArgumentType]
+        return replace(project, version=PINNED_VERSION) if project.version == _REAL_VERSION else project
+
+    monkeypatch.setattr(version, "_resolve_project", pinned)
+    return PINNED_VERSION

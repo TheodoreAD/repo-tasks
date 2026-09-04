@@ -111,7 +111,11 @@ def test_bump_invokes_bumpversion_with_a_generated_config_file_and_returns_new_v
     config_path = Path(command.removeprefix("bump-my-version bump minor --config-file "))
     assert not config_path.exists()  # cleaned up after the run
 
-    assert result == "0.1.0"  # MockContext never really runs bump-my-version, so the file is unchanged
+    # `_bump` returns the version re-read from disk after the run, and MockContext never really runs
+    # bump-my-version — so the assertion is "it reports what the file says", not any literal. That
+    # read goes through `discover_python_projects` rather than `_resolve_project`, so the
+    # `pinned_version` fixture deliberately does not reach it.
+    assert result == projects.discover_python_projects(c)[0].version
 
 
 def test_bump_raises_for_an_unknown_group(c):

@@ -47,8 +47,12 @@ def test_tracked_files_empty_outside_a_git_repo():
 
 
 def test_discover_python_projects_returns_repo_root_first(c):
-    result = projects.discover_python_projects(c)
-    assert result[0] == projects.PythonProject(name="repo-tasks", path=Path(), version="0.1.0")
+    """Identity, not version: this asserts the ordering its name describes, and the repo's own
+    version is a mutable fact that has no business failing an ordering test. The `pinned_version`
+    fixture does not reach here — that patches `version._resolve_project`, and this calls discovery
+    directly — so the literal has to go rather than be pinned."""
+    root = projects.discover_python_projects(c)[0]
+    assert (root.name, root.path) == ("repo-tasks", Path())
 
 
 def test_discover_python_projects_finds_this_repos_own_dogfood_member(c):
