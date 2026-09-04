@@ -252,4 +252,15 @@ session that wrote it:
   flat-layout consumer with no `src/` at all. So the only thing the sweep records is a window in
   which the family is mixed. What it should check per consumer: that adding the three `__init__.py`
   files is a separate, deliberate decision in that repo rather than something `configs.pull`
-  implies.]
+  implies.
+- The security-workflow caller, from the now-retired `plans/2026-08-30-deps-audit-in-ci.md`. Each
+  repo in the family needs about six lines — a `.github/workflows/security.yml` whose one meaningful
+  line is a job-level `uses:` naming this repo's `security-reusable.yml` at a full 40-character SHA,
+  with the readable version in a trailing comment. `repo-tasks` calls its own copy by relative path
+  and is done; the other eight are not, so the uniformity the design exists for is potential rather
+  than actual. **This one is an addition to each consumer rather than a `configs.pull`**, which is
+  what makes it sweep work rather than something a consumer picks up on its own schedule.
+  `scaffoldapy` is excluded from this item and is the highest-leverage repo of the set — its
+  template would hand the caller to every generated repo for free — and it is already filed there as
+  `plans/2026-08-31-security-workflow-caller.md`. Note while doing it that a pinned caller currently
+  goes stale silently, per [`../contributing/quality-gate.md`](../contributing/quality-gate.md).]
