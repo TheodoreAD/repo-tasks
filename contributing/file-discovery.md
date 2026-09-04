@@ -2,7 +2,8 @@
 
 Which of the tools `quality.py` wraps skip gitignored content on their own, which are blind to it,
 and why the shipped configs are include-shaped rather than carrying exclude lists. Extracted from
-`plans/2026-08-19-gitignore-tool-alignment.md`, whose remaining open questions are still live there.
+the now-retired `plans/2026-08-19-gitignore-tool-alignment.md`; the one question it left open is
+`plans/2026-09-05-pyright-include-coverage.md`.
 
 The guiding principle: **`.gitignore` absorbs as much of this as it can** — one declaration,
 respected automatically by every tool that supports it — and a tool's own exclude list is reserved
@@ -123,6 +124,34 @@ with nothing in the JSON to indicate a config problem. Anything consuming basedp
 wrapper, a coverage check over the include list — cannot see config errors at all. A second layer of
 the "clean output, wrong exit code" trap.]
 
+## Why `pyrightconfig.json` is copied, not `extends`-ed
+
+The tempting shape is a three-line consumer config extending the canonical copy inside the installed
+package, dissolving the pull/promote round trip for this one file. A time-boxed spike ran it
+2026-08-30 (basedpyright 1.39.10 / pyright 1.1.412) against a scratch consumer, and every claim here
+is a measured run.
+
+[DECISION: keep copying the file. `extends` inherits **rule settings** correctly — every severity,
+and `pythonVersion`, which a child scalar overrides — but **not the two blocks that decide what gets
+checked**, so the consumer has to re-declare exactly the parts whose absence is undetectable. What
+it would save is the rule list; what it would cost is a silent failure mode the copy has never had.]
+
+[PITFALL: **relative paths inside the extended config resolve against the extended file's own
+directory, not the extending one**, and the failure is silent-green. With only `"extends"` in the
+consumer's config, `include: ["src*", "tests*", "tasks*"]` resolved inside the package's `configs/`
+directory: `filesAnalyzed: 0`, exit 0 — a consumer that type-checks nothing and passes its gate.
+Proved causal: a file dropped at `<package>/configs/src/oops.py` was analysed from the consumer's
+working directory. `executionEnvironments[].root` resolves the same way and fails the other
+direction, checking the consumer's tests under the full profile. So the consumer's file must carry
+`extends`, the whole `include` list _and_ the whole `executionEnvironments` block — the two largest
+structures in the file, and the two carrying the most rationale.]
+
+[PITFALL: a broken `extends` path does not abort. basedpyright prints
+`Config file "..." could not be read.` and **continues with default settings**, silently discarding
+the profile (`reportAny` degraded to warning, `failOnWarnings` gone). It exits 3, so CI catches it;
+an editor's language server does not. And the path is the part that varies — pointing into a venv
+embeds the interpreter version, which breaks on the next floor bump.]
+
 ## `.gitignore` itself is not this package's file
 
 [DECISION: `scaffoldapy` owns `.gitignore` outright — source of truth and updates both, not split
@@ -137,8 +166,25 @@ repo's own config files stall at their initial-commit snapshot.]
 own README. Reuse actively-maintained upstream work rather than rolling our own. Confirmed
 2026-08-19, from the plugin's README rather than inferred.]
 
-The consequence for this package is a dependency it cannot see: the shipped configs assume certain
-paths are gitignored — that assumption is the entire basis of "ruff needs zero manual excludes" — so
-a consumer whose `.gitignore` is missing one of them breaks that assumption invisibly, with no
-connection back to the cause. Whether `repo_tasks` should detect and warn about that is still open
-in `plans/2026-08-19-gitignore-tool-alignment.md`.
+The consequence for this package looked like a dependency it cannot see: the shipped configs assume
+certain paths are gitignored — that assumption is the entire basis of "ruff needs zero manual
+excludes" — so a consumer whose `.gitignore` is missing one of them would break that assumption
+invisibly, with no connection back to the cause. The one path this package's own behaviour depends
+on is `.venv`, and the assumption turns out to hold there by construction.
+
+[DECISION: **no `git check-ignore` gate step for `.venv`, because the venv ignores itself.**
+Measured 2026-09-05: `uv venv` writes `.venv/.gitignore` containing `*`, and so does Python 3.14's
+stdlib `venv`. In a scratch repo with no root `.gitignore` at all, `git check-ignore .venv/` and
+`.venv/pyvenv.cfg` both report ignored via that nested file, and
+`git ls-files --others --exclude-standard` lists nothing from the venv — so `tracked_files()`, ruff
+and dprint never see it whatever the root file says. `venv.create` only ever uses uv. A gate step
+checking the root entry would therefore pass in every consumer for a reason unrelated to their
+`.gitignore`: nearly inert, which is the worse answer for the same decision — the same shape
+`plans/2026-08-30-deferred-gate-tools.md` measured for the bandit subprocess rules, which cannot see
+the `c.run` calls this package shells out through. A venv created by a tool that does not
+self-ignore is the only case left, and none of this family's tooling can produce one.]
+
+The wider question — is a repo's `.gitignore` complete, does it match upstream `github/gitignore`,
+should a new community entry be adopted — is agent judgement rather than code: fuzzy, infrequent,
+and better served by reading the actual diff than by a hard-coded rule. It belongs with
+`scaffoldapy`, which owns the file.
