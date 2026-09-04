@@ -445,3 +445,101 @@ way on maintenance and popularity alone — and then reversed six days later, be
 code path" stopped being worth 61 packages and a pinned transitive once the paths it uniquely
 reached were pinned by tests and an advisory landed on that pin. Re-ask the question when the cost
 changes, not only when the candidates do.
+
+### Pytest plugins: what ships, what is recommended, what was rejected
+
+The family-wide plugin survey ran 2026-08-30 over twenty-four candidates, and its conclusion was
+narrow: the family was missing exactly one plugin, `pytest-timeout`, adopted above. The rest of its
+result is here so the question is not surveyed a third time. The survey's own plan,
+`plans/2026-08-27-pytest-plugin-survey.md`, keeps only what is still open.
+
+**The criterion is inertness.** A plugin ships in the `repo-tasks-quality` manifest only if it does
+nothing until something asks for it — `--cov`, `disable_socket()`, `--timeout`. That is what made
+shipping `pytest-cov` and `pytest-socket` to every consumer cost nothing, and it disqualifies a
+whole class outright: a plugin that changes behaviour on install (reordering, rerunning) alters
+every consumer's suite the moment `configs.ensure-deps` runs, with no opt-in; one that changes
+output on install (progress bars, diff prettifiers) does the same to a gate whose output agents read
+as well as humans; one that needs a network, a daemon or a service cannot sit in a manifest whose
+point is that `quality.check` runs offline anywhere. Weight is the weaker constraint —
+`pytest-socket` is an 8.7 KB wheel and `hadolint-py`'s 12 MB was accepted on its merits — so judge
+it, but do not lead with it.
+
+Inertness was **measured, not reasoned**: this repo's unit tier run once as a baseline and once per
+candidate with nothing changed but `uv run --with <candidate>`, the outputs compared after
+normalising away ANSI escapes, uv's resolver chatter, the `plugins:` banner and every duration. A
+candidate is inert when that diff is empty. Every one of the twenty-four passed the full tier with
+the plugin merely installed — nothing broke `--strict-config`, `--strict-markers` or
+`filterwarnings = error`, which was the failure most likely to disqualify one cheaply.
+
+[PITFALL: **the inertness run must go through a pty, or the measurement is wrong in the exact
+direction that matters.** Piped to a file, `pytest-sugar` produced output byte-identical to the
+baseline and was scored inert; the same run under `script -qec` replaced the reporter wholesale —
+193 KB of progress bar and per-test checkmarks against the baseline's 7.5 KB. Output plugins check
+for a terminal, so the cheap way to run the experiment is precisely the way that cannot detect them.
+The piped measurement was believed first.]
+
+[DECISION: **the inert/not-inert line falls in a different place than assumed.** `pytest-randomly`
+is the archetypal non-inert plugin, as predicted — but rerunning and reordering plugins had been
+grouped with it, and `pytest-rerunfailures`, `pytest-xdist`, `pytest-order`, `pytest-repeat` and
+`pytest-testmon` are all measurably inert: each does nothing without its flag or marker. The
+criterion acquits most of the class it was expected to convict, so the rejections below stand on the
+concern each plugin serves, not on the mechanics.]
+
+The survey swept concerns the tiers actually have rather than filtering a popularity list:
+
+| concern                                 | answered by                                         | gap?                         |
+| --------------------------------------- | --------------------------------------------------- | ---------------------------- |
+| line coverage                           | `pytest-cov` (shipped)                              | no                           |
+| no network in the unit tier             | `pytest-socket` (shipped) + `no_network` autouse    | no                           |
+| nothing written to the real `$HOME`     | `isolated_home` autouse fixture                     | no — and no plugin does this |
+| nothing written outside `tmp_path`      | `tmp_cwd` fixture                                   | no                           |
+| asserting the command a task builds     | invoke's own `MockContext` (14 unit modules use it) | no                           |
+| async test collection                   | `anyio`, already present and configured             | no                           |
+| **a hung test in the integration tier** | `pytest-timeout`, since 2026-08-30                  | closed                       |
+
+[DECISION: **the honest answer to "which plugins is the family missing entirely" is: one.** The
+concerns that looked plugin-shaped are answered by three autouse fixtures in
+`tests/unit/conftest.py` and by a class invoke itself ships, and those answers are better than a
+plugin would be — opt-in per tier rather than imposed through a config every consumer inherits, the
+reasoning that conftest already states for the socket guard. The `$HOME`/cwd fixtures in particular
+cover a hazard `~/AGENTS.md` documents as recurring and for which no maintained plugin exists at
+all.]
+
+**Recommended, not shipped.** Each is inert and would cost nothing in the manifest, but covers a
+concern only some repos have — so it is a named recommendation a repo adds when it needs it. PyPI
+metadata read from each project's own JSON on 2026-08-30; size is the largest wheel for the release
+then current.
+
+| candidate                              | as of 2026-08-30                   | the concern, and who has it                                                                                                                                                                                                                                                                               |
+| -------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hypothesis`                           | 6.167.0, 2026-08-30, 1.4 MB        | Property-based testing. Real shapes here (version arithmetic, parsers), but a testing _style_ a repo opts into, and 1.4 MB with a near-daily release cadence is weight every consumer would carry for a style most will not use.                                                                          |
+| `syrupy`                               | 6.0.0, 2026-08-22, 57 KB           | Snapshot assertions — `scaffoldapy` renders templates and asserts on them by hand. That repo decides it.                                                                                                                                                                                                  |
+| `pytest-httpx`, `respx`                | 0.36.2 / 0.23.1, 2026-04, 20/25 KB | HTTP fixtures, for the repos that use httpx. Both **measured to coexist with the socket guard**: under the unit tier's `disable_socket(allow_unix_socket=True)`, with a control test proving the guard live, each served its mocked response — they intercept at the transport layer, so no socket opens. |
+| `time-machine`                         | 3.5.0, 2026-08-25, 70 KB           | Time control, next to the `python-conventions` skill's dates/times topic. Compiled (64 wheels), actively released.                                                                                                                                                                                        |
+| `pytest-subprocess`                    | 1.6.0, 2026-05-10, 23 KB           | Mocking real subprocess calls — relevant to the integration tier, where `MockContext` deliberately does not reach.                                                                                                                                                                                        |
+| `pytest-datadir`, `pytest-regressions` | 1.8.0 / 2.11.0, 6/25 KB            | Fixture-file management, for a repo whose tests grow fixture-heavy.                                                                                                                                                                                                                                       |
+| `pytest-recording`                     | 0.13.4, 2025-05-08, 13 KB          | VCR-style record/replay. Recording needs network, so it belongs to the integration tier only, never near the offline gate.                                                                                                                                                                                |
+| `pytest-xdist`                         | 3.8.0, 2025-07-01, 45 KB           | Parallelism. Measurably inert (nothing without `-n`), so it _qualifies_ for the manifest — held back only because this repo's unit tier is about a second and no consumer has reported a slow one. Revisit on evidence.                                                                                   |
+| `pytest-mock`                          | 3.15.1, 2025-09-16, 10 KB          | The most-installed pytest plugin there is, and it covers no concern this family has: tests use `monkeypatch` and `MockContext` already. Popularity is a tiebreaker, not a reason.                                                                                                                         |
+
+**Rejected, with the reason**, so a later session does not re-litigate a settled no:
+
+| candidate              | reason                                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pytest-sugar`         | **Not inert.** Replaces the terminal reporter entirely under a pty — 193 KB of output where the baseline prints 7.5 KB. The gate's output is read by agents as well as humans.                                                                                     |
+| `pytest-randomly`      | **Not inert.** Reorders every run on install. Whether a non-inert plugin could ship with its behaviour disabled by the canonical `pytest.ini` (`-p no:randomly`) is the survey plan's one remaining open question, and this is the only rejection it would reopen. |
+| `pytest-asyncio`       | The slot is taken. `anyio` is already resolved family-wide and `pytest.ini` already derives `anyio_mode` per consumer; two async plugins in one environment is a conflict, not a choice.                                                                           |
+| `pytest-rerunfailures` | Inert, so this is a values rejection rather than a mechanical one: a retry converts a real defect into a slower green run. This family already treats an xpass as a failure and every warning as an error; a rerun flag contradicts both.                          |
+| `pytest-env`           | `monkeypatch.setenv` covers it, per-test rather than per-session, which is strictly better isolation. No uncovered concern.                                                                                                                                        |
+| `pyfakefs`             | The concern (filesystem isolation) is already structural via `tmp_path`, `tmp_cwd` and `isolated_home`. 236 KB to re-answer a solved question.                                                                                                                     |
+| `pytest-check`         | Soft assertions let a test continue past a failed check, which produces tests that report several failures for one cause. No concern behind it here.                                                                                                               |
+| `pytest-benchmark`     | Adds a banner line, and performance is not a concern any repo in the family has stated. Nothing to measure yet.                                                                                                                                                    |
+| `pytest-order`         | Inert, but explicit inter-test ordering is a dependency between tests — the thing to remove, not to declare.                                                                                                                                                       |
+| `pytest-repeat`        | Inert, but the flake-hunting it serves is an occasional ad-hoc need, met by `--count` on a one-off install.                                                                                                                                                        |
+| `pytest-testmon`       | Inert, but it selects tests from a local DB keyed to a working tree. The unit tier is about a second; there is nothing to save and a stale-DB failure mode to acquire.                                                                                             |
+| `pytest-freezer`       | 8 releases, last 2024-12-12 — effectively parked. `time-machine` covers the same concern.                                                                                                                                                                          |
+| `pytest-clarity`       | 5 releases, last 2021-06-11, **no wheel at all** (sdist only). Unmaintained.                                                                                                                                                                                       |
+
+`pytest-asyncio` and `pytest-benchmark` are the two "banner only" cases: one configuration header
+line each, no behaviour change — a weaker violation than a progress bar, and neither is rejected on
+that ground alone.
