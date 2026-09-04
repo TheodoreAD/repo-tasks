@@ -275,11 +275,11 @@ trailing `# <version>` comment as the human-readable pin, so a stale ref is repo
 invisible.]
 
 [PITFALL: that currency check does not actually work for this pin **yet**. `_latest_tag` asks
-`gh api repos/<owner>/<repo>/releases/latest`, and this repo publishes no releases and carries no
-tags — so the reusable workflow's own ref resolves to "nobody's release to track" and is skipped
-rather than reported. Until this repo starts tagging releases, a pinned consumer goes stale silently
-and the bump is a thing someone has to remember. That is the real cost of pinning here, and it is
-paid for stability deliberately.]
+`gh api repos/<owner>/<repo>/releases/latest`, which answers with GitHub Releases, not tags — and
+this repo has a `v0.2.0` tag and no Release, so the reusable workflow's own ref resolves to
+"nobody's release to track" and is skipped rather than reported. Until `inv release.create` has
+published one, a pinned consumer goes stale silently and the bump is a thing someone has to
+remember. That is the real cost of pinning here, and it is paid for stability deliberately.]
 
 [PITFALL: the job installs nothing and caches nothing, and that is not an oversight to "fix" later.
 `uv audit --locked` reads `uv.lock` and queries OSV — measured 2026-08-31 on a clean checkout with

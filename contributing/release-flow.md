@@ -158,8 +158,9 @@ that. A support patch never has a candidate. The rc tags stay on the branch's hi
 the sync merge is reachable from `develop` too; `_require_tag_absent` checks each candidate's tag
 before cutting it, the same guard as the final's.
 
-Teams that do not want a release branch for every release are a separate design —
-`plans/2026-08-25-release-without-release-branch.md`.
+A repo that does not want a release branch at all wants `trunkflow`, not a lighter gitflow — see
+"Two models ship, and a repo uses one" above. A lighter gitflow (release straight from `develop`, or
+rc tags cut on `develop`) was considered and not built.
 
 ## The hotfix redirect
 
