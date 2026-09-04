@@ -70,6 +70,38 @@ with upstream today, but a single data point is not a version-tracking record. T
 is dead — `pytest-check-links` last released 2024-04, `linkcheckmd` 2021-02. The need is narrow
 enough that ~40 lines covers it.]
 
+**`docs.build` (`zensical build --strict`)**, file-gated on `mkdocs.yml`. It is the only check in
+the family that sees a **dangling anchor**: `link_check` strips a link's fragment by design, so
+`file.md#heading` verifies the file and never the heading, and a renamed heading passes it.
+
+[DECISION: taken 2026-09-04, after that gap shipped a red Pages deploy twice in one consumer. A
+heading rename changed an anchor while another page kept linking to the old one; `CI` passed green
+on both commits while `Deploy docs to GitHub Pages` failed on both, so the branch moved twice with
+the published site serving the last good build. `link_check` exits 0 on that input and
+`zensical build --strict` exits 1 — no overlap and no cheaper substitute. Measured cost on a 41-page
+site: ~1.5 s, about +23% on a 6.8 s gate.]
+
+[DECISION: in `check`, not in `precommit`. `precommit` is `pre=[fix, check]`, so `check` reaches
+both — and only `check` reaches CI, which is what turns a Pages failure into a failure of the run
+people already watch.]
+
+[DECISION: the no-op is keyed on `mkdocs.yml`, not on whether zensical is installed. Keying on the
+tool would make "this consumer's docs group is not synced" indistinguishable from "this repo has no
+docs site", which is the silent pass the whole step exists to remove. Most consumers have no docs
+site at all and none of them declares zensical on repo-tasks' behalf, so the config file is what
+makes the step safe to run unconditionally.]
+
+[PITFALL: this one step does **not** use `configs.require_tool`, and that is deliberate rather than
+an oversight to tidy up. That helper's message names the `repo-tasks-quality` manifest and
+`dependency-groups.dev`, which is right for every other gate binary and wrong for this one —
+zensical is in the consumer's own `docs` group, so a consumer following that remediation would sync
+the wrong group and see nothing change. `docs.py` carries its own preflight naming
+`uv sync --group docs`.]
+
+This is also the one step that makes "no changes written" not literally true: a repo with an
+`mkdocs.yml` gets `site/` rebuilt. `site/` is gitignored in every consumer and `build` cleans on
+entry rather than on exit, so nothing tracked moves and nothing accumulates between runs.
+
 **`test.untested_modules`** — every module under `src/<pkg>/` has a `tests/unit/test_<module>.py`.
 Deterministic, offline, no-ops cleanly where either directory is absent.
 
