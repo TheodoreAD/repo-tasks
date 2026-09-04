@@ -138,10 +138,9 @@ def package_index(tmp_path_factory):
 class JsonIndex:
     """A stub PEP 691 index: serves one canned body and records the Accept header it was asked with.
 
-    Everything a test needs hangs off this object rather than off module-level helpers, because
-    `tests/` is deliberately not a package (see contributing/type-checking.md) — so a test module
-    cannot import from its own conftest by name, and `import conftest` would be ambiguous between
-    this file and `tests/conftest.py`.
+    Everything a test needs hangs off this object rather than off module-level helpers: a conftest
+    holds fixtures only and nothing imports it by module name (see contributing/test-tiers.md,
+    "Conftest layout"). A helper worth importing by name goes in a distinctly-named module instead.
     """
 
     def __init__(self) -> None:
