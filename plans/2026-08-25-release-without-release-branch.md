@@ -42,14 +42,38 @@ branching model the repo uses — a trunk repo can want a PR too. Folding "PRs o
 choice would conflate two independent axes, which is the exact failure the decision above avoids for
 the other one.]
 
-[NEEDS CLARIFICATION: what is the trunk namespace called, and does `gitflow.py` keep its name? The
-tasks under it are few — plausibly just `release.cut --bump minor`, with `dist.create-release` doing
-the GitHub Release half. `release.*` reads well and does not collide with `gitflow.release-start`,
-but `gitflow.py` continuing to own only the gitflow shape is the thing that keeps both module names
-honest. Renaming `gitflow.py` is explicitly not proposed: `gitflow.feature-start` mirrors
-`git flow
-feature start` on purpose, and the `invoke-task-conventions` skill measures a comparable
-rename at 53 files.]
+### Naming: the two namespaces should read as the same class
+
+The user's requirement, 2026-09-04: the trunk namespace should make it obvious it is an alternative
+to gitflow, or that the two are in the same class — `trunk.release`, `git-trunk.release`, or a
+shared root such as `integration.trunk.release`, the last being "a bit less user friendly when
+typing, although of no consequence to an agent".
+
+**The rename cost was measured rather than assumed, and it is smaller than this plan previously
+implied.** `rg -c 'gitflow[._]'` over the repo: **15 files**, and heavily concentrated —
+`tests/unit/test_gitflow.py` (41 hits) and `gitflow.py` itself (10) are most of it, with the rest
+single-digit hits in plans, `contributing/` and `README.md`. The `invoke-task-conventions` skill's
+53-file figure is from a 24-task rename in another repo and does not transfer.
+
+| option                            | class signal                                                    | cost     | houses the shared release task? |
+| --------------------------------- | --------------------------------------------------------------- | -------- | ------------------------------- |
+| `gitflow.*` + `trunk.*`           | documentation only                                              | none     | no                              |
+| `gitflow.*` + `git-trunk.*`       | shared `git` prefix, **and they sort adjacent** in `inv --list` | none     | no                              |
+| `flow.gitflow.*` + `flow.trunk.*` | explicit and structural                                         | 15 files | **yes**                         |
+
+[PITFALL: `trunk` alone does not sit next to `gitflow` in `inv --list`. Verified by sorting the real
+namespace set — `gitflow, helm, quality, test, trunk, version` puts four namespaces between them, so
+the "these two are alternatives" reading is available only to someone who already knows. `git-trunk`
+does sort adjacent (`-` is 0x2D, before `f`), which is the one concrete argument for the invented
+compound over the honest short name.]
+
+[NEEDS CLARIFICATION: which of the three? The shared root is the only one that also solves a problem
+this plan otherwise leaves open — `create-release` is wanted by **both** flows and belongs to
+neither, so under the first two options it needs a third namespace of its own, while under a shared
+root it is simply `flow.create-release`. Against it: every gitflow command grows by five characters,
+and `trunk` and `git-trunk` are free. Note the mirroring argument is weaker than first stated —
+`flow.gitflow.feature-start` still contains `gitflow feature start`, so nesting does not destroy the
+`git flow feature start` echo, only lengthens it.]
 
 ## Open questions
 
