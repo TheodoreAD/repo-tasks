@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-30
+updated: 2026-09-04
 ---
 
 # Releasing without a release branch every time
@@ -18,22 +18,55 @@ is green — trunk-based or GitHub-flow shaped teams, or a gitflow team for whom
 Raised 2026-08-25 while settling where the rc cycle sits: keep the canonical shape as the default,
 and explore this separately rather than fold a second mode into `release_start`.
 
+## Decided 2026-09-04: both shapes ship, neither replaces the other
+
+[DECISION: **the package supports gitflow _and_ trunk**, per the user: "we need to have both shapes,
+gitflow with develop and ceremony and PRs, and owner-direct-to-main single dev style". So this is no
+longer "which shape is worth supporting first" — the canonical flow stays exactly as it is, and the
+trunk shape is added beside it. That also resolves the plan's framing: shape (b), tag-only releases
+on `main`, is the one being added, because it is what "owner direct to main" means and it is the
+only shape this repo can run today (no `develop` branch exists here, checked 2026-09-04).]
+
+[DECISION: **the trunk shape gets its own namespace rather than a mode flag on `gitflow.*`.** The
+plan's earlier lean was a `repo-tasks.toml` `[gitflow] model = "..."` key, and that was reasoning
+about two near-duplicate trees. They are not near-duplicate: gitflow has twelve tasks
+(feature/release/hotfix/support × start/finish/finalize, plus the rc cycle), and the trunk shape
+needs roughly one — bump on `main`, tag, push. A mode key would make twelve task names conditionally
+meaningful, and `inv --list` would advertise ten tasks that error in a trunk repo. Two small
+namespaces is both honest and cheaper, and it is what `~/AGENTS.md` asks for over an enum branching
+into near-duplicate trees.]
+
+[PITFALL: the existing PR-vs-local axis is **already** orthogonal and must stay that way.
+`gitflow`'s "PR mode (default) vs local mode" is about how a branch merges, not about which
+branching model the repo uses — a trunk repo can want a PR too. Folding "PRs or not" into the model
+choice would conflate two independent axes, which is the exact failure the decision above avoids for
+the other one.]
+
+[NEEDS CLARIFICATION: what is the trunk namespace called, and does `gitflow.py` keep its name? The
+tasks under it are few — plausibly just `release.cut --bump minor`, with `dist.create-release` doing
+the GitHub Release half. `release.*` reads well and does not collide with `gitflow.release-start`,
+but `gitflow.py` continuing to own only the gitflow shape is the thing that keeps both module names
+honest. Renaming `gitflow.py` is explicitly not proposed: `gitflow.feature-start` mirrors
+`git flow
+feature start` on purpose, and the `invoke-task-conventions` skill measures a comparable
+rename at 53 files.]
+
 ## Open questions
 
-[NEEDS CLARIFICATION: which of these shapes is the one worth supporting first? (a) **release from
-develop** — `gitflow.release-direct --bump minor`: bump on a short-lived branch that is immediately
-PR'd to main with no rc cycle, i.e. today's `release_start` + `release_finish` collapsed into one
-command and one PR; (b) **tag-only releases on main** — no `develop` at all, a bump PR against
-`main` and a tag, GitHub-flow style, where `hotfix_*` is the only remaining flow; (c) **rc from
-develop** — rc tags cut straight off `develop` (`vX.Y.0rc1` on a develop commit) with the release
-branch created only if an rc needs fixing. (c) is what most "we don't need a release branch"
-requests actually want, and it is the one that interacts with the dev-build scheme in the
-pre-release plan.]
+[NEEDS CLARIFICATION: **superseded in part by the decision above** — both ship, and (b) is the one
+being added. Retained for the shape descriptions, which are still the clearest statement of what
+each involves. Which of these shapes is the one worth supporting first? (a) **release from develop**
+— `gitflow.release-direct --bump minor`: bump on a short-lived branch that is immediately PR'd to
+main with no rc cycle, i.e. today's `release_start` + `release_finish` collapsed into one command
+and one PR; (b) **tag-only releases on main** — no `develop` at all, a bump PR against `main` and a
+tag, GitHub-flow style, where `hotfix_*` is the only remaining flow; (c) **rc from develop** — rc
+tags cut straight off `develop` (`vX.Y.0rc1` on a develop commit) with the release branch created
+only if an rc needs fixing. (c) is what most "we don't need a release branch" requests actually
+want, and it is the one that interacts with the dev-build scheme in the pre-release plan.]
 
-[NEEDS CLARIFICATION: is this a mode of the existing tasks (a `--direct` flag, a `repo-tasks.toml`
-`[gitflow] model = "..."` key) or a separate set of tasks? A config key is closest to how the rest
-of the package selects behavior (`repo-tasks.toml` for docker/helm), and it keeps `inv -l` from
-listing two vocabularies; a flag keeps one code path per task but every caller has to remember it.]
+**Answered 2026-09-04** — a separate set of tasks, in their own namespace, not a mode of the
+existing ones. The reasoning is in the decision above; the short version is that the two trees are
+not near-duplicates, so a mode key would leave ten task names advertised and inert in a trunk repo.
 
 [NEEDS CLARIFICATION: how does the `sync/<tag>` merge-back change? In (a) it is unchanged; in (b)
 there is nothing to sync; in (c) the rc tag is already on `develop`, so only the final needs syncing
@@ -41,19 +74,28 @@ there is nothing to sync; in (c) the rc tag is already on `develop`, so only the
 
 ## Recommended direction
 
-Rough. Do nothing until the pre-release plan has landed and been used once — the rc cycle on a
-release branch may turn out cheap enough that (c) is not wanted.
+**Superseded 2026-09-04.** This plan previously recommended waiting — the gate being "cut one real
+release first, and see whether the release branch turns out to be ceremony or load-bearing". That
+gate no longer decides anything, because the user has said **both** shapes are wanted regardless of
+how that comparison would have come out. Waiting for evidence to choose between them is moot when
+neither is being dropped.
 
-**Half of that gate is now met, and the half that is not is the informative one.** Checked
-2026-08-30: the pre-release work landed on 2026-08-25 and its plan has since been retired, so there
-is no `plans/2026-08-25-prerelease-versions.md` to look for — the rc cycle is described in
-[`../contributing/release-flow.md`](../contributing/release-flow.md). But `git tag -l` is empty:
-this repo has never cut a release of any kind, so the rc cycle has been exercised only against a
-local bare repo and never once for real. Until it has, there is no evidence about whether the
-release branch is ceremony or load-bearing, which is the entire question this plan turns on. Waiting
-is still the right call, and it is now waiting on one specific thing rather than two. If it is,
-prefer (c) as a `repo-tasks.toml` `[gitflow]` setting over a per-call flag, and keep `hotfix_*`
-unchanged in every shape: a hotfix is the one flow whose branch always earns its keep.
+What remains true from that reasoning, and is worth keeping: `git tag --list` is still empty, so the
+rc cycle has never run for real, only against a local bare repo. That is now a reason to exercise
+it, not a reason to wait.
+
+The order of work, and it runs the other way round from what this plan assumed — the shape comes
+first and the release comes out of it, because a hand-cut release would be evidence about nothing:
+
+1. Add the trunk namespace (naming is the open question above). One task, roughly `release.cut`:
+   bump on `main`, tag, push.
+2. Add `dist.create-release` for the GitHub Release half — see
+   `plans/2026-09-04-versioning-policy.md`, which owns the release mechanism and the versioning
+   rule.
+3. Cut this repo's `v0.2.0` with them, which exercises the trunk shape for real.
+4. The gitflow shape stays untouched throughout and remains the default for a repo that has a
+   `develop`. `hotfix_*` is unchanged in every shape: a hotfix is the one flow whose branch always
+   earns its keep.
 
 Prior art to check before designing: `git-flow-avh`'s `release finish` from a non-release branch,
 `semantic-release`'s prerelease branches config (`develop` → `rc` channel), and how
