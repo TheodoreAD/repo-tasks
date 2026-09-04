@@ -19,6 +19,7 @@ from . import (
     gitflow,
     helm,
     quality,
+    release,
     selfinstall,
     testing,
     version,
@@ -37,6 +38,7 @@ ns.add_collection(Collection.from_module(quality), name="quality")
 ns.add_collection(Collection.from_module(testing), name="test")
 ns.add_collection(Collection.from_module(version), name="version")
 ns.add_collection(Collection.from_module(gitflow), name="gitflow")
+ns.add_collection(Collection.from_module(release), name="release")
 ns.add_collection(Collection.from_module(dev_env), name="dev_env")
 ns.add_collection(Collection.from_module(docs), name="docs")
 ns.add_collection(Collection.from_module(venv_module), name="venv")
