@@ -1,0 +1,65 @@
+name: Release
+
+# Publish an already-pushed tag as a GitHub Release, from the Actions tab.
+#
+# Dispatch-only, and deliberately so. A release is never automatic here: not every version merits
+# one, and one that does may not want it immediately, so a tag can sit unpublished indefinitely and
+# be released later by naming it. Nothing about this workflow fires on a tag push — that is the
+# other half of the same decision, and why publish.yml's tag trigger was removed.
+#
+# This runs the repo's own `inv release.create` rather than a `gh release create` line of its own.
+# That is the opposite call from security-reusable.yml, which runs `uv audit --locked` raw, and the
+# two are consistent once priced: that command has no logic worth single-sourcing and runs on every
+# push, where this one carries real guards (the tag must exist on the remote, no Release may already
+# exist) and runs by hand. Duplicating the guards in YAML is exactly the drift a task exists to
+# prevent — see contributing/quality-gate.md, "The dependency audit runs as its own workflow".
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, e.g. v0.2.0. Leave blank for the most recent tag"
+        required: false
+        type: string
+      draft:
+        description: "Create the Release as a draft"
+        required: false
+        default: false
+        type: boolean
+
+# `contents: write` is what creating a Release needs, and it is the only elevated grant here. The
+# repo's other workflows read only; this one is the exception because publishing is the point.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # `release.create` resolves a blank tag input with `git describe`, and reads the tag's
+          # existence locally — neither works against the single commit a default checkout fetches.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: ./bootstrap.sh
+      # The inputs reach the shell through `env`, never interpolated into the script. A `${{ }}`
+      # expansion inside a `run:` is substituted before the shell ever sees the line, so an input
+      # containing shell syntax executes as code — zizmor's `template-injection` audit rejects the
+      # interpolated form outright, and it was right to: the first draft of this step used it.
+      - run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$TAG" ]; then args+=(--tag "$TAG"); fi
+          if [ "$DRAFT" = "true" ]; then args+=(--draft); fi
+          inv release.create "${args[@]}"
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          DRAFT: ${{ inputs.draft }}
+          # `gh` authenticates with the job's token rather than a stored secret; the `contents:
+          # write` grant above is what makes it sufficient to create a Release.
+          GH_TOKEN: ${{ github.token }}
