@@ -53,6 +53,20 @@ ignore = [
   # Assistant's own config drops this same code for being too opinionated for exactly this reason
 ]
 
+[lint.flake8-tidy-imports.banned-api]
+# The guard that pays for `extraPaths: ["."]` in pyrightconfig.json. That setting exists so a
+# packaged `tests/` can import a shared helper as `tests.support`, and it has one side effect: it
+# also makes `from src.<pkg> import ...` resolve clean, which is a *second* import route to the same
+# code. `import src.pkg.mod` and `import pkg.mod` produce different module objects with separate
+# state at runtime, and `src` resolves as a PEP 420 namespace package, so no `src/__init__.py` is
+# needed for the hazard to exist. The type checker stopped objecting, so a linter does instead.
+#
+# Deliberately generic: this file ships byte-identical to every consumer, and a message naming one
+# package would be wrong in all the others. In a flat-layout consumer with no `src/` directory at
+# all the rule is simply inert — never triggered rather than wrong. `TID` is already in `select`
+# above, so this adds no rule family and no dependency.
+"src" = { msg = "import the installed package, not the src/ path to it — they are two different modules at runtime" }
+
 [lint.isort]
 # No known-first-party: ruff auto-detects first-party imports from the project's own layout
 # (src/<pkg> or a flat top-level package) without needing it declared — confirmed empirically

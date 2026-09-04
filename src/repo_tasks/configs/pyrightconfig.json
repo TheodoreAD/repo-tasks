@@ -33,6 +33,17 @@
   // widening is only to top-level siblings sharing the prefix, and no repo in the family has one.
   // See repo-tasks' contributing/file-discovery.md.
   "include": ["src*", "tests*", "tasks*"],
+  // Packaged tests: `tests/` and its tiers carry `__init__.py`, which is pytest's own documented
+  // recommendation for the `prepend` import mode this family uses, and which removes the
+  // globally-unique-test-basename requirement the unpackaged layout imposes. basedpyright then
+  // needs the repo root on its search path to resolve `from tests.support import ...`, which is
+  // what this line is for. See repo-tasks' contributing/type-checking.md.
+  //
+  // It has one side effect, and it is guarded rather than accepted: it also makes `from src.<pkg>
+  // import ...` resolve, a second import route producing different module objects with separate
+  // state. ruff's flake8-tidy-imports `banned-api` entry for `src` in the shipped ruff.toml is what
+  // enforces this once the type checker no longer can.
+  "extraPaths": ["."],
   // A warning fails the run. Flipped 2026-08-25 once every repo in the family was at zero: with
   // thousands of warnings the count was output nobody read; at zero, this is what keeps it there.
   // A warning that is structural rather than a defect is suppressed at its one site with a

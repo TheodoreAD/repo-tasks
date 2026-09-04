@@ -149,31 +149,31 @@ The `package_index` fixture **skips gracefully** (`pytest.skip`, never a hard fa
 environment from looking like a real regression. A missing Docker daemon deliberately fails loudly
 instead.
 
-### Every test module basename must be unique across the whole tree
+### `tests/` is a package, so test module basenames need not be unique
 
-There is no `__init__.py` anywhere under `tests/` — the only one in the tree belongs to the
-`sample-service` fixture's own package, which is a fixture rather than a test module. That is the
-layout pytest's own good-practices page recommends for a `src` project whose tests sit outside the
-package, and it is supported rather than accidental.
+`tests/`, `tests/unit/` and `tests/integration/` each carry an `__init__.py`. That is the layout
+pytest "highly recommends" for the `prepend` import mode this family uses — the documented shape for
+the mode, not a workaround — and it is what the shipped `pyrightconfig.json`'s `extraPaths: ["."]`
+exists to support. Adopted 2026-09-04; see [`type-checking.md`](type-checking.md), "Why `tests/` is
+a package", for the guard that pays for it.
 
-It comes with one requirement, and pytest states it plainly for the `prepend` import mode this repo
-uses: without `__init__.py` files, "each test file needs to have a unique name compared to the other
-test files". Two same-named modules in different tiers collide on import.
+What this bought, stated as the thing it replaced: an unpackaged tree requires every test module
+basename to be unique across the whole tree, because pytest imports each by bare module name and two
+same-named modules collide. That was a **collection error**, exit 2, not a failing assertion —
+verified 2026-09-04 by removing the `__init__.py` files and putting a `test_dupe.py` in two tiers:
+`which is not the same as the test file we want to collect ... use a unique basename`. With the
+packaging in place the same two files collect and pass.
 
-[PITFALL: the `_integration` suffix on every integration module is load-bearing for _collection_,
-not merely descriptive. A `tests/integration/test_dist.py` alongside `tests/unit/test_dist.py`
-breaks the run outright — an import collision at collection time, not a failing assertion — and
-nothing in the tooling prevents it. Checked 2026-08-30: zero duplicate `test_*.py` basenames across
-the tree, maintained entirely by that naming convention. It reads as a style preference and is not
-one.]
+[DECISION: **the `_integration` suffix stays**, though it is no longer load-bearing. It was the
+convention keeping basenames unique, and it now describes rather than protects — which is a better
+reason to keep a naming convention than the one it had. Nothing is renamed: a rename would churn
+every integration module to buy nothing, and the suffix still tells a reader which tier a file is in
+when it appears alone in a traceback or a `pytest` argument.]
 
-A packaged `tests/` would make the collision impossible and the suffix purely descriptive, but it is
-**not permitted**: it needs `extraPaths: ["."]` in the shipped `pyrightconfig.json`, which also
-makes `src.<pkg>` resolve as a second import route to the same code. Measured and settled 2026-08-30
-— see [`type-checking.md`](type-checking.md), "Why `tests/` may not be a package". So the basename
-rule above is what this repo currently lives with. It is not unavoidable, though:
-`--import-mode=importlib` removes it outright, at the cost of making shared test helpers impossible.
-Which layout the family should ship is open in `plans/2026-08-30-tests-import-layout.md`.
+`--import-mode=importlib` also removes the basename requirement and was rejected: pytest documents
+that it makes testing utility modules under `tests/` not importable at all, which forecloses the
+shared-helper case the packaging is for. The full comparison is in
+`plans/2026-08-30-tests-import-layout.md`.
 
 ## Unit tier: mocked `c.run`
 

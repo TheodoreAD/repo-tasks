@@ -161,22 +161,34 @@ field.]
   against those rules when working with untyped or partially-typed libraries (microsoft/pyright
   discussion #6243) — but the alternative he offers in the same breath is a local stub for the
   offending library, which is what `invoke-stubs` is. The stub was the better half of that advice.
-- **`extraPaths: ["."]` in the tests execution environment**, which would permit a packaged `tests/`
-  tree (`__init__.py` files, `from tests.conftest import ...`). See the decision below.
 
-### Why `tests/` may not be a package
+### Why `tests/` is a package
 
 The tests execution environment sets `root: "tests"`, which makes `tests/` the search root for files
-beneath it — so `conftest` resolves and `tests.conftest` cannot. A consumer wanting a shared test
-helper imported by name across tiers meets `Import "tests.conftest" could not be resolved`, and
+beneath it — so `conftest` resolves and `tests.conftest` cannot. A test tree wanting a shared helper
+imported by name across tiers meets `Import "tests.conftest" could not be resolved`, and
 `extraPaths: ["."]` is the one-line fix.
 
-[DECISION: not taken. Adding `.` to the type checker's search path also makes `src.<pkg>` resolve —
-a second, blessed import route to the same code, which is precisely what a `src` layout exists to
-prevent. `import src.repo_tasks.version` and `import repo_tasks.version` yield **different module
-objects with separate state** at runtime, and this setting is exactly what stops the type checker
-from flagging that. The cost lands in a file every consumer inherits, to buy a layout one consumer
-wanted. Settled 2026-08-30.]
+[DECISION: **taken, 2026-09-04, by the user: follow pytest's canonical shape.** `tests/` and each
+tier carry `__init__.py`, the shipped `pyrightconfig.json` carries `extraPaths: ["."]`, and the
+shipped `ruff.toml` carries the `banned-api` guard that pays for it. pytest "highly recommends"
+packaging tests under the `prepend` import mode this family uses, so this is the documented shape
+for the mode rather than a workaround, and it removes the unique-basename requirement outright.]
+
+[DECISION: **the second import route is guarded, not accepted.** `extraPaths: ["."]` also makes
+`from src.<pkg> import ...` resolve — `import src.repo_tasks.version` and
+`import
+repo_tasks.version` yield **different module objects with separate state** at runtime, and
+this setting is exactly what stops the type checker flagging it. ruff's `flake8-tidy-imports`
+`banned-api` entry for `src` closes it instead, costing one config block, no new dependency and no
+new rule family (`TID` was already in `select`). Verified firing 2026-09-04:
+`TID251 'src' is banned` on the exact import basedpyright now permits. The earlier decision,
+2026-08-30, rejected the whole thing on this cost without pricing the guard.]
+
+[DECISION: the ban's message names no package. This file ships byte-identical to every consumer, so
+a message naming `repo_tasks` would be wrong everywhere else; and in a flat-layout consumer with no
+`src/` at all the rule is **inert rather than wrong** — never triggered. That is a property worth
+stating deliberately, since the shipped configs otherwise avoid anything that varies by repo.]
 
 Measured here, four runs (basedpyright 1.39.10, this repo, two tiers):
 
@@ -190,17 +202,29 @@ Measured here, four runs (basedpyright 1.39.10, this repo, two tiers):
 That last row is the finding, and it is causal: the identical import is a `reportMissingImports`
 error with `extraPaths` removed and nothing else changed.
 
-The supported alternative is pytest's own: no `__init__.py`, and a shared helper imported bare
-(`import conftest`), which its
-[good integration practices](https://docs.pytest.org/en/stable/explanation/goodpractices.html) page
-says "should just work" for exactly this `src`-layout shape. The cost of that layout is the
-unique-basename requirement, written down in [`test-tiers.md`](test-tiers.md) under Conftest layout.
+That last row is why the guard exists rather than why the layout was rejected.
 
-**This is a choice between three documented options, not a forced move**, and the decision above
-settles only the `extraPaths` half. pytest also "highly recommends" packaging tests under the
-`prepend` mode this repo uses, and `--import-mode=importlib` removes the basename requirement
-outright while making shared test helpers impossible. Which one this family should ship is open in
-`plans/2026-08-30-tests-import-layout.md`, with the community survey and the per-tool measurements.
+The unpackaged alternative — no `__init__.py`, a shared helper imported bare as `import conftest` —
+is also supported by pytest, and its
+[good integration practices](https://docs.pytest.org/en/stable/explanation/goodpractices.html) page
+says it "should just work" for this `src`-layout shape. It was what this repo did until 2026-09-04.
+Its cost is the globally-unique-test-basename requirement, and that cost is real rather than
+theoretical:
+
+```
+tests/unit/test_dupe.py ... which is not the same as the test file we want to collect:
+tests/integration/test_dupe.py
+HINT: ... use a unique basename for your test file modules
+```
+
+Measured 2026-09-04 — two same-named test files in different tiers are a hard **collection error**,
+exit 2, with the packaged layout removed and nothing else changed. With it, both collect and pass.
+
+The third documented option, `--import-mode=importlib`, is the one ruled out: it removes the
+basename requirement too, but pytest documents that it makes test modules unable to import each
+other and testing utility modules in `tests/` **not importable at all** — which forecloses the
+shared helper this whole arrangement is for. The full comparison, the 14-project community survey
+and the per-tool measurements are in `plans/2026-08-30-tests-import-layout.md`.
 
 ## Rolling this out to a consumer
 
