@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-04
 source_repo: github.com-personal/power-user-linux-setup
 source_session: bc30285c-145c-494d-b2d1-be6b37cd37f1.jsonl
@@ -69,11 +69,69 @@ exemption — the shape `shell_check` already uses to no-op on a repo with zero 
    `build` cleans on entry rather than on exit, so nothing tracked moves and nothing accumulates
    across runs.
 
+## Landed, 2026-09-04
+
+All four steps, with one of them decided against the plan's own suggestion.
+
+1. **The guard lives in `build` itself**, not in a wrapper. The plan left this open, worrying that
+   `inv docs.build` on a docs-less repo would then "lie". It does not: `docs.clean` in the same
+   module already prints `site/ not present — nothing to clean` and returns, "no mkdocs.yml —
+   nothing to build" is a true statement rather than a silent success, and the repo's own
+   task-module conventions call for no-opping cleanly when an artifact kind is absent. A second task
+   would also have to be published to be debuggable, at which point the gate has a task nobody would
+   type.
+2. **Not `require_tool`**, which is where the plan's step 2 would have misled a consumer — see the
+   pitfall in `contributing/quality-gate.md`. `docs.py` carries `_require_zensical`, naming
+   `uv sync --group docs`.
+3. `docs_build` in `check`'s `pre=`, aliased on import for the same reason `deps.check` is: `build`
+   alone in a gate chain says nothing about what is being built.
+4. `check`'s docstring now states the `site/` exception and why it is harmless.
+
+Verified rather than assumed: `inv docs.build` in this repo, which has no `mkdocs.yml`, prints the
+no-op and runs nothing. Five new unit tests — the command string still built when a config exists,
+the no-op when it does not, the hard stop when a config exists and zensical does not (asserting the
+message names the docs group and _not_ the dev group or the quality manifest), and both halves of
+the wiring: `docs.build` in `check.pre`, absent from `precommit.pre`. Gate green, 557 tests.
+
 ## Open questions
 
-[NEEDS CLARIFICATION: does every docs-carrying consumer already have a `docs` dependency group?
-`power-user-linux-setup` does not — its `zensical==0.0.44` lives in a `requirements-docs.txt` the
-Pages workflow `pip install`s, plus a machine-wide `uv tool` install, so its
-`.github/ci-bootstrap.sh` (`uv run inv dev-env.setup`) would give CI no zensical at all. That
-consumer-side prerequisite is tracked in its own plan; check the other three before assuming the
-guard alone is enough.]
+**Answered 2026-09-04, and both halves of the question's premise had gone stale.**
+
+`power-user-linux-setup` **does** have a `docs` dependency group now — `docs = ["zensical==0.0.44"]`
+in its `pyproject.toml`, with a comment saying it exists because `repo_tasks`' `docs.py` already
+assumes `uv sync --group docs`. The `requirements-docs.txt` this plan describes is gone. The
+consumer-side prerequisite it worried about was tracked in that repo's own plan and has since been
+done, so nothing here is waiting on it.
+
+The other three repos are the bigger correction: `creative-writing`, `mkdocs-taudelta` and `mktd`
+each have an `mkdocs.yml` and **none of them is a repo-tasks consumer** — no `repo-tasks` dependency
+in any of their `pyproject.toml` files, and the first two are old poetry-era `mkdocs-material`
+projects. They never run `quality.check`, so they were never in scope. The question counted
+docs-carrying _checkouts_ when the set that matters is docs-carrying _consumers_, and that set has
+exactly one member, which is already correct.
+
+[PITFALL: so the guard is not what protects the docs-carrying consumer — that one is fine either
+way. It protects the **many consumers with no docs site**, which is the majority and includes
+`repo-tasks` itself. Worth stating because the plan was written as though the risky case were the
+repo with docs, and it is the opposite.]
+
+## Migrated to
+
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "In the gate" — the three
+  decisions and the pitfall, in the section that already explains every other gate step. The pitfall
+  is the one that had to be written down: nothing in the code says why this single step preflights
+  differently from all the others, so without it the next reader tidies `_require_zensical` into
+  `require_tool` and quietly starts telling consumers to sync the wrong dependency group.
+- `src/repo_tasks/docs.py` and `src/repo_tasks/quality.py` — the no-op contract and the `site/`
+  exception are stated in the docstrings a reader of those tasks actually reaches.
+- The **cross-repo verification this plan still owes** is filed as `power-user-linux-setup`'s
+  `2026-09-04-docs-build-gate-verification.md`. This plan carries `source_repo`, and `plan-docs` is
+  explicit that such a plan is not done until the original repro is re-checked in the repo where it
+  happened — `repo-tasks` has no docs site, so the anchor case cannot be reproduced here at all.
+  Filed rather than done, since it is that repo's tree.
+
+**Deliberately not migrated.** The timing measurements (1.54 s on 41 pages, +23% on a 6.8 s gate)
+are kept only as the one-line cost in the decision, not as a table: they were taken to answer "is
+this affordable in the gate", that question is answered, and a wall-clock number for one site on one
+machine ages badly. The blow-by-blow of which commits went out red is in the consumer's own plan and
+is not this repo's record to keep a second copy of.
