@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-31
+updated: 2026-09-04
 ---
 
 # The push-triggered `deps.audit` workflow
@@ -43,10 +43,15 @@ queries OSV; it needs no installed environment at all — run on a clean `git ar
 subject: there is no venv, and the job is shorter than restoring a cache would be.]
 
 [DECISION: the raw `uv audit --locked` rather than `inv deps.audit`, which is exactly that command
-(`src/repo_tasks/deps.py`). Running the task would mean bootstrapping the whole dev group to shell
-out to one uv subcommand, and would restrict the workflow to repos that use `repo-tasks` — the
-command form works for any uv project. The cost is the command string living in two places, closed
-by a test rather than by discipline (§3).]
+(`src/repo_tasks/deps.py`). Confirmed by the user 2026-09-04 on the criterion "if `inv` is not
+installed when you need to run the uv command, then it makes sense not to use invoke" — and it is a
+bootstrap-time question, which is what makes that criterion bite. `bootstrap.sh` says so itself: it
+exists to get "from a fresh clone (or a CI runner) to a working `inv`, nothing more — the one place
+a raw `uv` call is unavoidable, since there's no `inv` to bootstrap with yet". A CI runner starts
+with neither, so reaching `inv deps.audit` means running `uv run inv venv.create` first and syncing
+the entire dev group to shell out to one uv subcommand. It would also restrict the workflow to repos
+that use `repo-tasks`, where the command form works for any uv project. The cost is the command
+string living in two places, closed by a test rather than by discipline (§3).]
 
 ### 2. `.github/workflows/security.yml` — the trigger, and the separate signal
 
@@ -72,20 +77,29 @@ suppression list, no acknowledge-and-move-on. This repo has lived in that state 
 
 ### 3. The uniformity mechanism: one definition, called everywhere
 
-Every other repo gets a caller of about six lines,
-`uses:
-TheodoreAD/repo-tasks/.github/workflows/security-reusable.yml@main`. `repo-tasks` calls its
-own copy by path, since it hosts it.
+Every other repo gets a caller of about six lines, whose one meaningful line is a job-level `uses:`
+naming `TheodoreAD/repo-tasks/.github/workflows/security-reusable.yml` at a full 40-character commit
+SHA, with the readable version beside it in a trailing comment. `repo-tasks` calls its own copy by
+relative path instead, which takes no ref at all and is why nothing in this repo pins anything.
 
 [DECISION: the reusable workflow lives in `repo-tasks` **because `repo-tasks` is public.** On Free,
 Pro and Team a reusable workflow must be in the same repository or a public one — so a public host
 is callable from the family's private repos, while hosting it in a private repo would need
 Enterprise. That is the only reason this file is here rather than somewhere more thematic.]
 
-[DECISION: callers pin `@main`, not a SHA. A pinned ref would have to be bumped in every consumer,
-which reintroduces exactly the per-repo drift the reusable workflow exists to remove; both ends of
-the call are owned by the same person, so the supply-chain argument for pinning is weak here. zizmor
-is content (12 suppressed, no findings).]
+[DECISION: **callers pin a full SHA, not `@main`** — the user's call, 2026-09-04, on stability. The
+first draft of this plan chose `@main` and recorded it as settled; that was a live trade-off decided
+without asking, and this replaces it. A moving ref changes every consumer's audit the moment this
+repo's `main` moves, including in repos nobody is touching; a SHA means a consumer runs what it was
+pinned to until someone changes it on purpose. `ci.check-actions` already understands the shape — it
+parses a job-level `uses:`, recognises a 40-hex SHA and reads a trailing `# <version>` comment — but
+see the pitfall below for why that does not help yet.]
+
+[PITFALL: the pin is currently unwatched. `ci.check-actions` resolves currency through
+`gh api repos/<owner>/<repo>/releases/latest`, and this repo has **no tags and no releases** — so
+its own reusable workflow is treated as "nobody's release to track" and skipped. A pinned consumer
+therefore goes stale silently. Tagging releases here would close it, and that is coupled to the
+still-open `plans/2026-08-22-pypi-publish-integration.md`.]
 
 The drift that remains is between `deps.py` and the workflow's `run:` line, and it is closed by
 `test_deps.py::test_audit_command_matches_the_reusable_workflow`: it asks `deps.audit` what command

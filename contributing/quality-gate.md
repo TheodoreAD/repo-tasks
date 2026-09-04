@@ -168,10 +168,22 @@ would additionally need a SARIF converter nobody maintains. A separate workflow 
 
 [DECISION: the reusable workflow lives in **this** repo because this repo is public. On Free, Pro
 and Team a reusable workflow must be in the same repository or a public one, so a public host is
-callable from the family's private repos while a private host would need Enterprise. Callers pin
-`@main` rather than a SHA: pinning would mean bumping the ref in every consumer, which is precisely
-the "hard to keep track of the differences" problem the reusable workflow exists to remove, and both
-ends of the call are owned by the same person.]
+callable from the family's private repos while a private host would need Enterprise.]
+
+[DECISION: **callers pin a full SHA, not `@main`** — chosen by the user 2026-09-04 on stability. A
+moving ref means every consumer's audit changes the moment this repo's `main` does, including in
+repos nobody is working in; a SHA means a consumer runs the workflow it was pinned to until someone
+changes it deliberately. The cost is the bump, and it is smaller than it looks: `ci.check-actions`
+already parses a job-level `uses:` for a reusable workflow, recognises a 40-hex SHA, and reads a
+trailing `# <version>` comment as the human-readable pin, so a stale ref is reportable rather than
+invisible.]
+
+[PITFALL: that currency check does not actually work for this pin **yet**. `_latest_tag` asks
+`gh api repos/<owner>/<repo>/releases/latest`, and this repo publishes no releases and carries no
+tags — so the reusable workflow's own ref resolves to "nobody's release to track" and is skipped
+rather than reported. Until this repo starts tagging releases, a pinned consumer goes stale silently
+and the bump is a thing someone has to remember. That is the real cost of pinning here, and it is
+paid for stability deliberately.]
 
 [PITFALL: the job installs nothing and caches nothing, and that is not an oversight to "fix" later.
 `uv audit --locked` reads `uv.lock` and queries OSV — measured 2026-08-31 on a clean checkout with
