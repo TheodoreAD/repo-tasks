@@ -135,19 +135,41 @@ Confirmed on GitHub, first push to `main` (commit `9933e2a`, run `33339113208`, 
 - The experimental-feature warning appears in the log as expected and as `deps.py` intends — left
   visible rather than silenced with a flag that would break when uv graduates the command.
 
-## What is left
+## What is left, and where each piece now lives
 
-[DEFERRED: **the eight other repos each need their caller file**, and that is per-repo work in repos
-this session may not write to. `scaffoldapy` is the highest-leverage one, since its
-`template/.github/workflows/` would give every future generated repo the caller for free; the
-existing repos each need the same six lines added once. Until then the audit runs in `repo-tasks`
-alone, and the uniformity this design is built for is potential rather than actual.]
+Nothing is left in this plan. Both deferrals were rehomed 2026-09-04 into plans that stay.
 
-[DEFERRED: **an advisory that lands with no push here is not seen until the next push.** The obvious
-fix is a schedule, and this repo has already ruled one out — `contributing/quality-gate.md`,
-"Nothing here runs on a schedule, and that is the decision", settled 2026-08-30: a red scheduled run
-has no audience in a repo that pushes straight to `main` and reviews no PRs, and an unwatched
-scheduled job looks like coverage without being it. That decision explicitly left the _trigger_
-open, which is what landed here. The tension is real and worth revisiting on its own terms rather
-than by quietly adding a `cron`: a vulnerability differs from the staleness cases that decision was
-about, because nobody has to read a red run for the advisory to matter. Not re-decided here.]
+- **The eight other repos each need their caller file**, and that is per-repo work in repos this
+  session may not write to — so until it happens, the audit runs in `repo-tasks` alone and the
+  uniformity this design is built for is potential rather than actual. `scaffoldapy` is the
+  highest-leverage one, since its `template/.github/workflows/` would give every generated repo the
+  caller for free, and it was already filed there as `plans/2026-08-31-security-workflow-caller.md`.
+  The other seven are now an item in
+  [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), which owns the batched
+  cross-repo pass.
+- **An advisory that lands with no push here is not seen until the next push.** Moved to
+  [`2026-09-04-scheduled-dependency-audit.md`](2026-09-04-scheduled-dependency-audit.md), which
+  states the tension with the no-schedule decision properly and adds the option this plan never
+  priced — Dependabot alerts, which may make the schedule argument moot rather than winning it.
+
+## Migrated to
+
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "The dependency audit runs
+  as its own workflow" — written when the work landed rather than at retirement, and it already
+  carries the four decisions and the unwatched-pin pitfall: why a separate workflow rather than
+  SARIF into code scanning (a licence this family's four private repos do not have, so it would work
+  on five repos and not four), why the reusable workflow lives in this repo (a public host is
+  callable from private repos on Free/Pro/Team), why callers pin a full SHA rather than `@main`, and
+  why the pin currently goes stale silently.
+- `tests/unit/test_deps.py::test_audit_command_matches_the_reusable_workflow` — the command string
+  living in two places is closed by that test rather than by this document. It asks `deps.audit`
+  what command it builds and asserts that exact string appears as a `- run:` step in the reusable
+  workflow, so changing either fails naming the other.
+
+**Deliberately not migrated.** The verification section — the 9s job,
+`Resolved 64 packages in
+0.72ms`, the `audit / audit` naming GitHub gives a `workflow_call` — is a
+record that it worked once, and the workflow running on every push to `main` is the standing version
+of that claim. The no-cache decision's measurement (0.72s on a clean export with no `.venv`) is
+kept, because it is the reason a future reader should not add a cache, and that reason is not
+visible from the workflow file.
