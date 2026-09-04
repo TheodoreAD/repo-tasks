@@ -185,6 +185,17 @@ Its blind spot is real and worth stating: mocked fixtures only exercise the payl
 to write. Two genuine `dist.py` parsing bugs survived full unit coverage and were caught immediately
 by the integration tier the first time it ran against a real index (see below).
 
+[PITFALL: **the same blind spot hides a test's own dependence on mutable repo state, and only doing
+the real thing finds it.** A number of unit tests asserted version strings derived from this repo's
+real `pyproject.toml` — a branch named `release/0.2.0`, a `--new-version` argument, a tag that must
+not already exist — and they were correct only while the version never moved. Cutting the first real
+release moved it, `next_version(...)` started returning `0.3.0`, and 11 tests went red on a commit
+that a release tag would have pointed at. Nothing could have caught it earlier: the gate was green,
+the release tasks are unit-tested against `MockContext`, and a mock never runs `bump-my-version` and
+never rereads `pyproject.toml`. That is an argument for cutting a release early rather than late.
+`tests/unit/conftest.py`'s autouse `pinned_version` fixture is the fix, and its docstring carries
+why it is autouse and why it is scoped to this repo's own version rather than to every resolution.]
+
 That blind spot is exactly why the two coverage questions land on opposite sides of the gate.
 `inv test.untested-modules` — does every module under `src/` have a `tests/unit/test_<module>.py`? —
 is in `quality.check`: the question has a true answer regardless of how the tier is written. A

@@ -95,7 +95,7 @@ def pinned_version(monkeypatch: pytest.MonkeyPatch) -> str:
     `release/0.2.0`, a `--new-version` argument, a tag that must not already exist. Those were
     correct only while the version never moved: bumping `0.1.0` to `0.2.0` made `next_version(...)`
     return `0.3.0` and turned 11 of them red, found 2026-09-04 by cutting this repo's first real
-    release. See plans/2026-09-04-release-breaks-the-test-suite.md.
+    release. See contributing/test-tiers.md, "Unit tier: mocked `c.run`".
 
     Autouse, because the failure mode is a test *silently* depending on the repo's own version, and
     an opt-in fixture only protects the tests someone remembered to opt in.
