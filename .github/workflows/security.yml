@@ -16,7 +16,7 @@ name: Security
 # named this workflow as the trigger it was leaving open.
 #
 # The residual gap is real and accepted: an advisory that lands with no push here is not seen until
-# the next push. See plans/2026-08-30-deps-audit-in-ci.md.
+# the next push. See plans/2026-09-04-scheduled-dependency-audit.md.
 on:
   push:
     branches: [main]

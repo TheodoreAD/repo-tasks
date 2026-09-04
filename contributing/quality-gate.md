@@ -135,9 +135,10 @@ unwatched scheduled job is worse than a known gap, because it looks like coverag
 changes: `deps.audit` when dependencies move, `ci.check-actions` when a workflow is edited. The
 residual staleness risk is accepted, not pending. Settled 2026-08-30.
 
-This rules out a _schedule_, not a _trigger_. The push-triggered `deps.audit` step is a separate,
-still-wanted design that a push already gives a reader — open in
-`plans/2026-08-30-deps-audit-in-ci.md`.]
+This rules out a _schedule_, not a _trigger_. The push-triggered dependency audit is the trigger it
+left open, and it landed 2026-08-31 — see "The dependency audit runs as its own workflow" below. The
+gap that trigger cannot close, an advisory landing with no push here, is open on its own terms in
+`plans/2026-09-04-scheduled-dependency-audit.md` rather than settled by this decision.]
 
 **Run `inv ci.status` before pushing.** It is the habit the decision above rests on, and the only
 thing standing between a failed push-triggered run and nobody noticing.
