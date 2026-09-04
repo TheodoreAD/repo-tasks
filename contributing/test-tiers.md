@@ -172,8 +172,8 @@ when it appears alone in a traceback or a `pytest` argument.]
 
 `--import-mode=importlib` also removes the basename requirement and was rejected: pytest documents
 that it makes testing utility modules under `tests/` not importable at all, which forecloses the
-shared-helper case the packaging is for. The full comparison is in
-`plans/2026-08-30-tests-import-layout.md`.
+shared-helper case the packaging is for. The full three-way comparison, and what comparable projects
+do, is in [`type-checking.md`](type-checking.md), "The three options, side by side".
 
 ## Unit tier: mocked `c.run`
 

@@ -200,9 +200,8 @@ Measured here, four runs (basedpyright 1.39.10, this repo, two tiers):
 | `from src.repo_tasks import version` + `extraPaths` | **resolves clean** — the reason it was rejected    |
 
 That last row is the finding, and it is causal: the identical import is a `reportMissingImports`
-error with `extraPaths` removed and nothing else changed.
-
-That last row is why the guard exists rather than why the layout was rejected.
+error with `extraPaths` removed and nothing else changed. It is why the guard exists — not, as the
+2026-08-30 reading had it, why the layout should be rejected.
 
 The unpackaged alternative — no `__init__.py`, a shared helper imported bare as `import conftest` —
 is also supported by pytest, and its
@@ -223,8 +222,70 @@ exit 2, with the packaged layout removed and nothing else changed. With it, both
 The third documented option, `--import-mode=importlib`, is the one ruled out: it removes the
 basename requirement too, but pytest documents that it makes test modules unable to import each
 other and testing utility modules in `tests/` **not importable at all** — which forecloses the
-shared helper this whole arrangement is for. The full comparison, the 14-project community survey
-and the per-tool measurements are in `plans/2026-08-30-tests-import-layout.md`.
+shared helper this whole arrangement is for.
+
+#### The three options, side by side
+
+pytest documents three, not two. Framing the choice as "packaged or not" is what the 2026-08-30
+reading got wrong, and it is worth keeping the third column visible so the next reader does not
+re-derive it:
+
+| option                          | shared test helper            | unique basenames | basedpyright       |
+| ------------------------------- | ----------------------------- | ---------------- | ------------------ |
+| `prepend`, no `__init__.py`     | bare `import conftest` only   | **required**     | clean              |
+| `prepend` + `__init__.py` (now) | `from tests.helpers import …` | not needed       | needs `extraPaths` |
+| `importlib`                     | **impossible by design**      | not needed       | clean              |
+
+`prepend` is the default and stays that way. pytest's own
+[import modes](https://docs.pytest.org/en/stable/explanation/pythonpath.html) page: _"Initially we
+intended to make `importlib` the default in future releases, however it is clear now that it has its
+own set of drawbacks so the default will remain `prepend` for the foreseeable future."_
+
+The two pytest pages that look like they contradict each other are both right, about different
+modes. On `prepend`/`append`: _"It is highly recommended to arrange your test modules as packages by
+adding `__init__.py` files."_ On the `src` layout with tests outside the package: leaving
+`__init__.py` out _"should just work"_ — true, at the cost of the basename rule. Only the second
+described this repo before 2026-09-04, and only the first describes it now.
+
+#### What comparable projects do
+
+14 well-known projects, checked 2026-08-30 via the GitHub API for `tests/__init__.py`, a `src/`
+directory, and an `import-mode` setting in `pyproject.toml`:
+
+| packaged `tests/`, src layout   | packaged `tests/`, flat layout | unpackaged `tests/`         |
+| ------------------------------- | ------------------------------ | --------------------------- |
+| attrs (**importlib**), requests | httpx, pydantic, rich, fastapi | flask, click, urllib3 (src) |
+| black, poetry, cryptography     |                                | sqlalchemy (flat)           |
+
+Two things it settles, and one it does not:
+
+- **The default import mode is what everyone uses.** 13 of 14 leave it unset. `importlib` is
+  pytest's recommendation for new projects and is nearly absent in practice — attrs alone.
+- **Both layouts are mainstream.** Packaged leads, 9 of 13 overall and 5 of 8 among the src-layout
+  projects that match this repo's shape — so neither "packaging tests is unusual" nor "everyone
+  packages tests" is a claim this evidence supports.
+- **It does not support a proportion.** This is a convenience sample chosen by recall, not sampled
+  from anything, so the counts above are illustrative of the split and are not a rate. Widen it
+  before quoting a number anywhere.
+
+#### The shared-helper need, and why it did not decide this
+
+Worth recording because it cuts against the decision rather than for it. Every personal repo with a
+`tests/` tree was surveyed 2026-08-30 for a non-test, non-conftest module under it. Nine have tests;
+**two have the shared-helper need, and they solve it two different ways** — one with a `support.py`
+imported bare across tiers, the other with a session-scoped `conftest.py`. Neither uses packaging,
+and `repo-tasks` itself has no such module at all: the only `__init__.py` under its `tests/` before
+this change belonged to `tests/fixtures/sample-service`, a fixture _project_ rather than test code.
+
+So the case for `extraPaths` never rested on an unmet need, and saying otherwise would overstate it.
+What it rests on is the first decision above: this is pytest's documented shape for the import mode
+this family uses.
+
+[PITFALL: **a helper's shape is a property of the repo it lives in.** The 2026-08-30 survey first
+proposed folding the `support.py` case into that repo's `conftest.py`, reasoning from the module's
+imports rather than from the module — and that move had already been rejected there on evidence, for
+two confirmed failure modes a reader of the imports cannot see. Two repos solving "shared test
+world" differently is not evidence that either could adopt the other's solution.]
 
 ## Rolling this out to a consumer
 
