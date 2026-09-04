@@ -1,6 +1,6 @@
 ---
-status: blocked on the batched consumer sweep reaching scaffoldapy, power-user-linux-setup and agent-skills
-updated: 2026-08-30
+status: blocked on the batched consumer sweep reaching scaffoldapy and agent-skills
+updated: 2026-09-04
 depends_on: [scaffoldapy, power-user-linux-setup, agent-skills]
 ---
 
@@ -64,9 +64,9 @@ Read from the upstream release notes rather than assumed, because two of the thr
   of v2.327.1**; irrelevant on GitHub-hosted runners, load-bearing for anything self-hosted.
 - **`checkout@v6.0.0`** (2025-11-20) — "persist creds to a separate file". This one touches work
   done in this family on 2026-08-26: `persist-credentials: false` was added to every checkout to
-  satisfy zizmor's `artipacked`, and `power-user-linux-setup`'s `devcontainer.yml` carries two
-  `# zizmor: ignore[artipacked]` suppressions. Whether those suppressions are still needed under
-  v6's mechanism is a real question, not a formality.
+  satisfy zizmor's `artipacked`, and `power-user-linux-setup`'s `devcontainer.yml` carries a
+  `# zizmor: ignore[artipacked]` suppression. Whether it is still needed under v6's mechanism was a
+  real question, not a formality — answered under "Open questions" below: it is.
 - **`checkout@v7.0.0`** (2026-06-18) — blocks checking out a fork PR under `pull_request_target` and
   `workflow_run`, plus an ESM rewrite. A genuine behavioural change, though these repos take no fork
   PRs, so the risk here is low and the security default is the one we want anyway.
@@ -91,11 +91,22 @@ which stays `false` at every site; v7's fork-PR block applies to `pull_request_t
 `workflow_run`, which no workflow here uses. The `artipacked` interaction this was waiting on is
 `power-user-linux-setup`-only and does not gate the other three repos.
 
-[NEEDS CLARIFICATION: do the two `# zizmor: ignore[artipacked]` suppressions in
-`power-user-linux-setup`'s `devcontainer.yml` survive the upgrade, or does v6's separate-credential-
-file mechanism make them unnecessary? Worth checking rather than carrying forward — a stale
-suppression is exactly the kind of thing that hides a real finding later. The gate will answer it
-directly: drop them and see whether `zizmor --offline` still passes.]
+~~Do the `# zizmor: ignore[artipacked]` suppressions survive the upgrade?~~ **They do, answered
+2026-09-04 by dropping one and running the gate.** v6's separate-credential-file mechanism does not
+retire it: zizmor audits the `uses:` block's inputs, not where the action stores the credential, so
+the v7 site is flagged identically to the v4 one. Restored, with the retest written into the comment
+so the next reader does not repeat it.
+
+The suppression turned out to be load-bearing rather than inherited caution — that job force-pushes
+the `stable` tag with the checkout's own credentials, so `persist-credentials: false` would break
+the thing being flagged. It was restored even though the finding is `low`/`help` and fails no gate
+on its own, on the argument that a permanently-present accepted finding is how a real one later goes
+unread.
+
+[PITFALL: **this plan said "the two suppressions"; there is one.** The second went with the
+`stefanzweifel/git-auto-commit-action` step deleted from `devcontainer.yml` on 2026-09-01 — the
+CI-job-commits-to-master removal — so the count was stale by three days when it was acted on.
+Corrected here rather than left to send the next session looking for a site that no longer exists.]
 
 ### Should a task check this, and fix it?
 
@@ -173,7 +184,8 @@ Rough — the questions above come first, particularly the `v5`-vs-`v7` one.
    with separate failure modes, and mixing them into one commit makes the pinned pair easy to miss.
    Re-resolve the SHA at the time of the change; do not copy the one recorded above.
 3. **Drop the `artipacked` suppressions and let the gate rule on them**, rather than carrying them
-   across on the assumption they are still needed.
+   across on the assumption they are still needed. Done for `power-user-linux-setup`, the only repo
+   that had one; the gate ruled it still needed.
 4. **Verify by annotation, not by conclusion.** The whole reason this went unseen is that a green
    run looks identical either way, so the check that closes this plan is re-reading the annotations
    on a post-change run of each repo — `gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations`
@@ -282,22 +294,78 @@ five jobs on this repo's CI. No new dependency, no new install method, no versio
 
 ## What is left, and where it goes
 
-Three repos and one template still carry it. All of them are outside this repo, so they join the
-batched cross-repo pass already deferred in
+Two repos and one template still carry it. Both are outside this repo, so they join the batched
+cross-repo pass already deferred in
 [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) rather than being done
 piecemeal from here:
 
 | repo                     | remaining                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------- |
 | `scaffoldapy`            | own CI, **plus `template/.github/workflows/`** — the only site still emitting new instances |
-| `power-user-linux-setup` | `checkout`, `setup-python@v5`, and the two `artipacked` suppressions to drop and re-test    |
 | `agent-skills`           | `checkout`                                                                                  |
+| `power-user-linux-setup` | **done 2026-09-04** — see the section below                                                 |
 
 [PITFALL: "do the template first" (direction 1 below) and "repo-tasks first" (what happened) are in
 tension, and the tension is real rather than a mistake to correct — the template is the only call
 site that keeps producing new instances, so every generation between now and that fix inherits the
 deprecation. The mitigation is that no repo is expected to be generated in that window; if one is,
 it needs the bump by hand.]
+
+## Landed: `power-user-linux-setup` (2026-09-04)
+
+Merged in from `plans/2026-09-04-node20-power-user-linux-setup-done.md`, which was filed into the
+store from a session working in that repo and absorbed here rather than edited into this plan
+directly. That file is gone;
+`plans.py archive --file 2026-09-04-node20-power-user-linux-setup-done.md` reads it back.
+
+Three commits on `master`, pushed 2026-09-04, split the way direction 2 asks for — the annotated
+deprecation apart from the plain currency drift:
+
+| action                       | sites | was      | now       | GitHub annotated it? |
+| ---------------------------- | ----- | -------- | --------- | -------------------- |
+| `actions/checkout`           | 4     | `v4`     | `v7`      | yes                  |
+| `actions/setup-python`       | 1     | `v5`     | `v7`      | yes                  |
+| `astral-sh/setup-uv`         | 3     | `v9.0.0` | `v10.0.1` | no                   |
+| `peaceiris/actions-gh-pages` | 1     | `v4`     | unchanged | n/a — current        |
+| `devcontainers/ci`           | 1     | `v0.3`   | unchanged | n/a — current        |
+
+The last two are current at the precision each pin states (latest `v4.1.0` and a `v0.3.x` tag),
+which is the comparison rule `ci.check-actions` implements — recorded so the next sweep does not
+re-derive it.
+
+Each major's breaking change was read against that repo rather than assumed, and this plan's
+`v5`/`v6`/`v7` reading held: `checkout` v5's minimum runner is self-hosted-only and every job there
+is `ubuntu-latest`; v6 changes where credentials persist, not the `persist-credentials` input; v7's
+fork-PR block needs `pull_request_target` or `workflow_run`, which no workflow there uses.
+`setup-python` v7 additionally removes a `pip-install` input that repo never set. `setup-uv` v10
+disables the cache for `pull_request_target`, `workflow_run` and `release`; it triggers on `push`,
+`pull_request` and `workflow_dispatch` only.
+
+**Verified by annotation, not by conclusion** — direction 4's check, run against two runs of the
+same workflow one push apart. Before (`53b88d0`, run `33864487597`), all three jobs green and all
+three carrying `Node.js 20 is deprecated ... actions/checkout@v4`. After (`08456b6`, run
+`33866082588`), all three jobs green and all three returning no annotations; the Pages run's single
+job is clean too. The absence was checked against a call known to work — the same
+`gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations` returns the warnings on the older run
+— rather than trusted on its own, per this plan's own note that `[]` means two different things.
+
+[PITFALL: **a version bump can invalidate a comment, and no gate can see it.** `publish_on_push.yml`
+there explained `persist-credentials: false` by saying the credentials would otherwise be left "in
+`.git/config`" — true through checkout v5, false from v6. Nothing in `actionlint`, `zizmor` or a
+test suite reads English, so the sentence would have survived the bump unread. Committed as its own
+fix, and worth a grep for `.git/config` in `agent-skills` and `scaffoldapy` while bumping them.]
+
+[DEFERRED: **`power-user-linux-setup` publishes no `ci` namespace, and wiring it today would ship
+the wrong version.** Its `tasks/__init__.py` adds no `ci` collection, so `inv ci.status` and
+`inv ci.check-actions` do not exist there and every annotation and version comparison above was done
+with raw `gh api` calls. Wiring the collection is one line — but the `repo_tasks` resolved into that
+repo's venv predates both `e51e062` (the annotation printing) and `9f3a03f` (`check_actions`), so
+what it would publish is a `ci.status` that reads `conclusion` only: the exact blind spot this
+deprecation hid in. Its `branch` also defaults to `main` against a repo on `master`. So the two
+halves have to land together — a `repo_tasks` bump in that repo's `pyproject.toml`/lock, then the
+collection — and the bump was deliberately not taken mid-session while `repo-tasks` itself was being
+worked on. Worth doing as one change afterwards, and worth checking whether `scaffoldapy` and
+`agent-skills` publish the namespace either.]
 
 ## Built: both halves (2026-08-29)
 
