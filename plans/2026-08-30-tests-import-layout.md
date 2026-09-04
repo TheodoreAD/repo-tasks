@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-09-04
 ---
 
@@ -80,10 +80,12 @@ Two clear signals and one caution:
   projects that match this repo's shape. So the retired plan's implicit premise — that an unpackaged
   `tests/` is the normal thing — was not right either; the field is genuinely split, leaning
   packaged.
-- [UNVERIFIED: this is a convenience sample of well-known projects, chosen by recall rather than
-  sampled from anything. It is enough to show that both layouts are mainstream and that `importlib`
-  is not, and it is not enough to put a number on "most projects". Widen it before quoting a
-  proportion anywhere.]
+- **Resolved 2026-09-04 by narrowing the claim rather than widening the sample.** This is a
+  convenience sample of well-known projects, chosen by recall rather than sampled from anything, so
+  it can support "both layouts are mainstream and `importlib` is not" and cannot support a
+  proportion. Nothing here ever needed one — the decision below turned on pytest's own documented
+  shape, not on a count — so the sample migrates with that limit stated in the text rather than as
+  an open tag, and widening it would buy a number nobody is using.
 
 ## What the other tools suffer
 
@@ -169,12 +171,12 @@ module named `support` shadow anything else by that name for the whole session. 
 as collidable as a module name gets. So the repo that would benefit most from a packaged `tests/` is
 the one already relying hardest on the property packaging would remove.]
 
-[NEEDS CLARIFICATION: whichever way this goes, does `scaffoldapy` generate it? The layout reaches
-new projects only through that template, and that repo's own
-`plans/2026-08-30-generated-test-layout.md` already owns the generated `tests/` tree — it was filed
-there from here on 2026-08-30, and explicitly waits on this plan before writing anything about
-basenames into the generated `AGENTS.md`. Same coupling the retired plan had, now at least pointing
-the right way round.]
+**Answered 2026-09-04** — whether `scaffoldapy` generates it. It should, and the wait is over: the
+layout reaches new projects only through that template, and that repo's own
+`plans/2026-08-30-generated-test-layout.md` already owns the generated `tests/` tree. It was filed
+there from here on 2026-08-30 and explicitly waited on this plan before writing anything about
+basenames into the generated `AGENTS.md`. The answer this plan owed it is "packaged", and doing the
+work is that repo's, not this one's — see "What is left" below.
 
 ## Recommended direction
 
@@ -251,20 +253,46 @@ packaging has made it descriptive rather than load-bearing. A rename would churn
 module to buy nothing, and the suffix still tells a reader which tier a file belongs to when it
 shows up alone in a traceback.]
 
-## What is left
+## What is left, and where each piece now lives
 
-[DEFERRED: **`scaffoldapy` still generates the unpackaged tree**, and the shipped configs now assume
-the packaged one. That repo's own `plans/2026-08-30-generated-test-layout.md` was explicitly waiting
-on this decision before writing anything about basenames into the generated `AGENTS.md`; the wait is
-over and the answer is "packaged". Filed there rather than done here.]
+Nothing is left in this repo. All three deferrals were rehomed 2026-09-04 into plans that stay, so
+this file carries no live work and is deletable.
 
-[DEFERRED: **`scaffoldapy`'s `tests/support.py` can now become `tests.support`**, which is the fix
-rather than the mitigation — its bare `from support import ...` currently resolves by `sys.path`
-shadowing. Tracked in that repo's `2026-08-30-scaffoldapy-shared-test-helper.md`, whose recommended
-rename is now superseded by this decision.]
+- **`scaffoldapy` still generates the unpackaged tree**, and the shipped configs now assume the
+  packaged one. Owned by that repo's `plans/2026-08-30-generated-test-layout.md`, which was
+  explicitly waiting on this decision before writing anything about basenames into the generated
+  `AGENTS.md`. The wait is over and the answer is "packaged".
+- **`scaffoldapy`'s `tests/support.py` can now become `tests.support`** — the fix rather than the
+  mitigation, since its bare `from support import ...` currently resolves by `sys.path` shadowing.
+  Owned by that repo's `2026-08-30-scaffoldapy-shared-test-helper.md`, which already records that
+  its own recommended rename is superseded by this decision.
+- **The other consumers pull the new configs on their own schedule.** Moved into this repo's
+  `plans/2026-08-25-consumer-transitions.md`, which owns the batched sweep and now lists the
+  `extraPaths`/`banned-api` pair among the changes that sweep has to cover. There is no ordering
+  hazard — `extraPaths` alone was measured to cost nothing on an unpackaged tree, and the ban is
+  inert in a flat-layout consumer — only a window in which the family is mixed.
 
-[DEFERRED: **the other consumers pull the new configs on their own schedule.** `configs.pull` is
-what delivers `extraPaths` and the ban; until a repo runs it, it keeps the old pair. A consumer that
-pulls the configs but does not add `__init__.py` files is in a coherent state — `extraPaths` alone
-was measured to cost nothing on an unpackaged tree — so there is no ordering hazard, only a window
-where the family is mixed.]
+Both `scaffoldapy` items sit in that repo's store mirror awaiting absorption there, which is where a
+`repo-tasks` session must leave them: the work is in a tree this session does not own.
+
+## Migrated to
+
+- [`../contributing/type-checking.md`](../contributing/type-checking.md), "Why `tests/` is a
+  package" — the decision, the guard that pays for it, the four-run basedpyright measurement, and
+  now three subsections migrated from here: the three-way comparison of pytest's import modes with
+  the quotations behind it, the 14-project community survey with its convenience-sample limit stated
+  in the text, and the nine-repo shared-helper survey together with the pitfall about reasoning from
+  a module's imports rather than the module.
+- [`../contributing/test-tiers.md`](../contributing/test-tiers.md), "`tests/` is a package, so test
+  module basenames need not be unique" — the collection-error evidence and the decision to keep the
+  `_integration` suffix. Its pointer here was repointed at `type-checking.md`, as was
+  `type-checking.md`'s own.
+- [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) — the consumer rollout
+  deferral, as one more item in the batched sweep it already itemises.
+
+**Deliberately not migrated.** The two `scaffoldapy`-specific pitfalls — the tier-local
+`conftest.py` shadowing and the second `template/tests/conftest.py` — belong to that repo and are
+already written into the plans filed there; copying them here would ship a second copy that drifts.
+Only the general lesson came across, as the pitfall in `type-checking.md`. The per-tool verification
+table (pytest, ruff, coverage all unchanged) is dropped: it recorded that nothing broke, which the
+gate now asserts on every run.
