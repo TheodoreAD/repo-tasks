@@ -32,9 +32,9 @@ plan's earlier lean was a `repo-tasks.toml` `[gitflow] model = "..."` key, and t
 about two near-duplicate trees. They are not near-duplicate: gitflow has twelve tasks
 (feature/release/hotfix/support × start/finish/finalize, plus the rc cycle), and the trunk shape
 needs roughly one — bump on `main`, tag, push. A mode key would make twelve task names conditionally
-meaningful, and `inv --list` would advertise ten tasks that error in a trunk repo. Two small
-namespaces is both honest and cheaper, and it is what `~/AGENTS.md` asks for over an enum branching
-into near-duplicate trees.]
+meaningful, and `inv --list` would advertise ten tasks that error in a trunk repo — a least-surprise
+failure, and the reason this is not a cost argument. Two small namespaces is what `~/AGENTS.md` asks
+for over an enum branching into near-duplicate trees.]
 
 [PITFALL: the existing PR-vs-local axis is **already** orthogonal and must stay that way.
 `gitflow`'s "PR mode (default) vs local mode" is about how a branch merges, not about which
@@ -49,33 +49,65 @@ to gitflow, or that the two are in the same class — `trunk.release`, `git-trun
 shared root such as `integration.trunk.release`, the last being "a bit less user friendly when
 typing, although of no consequence to an agent".
 
-**The rename cost was measured rather than assumed, and it is smaller than this plan previously
-implied.** `rg -c 'gitflow[._]'` over the repo: **15 files**, and heavily concentrated —
-`tests/unit/test_gitflow.py` (41 hits) and `gitflow.py` itself (10) are most of it, with the rest
-single-digit hits in plans, `contributing/` and `README.md`. The `invoke-task-conventions` skill's
-53-file figure is from a 24-task rename in another repo and does not transfer.
+[DECISION: **refactor cost is not a criterion here**, per the user 2026-09-04: "we don't care about
+cost of refactors usually. we care about ux and non-functional benefits like testability,
+maintainability, extensibility, readability, simplicity etc. we also care about following the rule
+of least surprise in ux." An earlier version of this section led with a measured 15-file rename
+cost, which weighted the one thing that does not decide it. Recorded because the mistake is easy to
+repeat: a number that is cheap to measure is not thereby a reason.]
 
-| option                            | class signal                                                    | cost     | houses the shared release task? |
-| --------------------------------- | --------------------------------------------------------------- | -------- | ------------------------------- |
-| `gitflow.*` + `trunk.*`           | documentation only                                              | none     | no                              |
-| `gitflow.*` + `git-trunk.*`       | shared `git` prefix, **and they sort adjacent** in `inv --list` | none     | no                              |
-| `flow.gitflow.*` + `flow.trunk.*` | explicit and structural                                         | 15 files | **yes**                         |
+**What the two things actually are.** Both are _git branching models_ — the umbrella nvie's original
+post and Atlassian's docs both use. The one being added is trunk-based development in its solo
+variant: commit straight to `main`, tag, release. It is specifically **not** GitHub Flow, which
+branches and merges through a PR; that is a third model, and one that could plausibly be added
+later.
 
-[PITFALL: `trunk` alone does not sit next to `gitflow` in `inv --list`. Verified by sorting the real
-namespace set — `gitflow, helm, quality, test, trunk, version` puts four namespaces between them, so
-the "these two are alternatives" reading is available only to someone who already knows. `git-trunk`
-does sort adjacent (`-` is 0x2D, before `f`), which is the one concrete argument for the invented
-compound over the honest short name.]
+### Why a shared root looks better than it is
 
-[NEEDS CLARIFICATION: which of the three? The shared root is the only one that also solves a problem
-this plan otherwise leaves open — `create-release` is wanted by **both** flows and belongs to
-neither, so under the first two options it needs a third namespace of its own, while under a shared
-root it is simply `flow.create-release`. Against it: every gitflow command grows by five characters,
-and `trunk` and `git-trunk` are free. Note the mirroring argument is weaker than first stated —
-`flow.gitflow.feature-start` still contains `gitflow feature start`, so nesting does not destroy the
-`git flow feature start` echo, only lengthens it.]
+[DECISION: **`sdlc` overclaims, and the overclaim is visible from `inv --list`.** SDLC spans
+requirements, build, test, deploy and maintenance — and **ten of this package's sixteen namespaces
+are already SDLC phases** sitting as siblings: `quality`, `test`, `dist`, `docker`, `helm`, `docs`,
+`ci`, `deps`, `venv`, `configs`. A reader meeting `sdlc.gitflow.release-start` would reasonably
+expect `sdlc.test` and `sdlc.quality` beneath it too, and they are visibly elsewhere. That is a
+least-surprise failure by promising more than the namespace holds.]
+
+[PITFALL: `workflow` as a root is worse than generic, it collides. This repo has real GitHub Actions
+workflows and three tasks about them — `test.workflows`, `quality.workflow-check`,
+`ci.check-actions`. `inv workflow.gitflow.release-start` beside `inv test.workflows` would make
+"workflow" mean two unrelated things one namespace apart. `flow` inherits a weaker form of the same
+problem, which is part of why it reads as generic.]
+
+**The reframe that matters: a root answers a question asked once, and taxes every command forever.**
+"Are these two alternatives?" is a _discovery_ question. Once a repo has chosen its model, nobody
+working in it ever types the other one — so the root buys clarity at first contact and charges for
+it on every invocation after. Against the stated criteria that trade is poor: it costs simplicity
+(three levels where two do), readability (`sdlc.gitflow.release-start`), and buys nothing for
+testability or maintainability, since nesting is a `Collection` wiring detail and the module
+structure is identical either way.
+
+### The alternative: make the class signal the _name_, with a shared suffix
+
+[DECISION: **adopt `*flow` as the class marker** — `gitflow` (exists), `trunkflow` (new), and
+`githubflow`/`gitlabflow` if a third model is ever wanted. The suffix is what says "these are
+branching models", it needs no root, it keeps every command two levels, and it is the option that
+extends cleanest, which is one of the criteria named. `gitflow` already carries the suffix, so the
+convention is being noticed rather than invented.]
+
+[PITFALL: sort adjacency in `inv --list` is a tempting tiebreaker and a bad one. Only `git-trunk`
+(gap 0) and `githubflow` (gap 0) land next to `gitflow`; `trunkflow` and `trunk` sit four namespaces
+away, behind `helm quality repo-tasks test`. But `githubflow` names a _different model_ than the one
+being built, and `git-trunk` is an invented compound of the kind `~/AGENTS.md` warns off. A name
+that is accurate beats a name that sorts well — the listing is scanned, not bisected.]
 
 ## Open questions
+
+[NEEDS CLARIFICATION: the trunk namespace's exact name, and where `create-release` lives. Under the
+suffix convention the leading candidate is `trunkflow.*`, with the shared GitHub Release task in a
+flat `release.*` of its own — it belongs to neither model, so it should sit inside neither. The
+residual worry is that `release.create` would sit one namespace from `gitflow.release-start` while
+meaning a different object: a GitHub Release, versus starting a release branch. `publish.*` and
+folding it back into `version.*` are the alternatives, each with its own mismatch — `publish`
+already means "upload to a package index" in `dist`, and `version` is scoped to version strings.]
 
 [NEEDS CLARIFICATION: **superseded in part by the decision above** — both ship, and (b) is the one
 being added. Retained for the shape descriptions, which are still the clearest statement of what
@@ -111,9 +143,9 @@ it, not a reason to wait.
 The order of work, and it runs the other way round from what this plan assumed — the shape comes
 first and the release comes out of it, because a hand-cut release would be evidence about nothing:
 
-1. Add the trunk namespace (naming is the open question above). One task, roughly `release.cut`:
+1. Add the trunk namespace (naming is the open question above). One task, roughly `trunkflow.cut`:
    bump on `main`, tag, push.
-2. Add `dist.create-release` for the GitHub Release half — see
+2. Add the GitHub Release task — not in `dist`, whose scope is Python distributions; see
    `plans/2026-09-04-versioning-policy.md`, which owns the release mechanism and the versioning
    rule.
 3. Cut this repo's `v0.2.0` with them, which exercises the trunk shape for real.
