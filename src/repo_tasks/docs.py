@@ -2,7 +2,9 @@
 the consumer's `docs` uv dependency group is installed (`uv sync --group docs`) — `zensical`
 itself isn't a dependency of this package.
 
-`link_check` is the exception: it needs no zensical, no dependency at all, and runs in the gate."""
+`link_check` needs no zensical and no dependency at all. `build` is in the gate too, but on the
+weaker terms its own docstring sets out: it no-ops without an mkdocs.yml, so a consumer with no
+docs site pays nothing and needs no group."""
 
 import re
 import shutil
@@ -13,6 +15,10 @@ from invoke import Context, Exit, task
 from .projects import tracked_files
 
 _SITE_DIR = Path("site")
+
+# What "this repo has a docs site" means. zensical reads mkdocs.yml, so its presence is the same
+# question the build itself would ask, one step earlier and without needing zensical installed.
+_MKDOCS_CONFIG = Path("mkdocs.yml")
 
 # `[text](target)`, with markdown's optional `"title"` after the target. Deliberately narrow: no
 # reference-style definitions, no HTML anchors, no bare autolinks — every one of those is a way to
@@ -123,9 +129,42 @@ def clean(c: Context):
     print("[docs.clean] site/ removed")
 
 
+def _require_zensical() -> None:
+    """Preflight zensical, naming the group that supplies it.
+
+    Deliberately not `configs.require_tool`, which is right for every other gate binary and wrong
+    for this one: its message names the `repo-tasks-quality` manifest and `dependency-groups.dev`,
+    and zensical is in neither. It is the consumer's own `docs` group, so a consumer following that
+    remediation would sync the wrong group and see no change."""
+    if shutil.which("zensical") is not None:
+        return
+    print(
+        "[docs.build] zensical not found on PATH — this repo has an mkdocs.yml, so the docs site "
+        "is meant to build, but zensical is not installed in this project's environment. It comes "
+        "from the consumer's own `docs` dependency group, not from repo-tasks."
+    )
+    print("[docs.build] next: uv sync --group docs")
+    raise Exit(code=1)
+
+
 @task(pre=[clean])
 def build(c: Context):
-    """Build the docs site with zensical in strict mode (fails on any warning)."""
+    """Build the docs site with zensical in strict mode (fails on any warning).
+
+    In `quality.check`, because `--strict` is the only check in this family that sees a dangling
+    anchor: `link_check` strips the fragment by design, so a renamed heading passes it. That gap
+    shipped a red Pages deploy twice in one consumer while `CI` stayed green on both commits.
+
+    No-ops cleanly on a repo with no `mkdocs.yml`, which is what makes it safe to run
+    unconditionally in every consumer's gate — most of them have no docs site, and none of them
+    declares zensical on repo-tasks' behalf. [PITFALL: the no-op is keyed on the config file rather
+    than on whether zensical is installed. Keying on the tool would make "the docs group is not
+    synced" indistinguishable from "this repo has no docs", which is the silent-pass shape this
+    whole step exists to remove.]"""
+    if not _MKDOCS_CONFIG.exists():
+        print(f"[docs.build] no {_MKDOCS_CONFIG} — this repo has no docs site, nothing to build")
+        return
+    _require_zensical()
     c.run("zensical build --strict", echo=True)
 
 

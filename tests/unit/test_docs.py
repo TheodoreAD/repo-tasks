@@ -4,6 +4,8 @@ MockContext, plus `clean`'s real filesystem behavior against tmp_path.
 `link_check` is the one task here with real logic rather than a command string, so it gets direct
 coverage of the parser (what counts as a link, what is skipped) and of the resolution rules."""
 
+import shutil
+
 import pytest
 from invoke import Exit, MockContext, Result
 
@@ -25,9 +27,35 @@ def test_clean_removes_site_dir(c, tmp_path, monkeypatch):
     assert not site_dir.exists()
 
 
-def test_build_runs_zensical_strict(c):
+def test_build_runs_zensical_strict(c, tmp_cwd, monkeypatch):
+    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/zensical")
     docs.build.body(c)
     c.run.assert_called_once_with("zensical build --strict", echo=True)
+
+
+def test_build_noops_without_an_mkdocs_config(c, tmp_cwd, capsys):
+    """The guard that lets this run in every consumer's gate. Most have no docs site at all, and
+    none of them declares zensical on repo-tasks' behalf."""
+    docs.build.body(c)
+    c.run.assert_not_called()
+    assert "no docs site" in capsys.readouterr().out
+
+
+def test_build_stops_when_the_docs_group_is_not_installed(c, tmp_cwd, monkeypatch, capsys):
+    """A repo that *has* an mkdocs.yml and no zensical is broken, not docs-less — the whole point
+    of keying the no-op on the config file rather than on the tool."""
+    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    with pytest.raises(Exit):
+        docs.build.body(c)
+    c.run.assert_not_called()
+    out = capsys.readouterr().out
+    assert "uv sync --group docs" in out
+    # Not configs.require_tool's remediation: zensical is in the consumer's own docs group, so
+    # naming the dev group or the repo-tasks-quality manifest would send them to sync the wrong one.
+    assert "repo-tasks-quality" not in out
+    assert "dependency-groups.dev" not in out
 
 
 def test_serve_runs_zensical_serve(c):

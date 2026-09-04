@@ -14,6 +14,10 @@ from .configs import require_tool
 
 # Aliased: this module has its own `check`, and the gate needs deps' one in its pre-chain.
 from .deps import check as deps_check
+
+# Aliased for the same reason as deps' check: `build` alone in a gate's pre-chain says nothing
+# about what is being built.
+from .docs import build as docs_build
 from .docs import link_check
 from .projects import tracked_files
 from .testing import unit, untested_modules
@@ -208,6 +212,7 @@ def fix(c: Context):
         workflow_check,
         dockerfile_check,
         link_check,
+        docs_build,
         deps_check,
         untested_modules,
         unit,
@@ -223,7 +228,14 @@ def check(c: Context):
     through `bootstrap.sh`'s `uv sync --locked`, so a pyproject.toml edit without a re-lock passed
     locally and failed in CI. Every step here stays deterministic and offline — `deps.audit`, whose
     answer moves with the OSV database rather than with the code, is deliberately not in this
-    chain."""
+    chain.
+
+    "No changes written" has one exception, and `docs.build` is it: a repo with an mkdocs.yml gets
+    its site rebuilt into `site/`. That is gitignored in every consumer and `build` cleans on entry
+    rather than on exit, so nothing tracked moves and nothing accumulates between runs. It buys the
+    one failure nothing else here can see — `zensical build --strict` catches a dangling anchor,
+    which `link_check` cannot by design. It is in `check` rather than in `precommit` because only
+    `check` reaches CI, and CI is the run people already watch."""
 
 
 @task(pre=[fix, check])

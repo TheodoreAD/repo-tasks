@@ -205,6 +205,20 @@ def test_check_gates_on_link_check():
     assert docs.link_check in quality.check.pre
 
 
+def test_check_gates_on_the_docs_build():
+    # link_check strips a link's fragment by design, so a renamed heading passes it. `zensical
+    # build --strict` is the only thing in the family that sees the dangling anchor, and its
+    # absence from the gate shipped a red Pages deploy twice while CI stayed green.
+    assert docs.build in quality.check.pre
+
+
+def test_precommit_reaches_the_docs_build_through_check():
+    # In check rather than in precommit: precommit is pre=[fix, check], so check reaches both, and
+    # only check reaches CI — which is the run that has to go red.
+    assert quality.check in quality.precommit.pre
+    assert docs.build not in quality.precommit.pre
+
+
 def test_check_gates_on_untested_modules():
     # The question a coverage percentage cannot answer: which module has no tests at all.
     assert testing.untested_modules in quality.check.pre
