@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-04
+status: landed
+updated: 2026-09-05
 source_repo: github.com-personal/power-user-linux-setup
 source_session: bc30285c-145c-494d-b2d1-be6b37cd37f1.jsonl
 source_moment: 2026-09-04T23:52:51+03:00
@@ -92,5 +92,51 @@ retired or landed.]
    `plans/2026-09-04-docs-build-gate-verification.md` is blocked on this decision — taking the newer
    pin is what adopts the placement.
 
-[UNVERIFIED: whether any other consumer has already taken the newer pin and is now running a
-mutating `check`. Only `power-user-linux-setup` was checked.]
+~~Whether any other consumer has already taken the newer pin and is now running a mutating
+`check`.~~ **Answered by bounding it rather than by enumerating consumers, 2026-09-05.** The
+mutating `check` existed on `main` for under an hour — `c296ad8` to `7a41c1e` — and a consumer
+installs the revision its own lock names rather than whatever `main` is, so picking it up needed a
+re-lock inside that window. `power-user-linux-setup` declares
+`repo-tasks = { git = "https://github.com/TheodoreAD/repo-tasks" }` with the revision pinned in its
+lock, and that lock predates the commit.
+
+The impact would not have justified the enumeration anyway: the worst case is a gitignored `site/`
+written during one `check` run, self-correcting on the next pull. Recorded this way deliberately —
+the reason to chase every consumer would have been a bad _outcome_, and there isn't one; chasing it
+for tidiness would have cost more than the finding is worth.
+
+## Decided and fixed, 2026-09-05
+
+**Direction 1, in favour of `precommit`** — `pre=[fix, check, docs_build]`. Not re-decided here so
+much as applied: the user had already settled it in the repo that filed the plan, and the reason
+this repo held the opposite answer was purely that a filed plan is a snapshot. Where a genuine
+judgement was needed it was on whether to treat that as settled or reopen it, and the counter-cost
+this plan raises — a consumer with a docs site and no docs CI job of its own now needs one — is a
+real price rather than a reason to overturn the call.
+
+Direction 2 taken as written: `precommit`'s docstring states the losing argument alongside the
+winning one, since the loser is the intuitive one and is written down in two repos. The same is in
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md), together with the zensical
+probe and the community's separate validate modes, so neither gets re-derived.
+
+Direction 3 is that repo's to take: nothing here changes its pin.
+
+## Migrated to
+
+- [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "In the gate" — the
+  placement decision with the user's own words, the zensical probe at 0.0.44 (no output directory,
+  out-of-tree `site_dir` panics), the Zola/Sphinx/Hugo validate-mode prior art, and the
+  counter-argument as a pitfall.
+- `src/repo_tasks/quality.py` — `precommit`'s docstring carries the same, where a reader of the task
+  reaches it; `check`'s now says "no changes written" is literal and load-bearing rather than
+  carrying a carve-out.
+
+[PITFALL: the chain that produced this is worth keeping as a property of the filing mechanism, not
+as a one-off, and is recorded in `quality-gate.md` for that reason. **A filed plan is a snapshot,
+and the repo that filed it can move on without the copy knowing.** The filing session flagged twice
+in its own reports that the copy was stale, and that was not enough, because the correction had
+nowhere to land: the plan had already been absorbed and retired. Nothing in the convention carries
+an amendment to an absorbed plan.]
+
+**Deliberately not migrated.** The blow-by-blow of which session did what in which order: it is the
+evidence for the pitfall above, and the pitfall is what a future reader needs.
