@@ -134,6 +134,53 @@ used once would be the wrong order.]
 untouched, and a trunk shape is added beside it in its own namespace. This repo will use the trunk
 one, since it has no `develop`. What is still open there is the namespace's name.
 
+## Is the tag push manual? Researched 2026-09-04, and it changes the design
+
+The question: is pushing a tag normally a human act or an automated one? The answer is unambiguous
+and it is **both, in a specific order — the tag push is the manual gate, and everything downstream
+automates off it.**
+
+Read from the projects' own workflow files via the GitHub API, not from a search summary:
+
+| project         | publish trigger                                                           |
+| --------------- | ------------------------------------------------------------------------- |
+| `psf/requests`  | `push: tags: ["v*"]` plus `workflow_dispatch` with a test-pypi-only input |
+| `pallets/flask` | `push: tags: ["*"]`                                                       |
+| `encode/httpx`  | `push: tags: ["*"]`                                                       |
+| `astral-sh/uv`  | `workflow_call`, driven by a release-orchestration workflow               |
+
+PyPA's own guide agrees on the mechanism — `on: push` with
+`if: startsWith(github.ref,
+'refs/tags/')` — and instructs the reader to "push a tagged commit" to
+trigger publication. Nowhere is the tag itself created by automation: it is the human's deliberate
+act, and it is the _only_ one.
+
+[PITFALL: **this repo already implements that convention, and the new `trunkflow.cut` walks into
+it.** `publish.yml` fires on `push: tags: v[0-9]+.[0-9]+.[0-9]+`, and its TestPyPI job is
+unconditional — the real-index job sits behind the `pypi` environment's reviewer rule, TestPyPI does
+not. So `inv trunkflow.cut --bump minor`, which pushes the tag, does not mean "bump the version": it
+means "upload to TestPyPI and queue a PyPI approval". A command whose name and help text describe a
+version bump should not have publication as a side effect. Found by reading `publish.yml` while
+answering this question, not by the tests, which mock every `c.run`.]
+
+[PITFALL: and today that side effect **fails**. The trusted-publisher registration is a one-time
+manual setup on TestPyPI and PyPI that has never been done — it is the open blocker on
+`plans/2026-08-22-pypi-publish-integration.md`. So the first `trunkflow.cut` would push a tag, fire
+`publish.yml`, and go red on a repo that has just been told its release flow works.]
+
+A false alarm worth recording so nobody re-finds it: `docker-release.yml` looked like it triggered
+on `release:`, which would have coupled `release.create` to an image push too. It does not — that
+`release:` is the **job name**; the workflow is `workflow_dispatch` only. Grepping `^  release:` in
+a workflow finds both, and they mean opposite things.
+
+[NEEDS CLARIFICATION: should `trunkflow.cut` stop before pushing? The convention above says the tag
+push is the gate, which argues for `cut` doing the local bump and tag and then printing the push
+command together with what it will trigger — one deliberate step, matching what every project
+surveyed treats as the moment of decision. It also matches this package's own `gitflow`, where
+`release_start` bumps with `tag=False` and the tag only lands at finalize. Against: it is one more
+command in a flow whose entire purpose is low ceremony. A middle option is `--push` defaulting to
+false.]
+
 ## Releasing is manual, and the task is the primitive
 
 [DECISION: **a release is never automatic**, per the user 2026-09-04 — not every version merits one,
