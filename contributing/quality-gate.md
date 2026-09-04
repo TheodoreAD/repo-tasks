@@ -1,10 +1,10 @@
 # What the gate checks, and why each tool is in it or beside it
 
 `inv quality.check` runs ruff (lint + format), dprint, basedpyright, shellcheck, shfmt, actionlint,
-zizmor, hadolint, `deps.check`, `docs.link-check`, `docs.build`, `test.untested-modules`, and the
-unit tier. How each of those is _configured_ is a separate question, answered in
-[`type-checking.md`](type-checking.md), [`test-tiers.md`](test-tiers.md), and
-`power-user-linux-setup`'s
+zizmor, hadolint, `deps.check`, `docs.link-check`, `test.untested-modules`, and the unit tier.
+`inv quality.precommit` runs `fix`, then that, then `docs.build`. How each of those is _configured_
+is a separate question, answered in [`type-checking.md`](type-checking.md),
+[`test-tiers.md`](test-tiers.md), and `power-user-linux-setup`'s
 [`contributing/quality-tooling.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/contributing/quality-tooling.md).
 This file answers the other one: **which classes of problem does the gate look for, which are
 deliberately checked from outside it, and which are not checked at all.**
@@ -74,12 +74,13 @@ alone reports correct links in the other renderer as broken. Duplicate headings 
 ways too: python-markdown appends `_1`, github.com appends `-1`.]
 
 [DECISION: this stays in `link_check` rather than being left to `docs.build`, even though
-`zensical build --strict` also catches a dangling anchor and is now in the gate. They are not
-substitutes and neither subsumes the other. The strict build sees only a repo that _has_ a docs
-site, and only the pages inside it; `link_check` sees every tracked markdown file, which for most
-consumers — `repo-tasks` included — is all of them, and is where `plans/` and `contributing/`
-cross-references live. The strict build catches things anchors cannot, such as an unresolved nav
-entry, so both earn their place.]
+`zensical build --strict` also catches a dangling anchor. They are not substitutes and neither
+subsumes the other — and they are not even in the same half, since the anchor check is offline and
+read-only where the build writes a site, so only this one is in `check`. The strict build sees only
+a repo that _has_ a docs site, and only the pages inside it; `link_check` sees every tracked
+markdown file, which for most consumers — `repo-tasks` included — is all of them, and is where
+`plans/` and `contributing/` cross-references live. The strict build catches things anchors cannot,
+such as an unresolved nav entry, so both earn their place.]
 
 [PITFALL: three slugger bugs, all of them found by measurement rather than by reading. `_` is an
 identifier in these docs and not emphasis — stripping it turns `config_files` into `configfiles`, an
@@ -98,9 +99,9 @@ with upstream today, but a single data point is not a version-tracking record. T
 is dead — `pytest-check-links` last released 2024-04, `linkcheckmd` 2021-02. The need is narrow
 enough that ~40 lines covers it.]
 
-**`docs.build` (`zensical build --strict`)**, file-gated on `mkdocs.yml`. It is what a repo with a
-published site gets beyond `link_check`: everything the renderer itself objects to, an unresolved
-nav entry included.
+**`docs.build` (`zensical build --strict`)**, file-gated on `mkdocs.yml` — **in `precommit`, not in
+`check`.** It is what a repo with a published site gets beyond `link_check`: everything the renderer
+itself objects to, an unresolved nav entry included.
 
 [DECISION: taken 2026-09-04, after a dangling anchor shipped a red Pages deploy twice in one
 consumer. A heading rename changed an anchor while another page kept linking to the old one; `CI`
@@ -108,6 +109,32 @@ passed green on both commits while `Deploy docs to GitHub Pages` failed on both,
 twice with the published site serving the last good build. At the time this was the only check in
 the family that could see it — `link_check` stripped the fragment by design and exited 0 on that
 exact input. Measured cost on a 41-page site: ~1.5 s, about +23% on a 6.8 s gate.]
+
+[DECISION: **`precommit`, because `check` must not mutate** — the user's call, 2026-09-04, _"check
+shouldn't mutate"_ and then _"i agree with docs build in precommit"_. `check` is the read-only,
+CI-style half by construction: safe run concurrently, safe on a read-only checkout, and twice with
+the same answer. Building a site into the working tree from a task documented as "no changes
+written" is a category error whatever `.gitignore` thinks of the output. Zensical cannot avoid the
+write either, probed at 0.0.44 rather than assumed: `zensical build` takes only `--config-file`,
+`--clean` and `--strict`, with no output directory at all, and an out-of-tree `site_dir` in an
+alternate config passes validation and then panics. So the achievable property is "leaves no net
+change", never "writes nothing". The separate validate-mode the community ships — Zola's
+`zola check`, Sphinx's `-b dummy`, Hugo's `--renderToMemory` — has no zensical equivalent.]
+
+[PITFALL: the argument this beat is stronger than it looks and will be re-derived. Only `check` runs
+in CI, so `check` is the cheap way to make a docs failure fail the run people already watch — and a
+consumer with a docs site and no docs CI job of its own now needs one, which is a real cost this
+placement imposes and the other did not. `power-user-linux-setup` paid it, giving `ci.yml` its own
+`docs` job on push and pull_request. The trade was taken because a gate half that quietly stopped
+being read-only is worse for every consumer, including the majority that have no docs site and gain
+nothing from the build either way.]
+
+[PITFALL: this landed in `check` first, on 2026-09-04, and was moved the same day. The plan that
+specified `check` was filed from the consumer repo, revised **there** hours before the
+implementation, and nothing carries a correction to a filed plan that has already been absorbed — so
+the implementation was faithful to an artefact that had been withdrawn. Worth knowing as a property
+of the filing mechanism rather than as a one-off: a filed plan is a snapshot, and the repo that
+filed it can move on without the copy knowing.]
 
 [PITFALL: **the anchor case is now covered twice, and that is not redundancy to tidy up.**
 `link_check` gained anchor resolution later the same day, so the deploy failure above would today be

@@ -212,7 +212,6 @@ def fix(c: Context):
         workflow_check,
         dockerfile_check,
         link_check,
-        docs_build,
         deps_check,
         untested_modules,
         unit,
@@ -230,18 +229,32 @@ def check(c: Context):
     answer moves with the OSV database rather than with the code, is deliberately not in this
     chain.
 
-    "No changes written" has one exception, and `docs.build` is it: a repo with an mkdocs.yml gets
-    its site rebuilt into `site/`. That is gitignored in every consumer and `build` cleans on entry
-    rather than on exit, so nothing tracked moves and nothing accumulates between runs. It buys the
-    one failure nothing else here can see — `zensical build --strict` catches a dangling anchor,
-    which `link_check` cannot by design. It is in `check` rather than in `precommit` because only
-    `check` reaches CI, and CI is the run people already watch."""
+    "No changes written" is literal and load-bearing: this half is safe to run concurrently, on a
+    read-only checkout, and twice with the same answer. `docs.build` is deliberately **not** here
+    for that reason — it writes a built site into the working tree — and lives in `precommit`
+    instead. See that task's docstring for the argument it beat."""
 
 
-@task(pre=[fix, check])
+@task(pre=[fix, check, docs_build])
 def precommit(c: Context):
-    """Fix, then check — the one command to run before considering a change
-    done, with no need to know or invoke the individual tools."""
+    """Fix, then check, then build the docs site — the one command to run before considering a
+    change done, with no need to know or invoke the individual tools.
+
+    `docs.build` is here rather than in `check`, and that placement is the whole decision.
+    `zensical build --strict` catches what a renderer objects to and nothing else here sees, but it
+    writes a built site into the working tree, and `check` is the read-only CI-style half by
+    construction — safe on a concurrent run, on a read-only checkout, and twice with the same
+    answer. Building into the tree from a task documented as "no changes written" is a category
+    error whatever `.gitignore` thinks of the output, and zensical offers no way to avoid it: its
+    `build` takes only `--config-file`, `--clean` and `--strict`, with no output directory at all,
+    so the best achievable property is "leaves no net change" rather than "writes nothing".
+
+    The argument this beat, recorded because it is the one that gets re-derived: only `check` runs
+    in CI, so putting the build there is the cheapest way to make a docs failure fail the run people
+    already watch. The cost is real for a consumer with a docs site and no docs CI job of its own —
+    such a repo now needs one, which is what `power-user-linux-setup` did rather than take the
+    mutation. A gate half that quietly stopped being read-only would have been the worse trade, for
+    every consumer including the majority with no docs site."""
 
 
 # Explicit namespace, not Collection.from_module's auto-scan: `unit` is imported above for
