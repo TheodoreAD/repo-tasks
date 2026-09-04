@@ -241,4 +241,15 @@ session that wrote it:
   something the sweep broke. Whether to `venv.recreate` each one is a per-repo call: it is what
   makes local test runs agree with the `pythonVersion` the same sweep derives into
   `pyrightconfig.json`, and this repo's own gate passes whole on 3.11, but it also means developing
-  on the floor rather than the newest.]
+  on the floor rather than the newest.
+- The packaged-`tests/` pair, 2026-09-04: `extraPaths: ["."]` in the shipped `pyrightconfig.json`
+  and the `flake8-tidy-imports` `banned-api` entry for `src` in the shipped `ruff.toml`. Moved here
+  from the now-retired `plans/2026-08-30-tests-import-layout.md`, which owned the decision; the
+  reasoning is in [`../contributing/type-checking.md`](../contributing/type-checking.md), "Why
+  `tests/` is a package". **There is no ordering hazard and this item wants no sequencing** — a
+  consumer that pulls the configs without adding `__init__.py` files is in a coherent state, since
+  `extraPaths` alone was measured to cost nothing on an unpackaged tree, and the ban is inert in a
+  flat-layout consumer with no `src/` at all. So the only thing the sweep records is a window in
+  which the family is mixed. What it should check per consumer: that adding the three `__init__.py`
+  files is a separate, deliberate decision in that repo rather than something `configs.pull`
+  implies.]
