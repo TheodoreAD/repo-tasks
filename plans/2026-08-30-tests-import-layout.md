@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-31
+status: in-progress
+updated: 2026-09-04
 ---
 
 # Should `tests/` be a package, and under which import mode?
@@ -123,12 +123,9 @@ rejected as "more moving parts" without pricing it at one config block.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: does the guard belong in the shipped `ruff.toml`, and does it generalise? The
-message names `repo_tasks`, and the ban is only meaningful in a repo whose package sits under
-`src/`. A flat-layout consumer like `power-user-linux-setup` has no `src/` at all, so the entry is
-inert there rather than wrong — but "inert in some consumers" is a property worth stating
-deliberately, and the shipped configs otherwise avoid per-repo values. A generic message would fix
-the naming half.]
+**Answered 2026-09-04** — whether the guard belongs in the shipped `ruff.toml` and whether it
+generalises. It does ship, and it generalises by naming no package at all; in a flat-layout consumer
+with no `src/` it is inert rather than wrong. See the decision below.
 
 **The shared-helper question is answered — measured 2026-08-30, and the answer is "real, recurring,
 and already served two different ways, neither of them packaging."**
@@ -212,17 +209,62 @@ Three coherent positions, and choosing between them is the remaining decision:
    the shadowing mechanism, only the realistic chance of a collision.
 
 Option 3 first read "move it into conftest, the `ingesta` shape" — that is struck, per the pitfall
-above: the move is already rejected in `scaffoldapy` on evidence. Its replacement is weaker than
-what it replaced, which changes the balance:
+above: the move is already rejected in `scaffoldapy` on evidence.
 
-[DECISION: **the case for option 2 is stronger than the first pass of this survey concluded**, and
-the reason is that the cheap alternative turned out not to exist. The survey's conclusion was "the
-need is real but nothing needs packaging to serve it" — true for `ingesta`, false for `scaffoldapy`,
-whose only options are now a rename that mitigates rather than fixes, or packaging, which fixes it
-properly by giving `tests.support` a namespace instead of a `sys.path` position. That is not enough
-on its own to justify changing the shipped config for nine repos to serve one; it is enough that
-"change nothing" can no longer be defended as _equally_ correct.]
+## Decided: option 2, and landed in `repo-tasks`
 
-Still `scaffoldapy`'s call, which is what the third open question is about — filed there 2026-08-30
-as `2026-08-30-scaffoldapy-shared-test-helper.md`, corrected 2026-08-31 when the conftest route
-turned out to be closed.
+[DECISION: **option 2 — package `tests/`, family-wide.** The user's call, 2026-09-04: "we want to
+have pytest canonical. we want `__init__.py` in there. the fallout for basedpyright is weird, but if
+ruff configuration shores that off, then it's fine." The deciding criterion is that this is pytest's
+own documented shape for the `prepend` import mode this family uses, rather than a workaround — the
+survey's community sample and the two-of-nine helper count informed the choice but did not make it.]
+
+What landed here, 2026-09-04:
+
+- `tests/__init__.py`, `tests/unit/__init__.py`, `tests/integration/__init__.py`.
+- `extraPaths: ["."]` in the shipped `pyrightconfig.json`, with the reasoning inline.
+- `[lint.flake8-tidy-imports.banned-api]` banning `src` in the shipped `ruff.toml` — the guard that
+  pays for it.
+- `contributing/type-checking.md` "Why `tests/` is a package" and `contributing/test-tiers.md`
+  "`tests/` is a package, so test module basenames need not be unique", both rewritten from the
+  earlier not-permitted framing.
+
+Both halves verified rather than assumed, 2026-09-04:
+
+- **The guard fires.** `from src.repo_tasks import version` in a test drew
+  `TID251 'src' is banned: import the installed package, not the src/ path to it — they are two
+  different modules at runtime`.
+- **The basename freedom is real, and was genuinely absent before.** Two `test_dupe.py` files, one
+  per tier, collect and pass now; with the three `__init__.py` files removed and nothing else
+  changed, the same two are a hard collection error
+  (`which is not the same as the test file we want
+  to collect ... use a unique basename`), exit 2.
+- Full gate green throughout: 529 tests, basedpyright 0 errors 0 warnings, ruff clean.
+
+[DECISION: the ban's message names no package, because the shipped `ruff.toml` goes to every
+consumer byte-identical. In a flat-layout consumer such as `power-user-linux-setup`, with no `src/`
+directory at all, the rule is **inert rather than wrong** — it can never trigger. That answers this
+plan's first open question: the guard does ship, and it generalises by saying less.]
+
+[DECISION: the `_integration` suffix on integration modules is **kept and not renamed**, though
+packaging has made it descriptive rather than load-bearing. A rename would churn every integration
+module to buy nothing, and the suffix still tells a reader which tier a file belongs to when it
+shows up alone in a traceback.]
+
+## What is left
+
+[DEFERRED: **`scaffoldapy` still generates the unpackaged tree**, and the shipped configs now assume
+the packaged one. That repo's own `plans/2026-08-30-generated-test-layout.md` was explicitly waiting
+on this decision before writing anything about basenames into the generated `AGENTS.md`; the wait is
+over and the answer is "packaged". Filed there rather than done here.]
+
+[DEFERRED: **`scaffoldapy`'s `tests/support.py` can now become `tests.support`**, which is the fix
+rather than the mitigation — its bare `from support import ...` currently resolves by `sys.path`
+shadowing. Tracked in that repo's `2026-08-30-scaffoldapy-shared-test-helper.md`, whose recommended
+rename is now superseded by this decision.]
+
+[DEFERRED: **the other consumers pull the new configs on their own schedule.** `configs.pull` is
+what delivers `extraPaths` and the ban; until a repo runs it, it keeps the old pair. A consumer that
+pulls the configs but does not add `__init__.py` files is in a coherent state — `extraPaths` alone
+was measured to cost nothing on an unpackaged tree — so there is no ordering hazard, only a window
+where the family is mixed.]
