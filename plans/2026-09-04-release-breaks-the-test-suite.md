@@ -66,11 +66,10 @@ is what it always meant.
 Verified the way the bug was found rather than by reasoning: set the version to `0.9.0`, run the
 suite, revert. 552 pass at both values. `v0.2.0` was then cut, gated green, and pushed.
 
-[DEFERRED: should something stop this recurring? The class of bug is "a test asserts a literal
-derived from mutable repo state", and the version is unlikely to be the only such value — the repo
-name, the Python floor and the dependency-group contents have the same shape. A test that fails only
-when the repo changes in a normal way is a test that will be edited to match rather than questioned,
-which is how the assertion quietly stops meaning anything.]
+**Should something stop this recurring?** Not decided here, and moved out rather than dropped: the
+class of bug is "a test asserts a literal derived from mutable repo state", and the version is
+unlikely to be the only such value. Now owned by
+[`2026-09-04-tests-asserting-mutable-repo-state.md`](2026-09-04-tests-asserting-mutable-repo-state.md).
 
 ## Recommended direction
 
@@ -81,3 +80,27 @@ gate, and resetting again exactly as this plan's discovery did.
 
 Then re-cut `v0.2.0`. It is still a minor under the surface rule: shipped configs, the
 `repo-tasks-quality` manifest and the reusable workflow have all moved since `0.1.0`.
+
+**Done.** `cd3d9ba` landed the fixture, `cef6894` was the bump, and `v0.2.0` was cut, gated green
+and pushed 2026-09-04.
+
+## Migrated to
+
+- [`../contributing/test-tiers.md`](../contributing/test-tiers.md), "Unit tier: mocked `c.run`" —
+  the pitfall, as a second paragraph beside the blind spot it is an instance of. It belongs there
+  rather than under versioning or the release flow because nothing about the release machinery was
+  wrong: what failed is a property of how the tests were written, and the reason it survived to a
+  release is that a `MockContext` cannot run `bump-my-version`.
+- `tests/unit/conftest.py` — both decisions were already there before this retirement, in
+  `pinned_version`'s docstring: why it is autouse (the failure mode is a _silent_ dependence, so
+  opt-in protects only the tests someone remembered) and why it is scoped to this repo's own version
+  (blanket-replacing every resolution broke `set_dev`'s test, which writes its own `pyproject.toml`
+  and asserts against it). Its pointer here was repointed at `contributing/test-tiers.md`.
+- [`2026-09-04-tests-asserting-mutable-repo-state.md`](2026-09-04-tests-asserting-mutable-repo-state.md)
+  — the deferred general question, as its own plan, with the three values that share the shape and
+  the reason the class matters at all: a test that fails only when the repo changes normally gets
+  edited to match rather than questioned.
+
+**Deliberately not migrated.** The failure count, the list of affected test files, and the
+set-to-`0.9.0`-and-revert verification are dropped: they describe a state that no longer exists, and
+the fixture plus its test are now the standing assertion that it does not recur.
