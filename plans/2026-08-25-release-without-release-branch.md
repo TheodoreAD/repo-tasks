@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-04
+status: landed
+updated: 2026-09-05
 ---
 
 # Releasing without a release branch every time
@@ -99,61 +99,39 @@ away, behind `helm quality repo-tasks test`. But `githubflow` names a _different
 being built, and `git-trunk` is an invented compound of the kind `~/AGENTS.md` warns off. A name
 that is accurate beats a name that sorts well — the listing is scanned, not bisected.]
 
-## Open questions
+## Resolved — landed 2026-09-04, reconciled 2026-09-05
 
-[NEEDS CLARIFICATION: the trunk namespace's exact name, and where `create-release` lives. Under the
-suffix convention the leading candidate is `trunkflow.*`, with the shared GitHub Release task in a
-flat `release.*` of its own — it belongs to neither model, so it should sit inside neither. The
-residual worry is that `release.create` would sit one namespace from `gitflow.release-start` while
-meaning a different object: a GitHub Release, versus starting a release branch. `publish.*` and
-folding it back into `version.*` are the alternatives, each with its own mismatch — `publish`
-already means "upload to a package index" in `dist`, and `version` is scoped to version strings.]
+Everything this plan asked for was built on 2026-09-04, after its last edit, so its questions are
+answered by code rather than by argument:
 
-[NEEDS CLARIFICATION: **superseded in part by the decision above** — both ship, and (b) is the one
-being added. Retained for the shape descriptions, which are still the clearest statement of what
-each involves. Which of these shapes is the one worth supporting first? (a) **release from develop**
-— `gitflow.release-direct --bump minor`: bump on a short-lived branch that is immediately PR'd to
-main with no rc cycle, i.e. today's `release_start` + `release_finish` collapsed into one command
-and one PR; (b) **tag-only releases on main** — no `develop` at all, a bump PR against `main` and a
-tag, GitHub-flow style, where `hotfix_*` is the only remaining flow; (c) **rc from develop** — rc
-tags cut straight off `develop` (`vX.Y.0rc1` on a develop commit) with the release branch created
-only if an rc needs fixing. (c) is what most "we don't need a release branch" requests actually
-want, and it is the one that interacts with the dev-build scheme in the pre-release plan.]
+- **The namespace is `trunkflow.*`**, one task, `trunkflow.cut` (`e1d0306`): bump on `main`, tag,
+  stop. `--push` opts into pushing; by default nothing leaves the machine (`cc49ebb`).
+- **The GitHub Release task lives in `release.*`**, a module of its own (`a04b2ce`):
+  `release.create` publishes an existing remote tag, and `release.push-tag` (`33017fa`) is the
+  release gate as its own deliberate step. Neither flow owns them, because either flow's tag is
+  published identically. The worry about `release.create` sitting one namespace from
+  `gitflow.release-start` was accepted as the smaller mismatch: `publish` already means a package
+  index in `dist`, and `version` is scoped to version strings.
+- **Which shape**: (b), tag-only releases on `main`, is what shipped. (a) and (c) were not built,
+  and the `sync/<tag>` question only arose for them — in (b) there is nothing to sync, which is the
+  whole point. Not carried anywhere: a shape nobody asked for has no open plan.
+- **This repo's `v0.2.0` was cut with it** (`cef6894`) and the tag is on origin. No GitHub Release
+  was created: the user parked releases 2026-09-05 until there are real artifact stores to release
+  into, and that is recorded in `plans/2026-09-04-versioning-policy.md`, which owns the release
+  mechanism.
 
-**Answered 2026-09-04** — a separate set of tasks, in their own namespace, not a mode of the
-existing ones. The reasoning is in the decision above; the short version is that the two trees are
-not near-duplicates, so a mode key would leave ten task names advertised and inert in a trunk repo.
+## Migrated to
 
-[NEEDS CLARIFICATION: how does the `sync/<tag>` merge-back change? In (a) it is unchanged; in (b)
-there is nothing to sync; in (c) the rc tag is already on `develop`, so only the final needs syncing
-— or the final is also tagged on `develop` and `main` just fast-forwards.]
+- [`../contributing/release-flow.md`](../contributing/release-flow.md), "Two models ship, and a repo
+  uses one" and "The trunk flow, end to end" — both-shapes decision, the namespace-not-mode
+  decision, the orthogonal PR-vs-local axis, `cut` not pushing by default, and `release.py` being
+  model-agnostic.
+- [`../contributing/task-module-conventions.md`](../contributing/task-module-conventions.md), "A
+  shared suffix marks a family of interchangeable modules" — the `*flow` suffix, and why `sdlc` and
+  `workflow` roots were rejected.
+- The module docstrings of `trunkflow.py` and `release.py` carry the same reasoning at the code.
 
-## Recommended direction
-
-**Superseded 2026-09-04.** This plan previously recommended waiting — the gate being "cut one real
-release first, and see whether the release branch turns out to be ceremony or load-bearing". That
-gate no longer decides anything, because the user has said **both** shapes are wanted regardless of
-how that comparison would have come out. Waiting for evidence to choose between them is moot when
-neither is being dropped.
-
-What remains true from that reasoning, and is worth keeping: `git tag --list` is still empty, so the
-rc cycle has never run for real, only against a local bare repo. That is now a reason to exercise
-it, not a reason to wait.
-
-The order of work, and it runs the other way round from what this plan assumed — the shape comes
-first and the release comes out of it, because a hand-cut release would be evidence about nothing:
-
-1. Add the trunk namespace (naming is the open question above). One task, roughly `trunkflow.cut`:
-   bump on `main`, tag, push.
-2. Add the GitHub Release task — not in `dist`, whose scope is Python distributions; see
-   `plans/2026-09-04-versioning-policy.md`, which owns the release mechanism and the versioning
-   rule.
-3. Cut this repo's `v0.2.0` with them, which exercises the trunk shape for real.
-4. The gitflow shape stays untouched throughout and remains the default for a repo that has a
-   `develop`. `hotfix_*` is unchanged in every shape: a hotfix is the one flow whose branch always
-   earns its keep.
-
-Prior art to check before designing: `git-flow-avh`'s `release finish` from a non-release branch,
-`semantic-release`'s prerelease branches config (`develop` → `rc` channel), and how
-`bump-my-version`'s `scm_info.distance_to_latest_tag` could stand in for a branch as "what is
-unreleased".
+Deliberately not migrated: the sort-adjacency pitfall (a name that is accurate beats one that sorts
+well), the refactor-cost-is-not-a-criterion decision, and the three shape descriptions. The first
+two are already the working rule in `~/AGENTS.md`'s naming and tool-choice sections; the shapes
+describe designs that were not built.
