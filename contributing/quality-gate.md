@@ -1,8 +1,8 @@
 # What the gate checks, and why each tool is in it or beside it
 
 `inv quality.check` runs ruff (lint + format), dprint, basedpyright, shellcheck, shfmt, actionlint,
-zizmor, hadolint, `deps.check`, `docs.link-check`, `test.untested-modules`, and the unit tier. How
-each of those is _configured_ is a separate question, answered in
+zizmor, hadolint, `deps.check`, `docs.link-check`, `docs.build`, `test.untested-modules`, and the
+unit tier. How each of those is _configured_ is a separate question, answered in
 [`type-checking.md`](type-checking.md), [`test-tiers.md`](test-tiers.md), and
 `power-user-linux-setup`'s
 [`contributing/quality-tooling.md`](https://github.com/TheodoreAD/power-user-linux-setup/blob/master/contributing/quality-tooling.md).
@@ -57,10 +57,38 @@ Dockerfile — the same dependency-weight concern that eventually cost devpi its
 integration tier ([`test-tiers.md`](test-tiers.md), "Package index").
 
 **`docs.link_check`, hand-rolled.** Extracts markdown links, resolves the relative ones against the
-containing file, asserts each target exists. Relative file links only — not external URLs, not
-anchors, not HTML. It earns a gate slot because the `plan-docs` retirement procedure requires the
-finishing grep to return no live pointers and nothing enforced it: the first revision of the plan
-that proposed this task shipped two dangling citations to a plan retired in the same session.
+containing file, asserts each target exists and that any `#fragment` names a heading that is still
+there. Relative links only — not external URLs, not HTML. It earns a gate slot because the
+`plan-docs` retirement procedure requires the finishing grep to return no live pointers and nothing
+enforced it: the first revision of the plan that proposed this task shipped two dangling citations
+to a plan retired in the same session.
+
+It checks **anchors** as well as files, which is the half a rename breaks: `file.md#heading` used to
+verify the file and never the heading.
+
+[DECISION: an anchor resolves against the **union** of two sluggers, and a link passes if either
+matches. The same markdown has two renderers in this family — a docs site through python-markdown's
+`toc` extension, and `plans/`, `contributing/`, `AGENTS.md` and every README read on github.com —
+and they agree on the common case while differing on punctuation and space runs. Requiring either
+alone reports correct links in the other renderer as broken. Duplicate headings are suffixed both
+ways too: python-markdown appends `_1`, github.com appends `-1`.]
+
+[DECISION: this stays in `link_check` rather than being left to `docs.build`, even though
+`zensical build --strict` also catches a dangling anchor and is now in the gate. They are not
+substitutes and neither subsumes the other. The strict build sees only a repo that _has_ a docs
+site, and only the pages inside it; `link_check` sees every tracked markdown file, which for most
+consumers — `repo-tasks` included — is all of them, and is where `plans/` and `contributing/`
+cross-references live. The strict build catches things anchors cannot, such as an unresolved nav
+entry, so both earn their place.]
+
+[PITFALL: three slugger bugs, all of them found by measurement rather than by reading. `_` is an
+identifier in these docs and not emphasis — stripping it turns `config_files` into `configfiles`, an
+anchor no renderer emits. github.com does **not** collapse runs of spaces, so
+`## Bash & the CLI allowlist` drops the ampersand and keeps both surrounding spaces, leaving a
+double hyphen. And a single duplicate counter shared between the two sluggers counts every heading
+twice, numbering a repeated `## Notes` as `notes_2`/`notes-3`. The first two reported correct links
+as broken; the third was caught by the test written for duplicate handling. All three ship as
+regression tests.]
 
 [DECISION: hand-rolled rather than lychee, against the usual "prefer the maintained external
 project" default, on two measured facts. `lychee-bin` — the only maintained PyPI wrapper — is a 78.1
@@ -70,16 +98,24 @@ with upstream today, but a single data point is not a version-tracking record. T
 is dead — `pytest-check-links` last released 2024-04, `linkcheckmd` 2021-02. The need is narrow
 enough that ~40 lines covers it.]
 
-**`docs.build` (`zensical build --strict`)**, file-gated on `mkdocs.yml`. It is the only check in
-the family that sees a **dangling anchor**: `link_check` strips a link's fragment by design, so
-`file.md#heading` verifies the file and never the heading, and a renamed heading passes it.
+**`docs.build` (`zensical build --strict`)**, file-gated on `mkdocs.yml`. It is what a repo with a
+published site gets beyond `link_check`: everything the renderer itself objects to, an unresolved
+nav entry included.
 
-[DECISION: taken 2026-09-04, after that gap shipped a red Pages deploy twice in one consumer. A
-heading rename changed an anchor while another page kept linking to the old one; `CI` passed green
-on both commits while `Deploy docs to GitHub Pages` failed on both, so the branch moved twice with
-the published site serving the last good build. `link_check` exits 0 on that input and
-`zensical build --strict` exits 1 — no overlap and no cheaper substitute. Measured cost on a 41-page
-site: ~1.5 s, about +23% on a 6.8 s gate.]
+[DECISION: taken 2026-09-04, after a dangling anchor shipped a red Pages deploy twice in one
+consumer. A heading rename changed an anchor while another page kept linking to the old one; `CI`
+passed green on both commits while `Deploy docs to GitHub Pages` failed on both, so the branch moved
+twice with the published site serving the last good build. At the time this was the only check in
+the family that could see it — `link_check` stripped the fragment by design and exited 0 on that
+exact input. Measured cost on a 41-page site: ~1.5 s, about +23% on a 6.8 s gate.]
+
+[PITFALL: **the anchor case is now covered twice, and that is not redundancy to tidy up.**
+`link_check` gained anchor resolution later the same day, so the deploy failure above would today be
+caught by either. They cover different surfaces: this one sees only a repo that has a docs site and
+only the pages inside it, while `link_check` sees every tracked markdown file. Removing either
+leaves a real gap — dropping this loses nav entries and everything else the renderer checks;
+dropping the anchor half of `link_check` leaves `plans/` and `contributing/` cross-references
+unchecked in every consumer, most of which have no docs site at all.]
 
 [DECISION: in `check`, not in `precommit`. `precommit` is `pre=[fix, check]`, so `check` reaches
 both — and only `check` reaches CI, which is what turns a Pages failure into a failure of the run
