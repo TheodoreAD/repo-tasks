@@ -140,6 +140,17 @@ Three files, which is most of the reason the directories are split at all:
 - `tests/integration/conftest.py` — the container and index fixtures, which no unit test should be
   able to reach by accident.
 
+[PITFALL: **a `conftest.py` holds fixtures only, and nothing imports it by module name.** With a
+tier-local `conftest.py` present, a bare `from conftest import X` resolves to a _different file per
+tier_ — the root one from the unit tier, the tier-local one from the integration tier, where it
+raises `ImportError`. Silent and direction-dependent. `scaffoldapy` hit it the day it took the
+two-tier split, 2026-08-25. Shared parametrize inputs cannot be fixtures, so they go in a
+distinctly-named module — `tests/support.py` there, importable as `tests.support` now that `tests/`
+is a package. The packaging removes the ambiguity of the bare name, not the rule: a shared helper
+module is what the packaging was adopted for (see "`tests/` is a package" below), and a
+`conftest.py` imported by name is a helper module wearing a fixture file's name. This repo's tiers
+consume fixtures by injection only — no test module imports a conftest by name, checked 2026-09-05.]
+
 It is exemplary by being read, not distributed: this package ships tool config and the quality
 dependency manifest, never project structure or tests. That is `scaffoldapy`'s half of the split.
 
