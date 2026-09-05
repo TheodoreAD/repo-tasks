@@ -229,6 +229,20 @@ A repo with several projects declares them the way `uv` already does — `[tool.
 ordering is what "the repo's own project" means to every task's no-flag invocation. A single-project
 repo needs no workspace table at all and behaves exactly as before.
 
+**If this repo's trunk isn't `main`, say so once** in `repo-tasks.toml` and every branching task
+follows:
+
+```toml
+[branches]
+trunk = "master" # default: main — gitflow, trunkflow, ci.status and release.push-tag all read it
+develop = "develop" # default: develop — gitflow only; trunkflow has no such branch
+```
+
+Both keys are optional and the defaults are this family's convention, so a repo following it writes
+nothing. Without the setting a repo on `master` could not use `inv gitflow.*` at all — its trunk was
+~20 string literals with no flag to override — and had to pass `--branch master` on every
+`ci.status`, `trunkflow.cut` and `release.push-tag` call.
+
 Docker images and Helm charts aren't modelled by `uv`, so they live in `repo-tasks.toml` instead
 (`[[docker]]`/`[[helm]]`). An entry's `group` is what ties artifacts into one release unit: a
 service's image, the chart that deploys it, and the python project they're built from share one
