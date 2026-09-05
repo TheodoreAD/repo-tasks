@@ -115,6 +115,24 @@ That last one leaks into the task's own contract, which is why `build`'s docstri
 multi-platform builds push as part of `build` itself. A flag that changes what a task _does_, not
 just how, needs saying so where the caller will see it.
 
+## A decision lives in one docstring; the others point at it
+
+When two tasks are shaped by the same decision, write it out where it is _made_ and reference it
+from the other. A second copy reads as authoritative for exactly as long as it takes the first to
+change, and nothing in the gate compares two prose paragraphs.
+
+Measured 2026-09-06. `docs.build`'s docstring opened with "In `quality.check`, because …" — a
+placement `7a41c1e` had reversed, moving the build to `precommit` because `check` must not mutate —
+and it also cited a `link_check` limitation that `link_check` had itself removed. `quality.check`,
+`quality.precommit` and `docs.link_check` all read correctly at the time; the one paragraph holding
+a **second copy of the argument** was the one that drifted, and it drifted in both of its claims at
+once. It was found from a consumer's pinned checkout weeks later, because nothing in the gate reads
+English.
+
+The general form is worth stating because prose goes stale against anything it names and no linter
+notices: a sibling task's placement here, a dependency's behaviour elsewhere. Reference beats
+restatement wherever the two are available.
+
 ## Stop loudly, and say what to run next
 
 Any command that stops short of "the whole flow is done" — a PR was opened and needs a human, a
