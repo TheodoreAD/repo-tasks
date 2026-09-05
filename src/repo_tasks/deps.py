@@ -8,7 +8,6 @@ from invoke import Context, Exit, task
 # Underscored to stay out of gitflow's CLI namespace, not out of sibling modules.
 from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
 from .requirements import NETWORK, requires
-from .steps import run_step
 
 # The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
 # records the member's `source = { editable = "<old path>" }` and uv reads that stale entry before
@@ -50,7 +49,7 @@ def lock(c: Context, upgrade: bool = False, package: str | None = None):
 def check(c: Context):
     """Check uv.lock is up-to-date with pyproject.toml, read-only, no .venv needed. A gate step,
     so it runs in the gate's folded shape (see steps.py)."""
-    run_step(c, "uv lock --check")
+    c.run("uv lock --check", echo=True)
 
 
 @requires(NETWORK)

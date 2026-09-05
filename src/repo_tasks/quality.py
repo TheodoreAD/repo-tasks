@@ -1,7 +1,11 @@
-"""Shared, reproducible quality-tooling invoke tasks. Every command is printed as its own step
-line so both a human and an agent see exactly what ran — the only exception is a step that would
-involve a secret, and none here do. A step's output is folded on success and replayed whole on
-failure, and a gate ends with a verdict line; `steps.py` owns that shape and says why.
+"""Shared, reproducible quality-tooling invoke tasks. Every command is echoed (`echo=True`) so both
+a human and an agent see exactly what ran — the only exception is a step that would involve a
+secret, and none here do.
+
+Under `REPO_TASKS_RUN_REPORT` that echo becomes a one-line report per command, with output folded
+on success and replayed on failure, and the two gates end with a verdict line. Nothing in this
+module knows about that: `runner.py` owns it, keyed off the `echo=True` these calls already pass,
+and `verdict` is a no-op when the mode is off.
 
 Running tests is not this module's job — that lives in testing.py, under its own `test` namespace
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
@@ -21,7 +25,7 @@ from .deps import check as deps_check
 from .docs import build as docs_build
 from .docs import link_check
 from .projects import tracked_files
-from .steps import run_step, verdict
+from .runner import verdict
 from .testing import unit, untested_modules
 
 
@@ -48,14 +52,14 @@ def _dockerfiles(c: Context):
 def lint_check(c: Context):
     """Run ruff's linter (no fixes)."""
     require_tool("ruff")
-    run_step(c, "ruff check .")
+    c.run("ruff check .", echo=True)
 
 
 @task
 def lint_apply(c: Context):
     """Run ruff's linter and apply auto-fixes."""
     require_tool("ruff")
-    run_step(c, "ruff check --fix .")
+    c.run("ruff check --fix .", echo=True)
 
 
 @task
@@ -63,8 +67,8 @@ def format_check(c: Context):
     """Check formatting (ruff format, dprint) without writing changes."""
     require_tool("ruff")
     require_tool("dprint")
-    run_step(c, "ruff format --check .")
-    run_step(c, "dprint check --config-discovery=ignore-descendants")
+    c.run("ruff format --check .", echo=True)
+    c.run("dprint check --config-discovery=ignore-descendants", echo=True)
 
 
 @task
@@ -72,8 +76,8 @@ def format_apply(c: Context):
     """Apply formatting: ruff format, then dprint fmt."""
     require_tool("ruff")
     require_tool("dprint")
-    run_step(c, "ruff format .")
-    run_step(c, "dprint fmt --config-discovery=ignore-descendants")
+    c.run("ruff format .", echo=True)
+    c.run("dprint fmt --config-discovery=ignore-descendants", echo=True)
 
 
 @task(help={"python_version": "Check against this Python instead of pyrightconfig.json's (e.g. 3.13)"})
@@ -92,7 +96,7 @@ def type_check(c: Context, python_version: str | None = None):
     too narrow to pay for everywhere. See plans/2026-08-29-python-floor-in-the-shipped-configs.md."""
     require_tool("basedpyright")
     override = f" --pythonversion {python_version}" if python_version else ""
-    run_step(c, f"basedpyright{override}")
+    c.run(f"basedpyright{override}", echo=True)
 
 
 @task
@@ -129,7 +133,7 @@ def shell_check(c: Context):
         # no shell scripts" into a hard failure and cost the no-op contract the docstring promises.
         # Same in every file-gated step below.
         require_tool("shellcheck")
-        run_step(c, f"shellcheck {' '.join(files)}")
+        c.run(f"shellcheck {' '.join(files)}", echo=True)
 
 
 @task
@@ -139,7 +143,7 @@ def shell_format_check(c: Context):
     files = _sh_files(c)
     if files:
         require_tool("shfmt")
-        run_step(c, f"shfmt -d {' '.join(files)}")
+        c.run(f"shfmt -d {' '.join(files)}", echo=True)
 
 
 @task
@@ -149,7 +153,7 @@ def shell_format_apply(c: Context):
     files = _sh_files(c)
     if files:
         require_tool("shfmt")
-        run_step(c, f"shfmt -w {' '.join(files)}")
+        c.run(f"shfmt -w {' '.join(files)}", echo=True)
 
 
 @task
@@ -173,8 +177,8 @@ def workflow_check(c: Context):
     if files:
         require_tool("actionlint")
         require_tool("zizmor")
-        run_step(c, f"actionlint {' '.join(files)}")
-        run_step(c, f"zizmor --offline {' '.join(files)}")
+        c.run(f"actionlint {' '.join(files)}", echo=True)
+        c.run(f"zizmor --offline {' '.join(files)}", echo=True)
 
 
 @task
@@ -196,7 +200,7 @@ def dockerfile_check(c: Context):
     files = _dockerfiles(c)
     if files:
         require_tool("hadolint")
-        run_step(c, f"hadolint {' '.join(files)}")
+        c.run(f"hadolint {' '.join(files)}", echo=True)
 
 
 @task(pre=[lint_apply, format_apply, shell_format_apply])
@@ -243,7 +247,8 @@ def check(c: Context):
     instead. See that task's docstring for the argument it beat.
 
     The body runs only once every step has passed — invoke stops at the first failing pre-task,
-    and the step that failed has already printed the verdict — so all it does is print the PASS."""
+    and the step that failed has already printed the verdict — so all it does is print the PASS,
+    and only under `REPO_TASKS_RUN_REPORT`. Stock invoke reaches here and prints nothing."""
     verdict("quality.check")
 
 

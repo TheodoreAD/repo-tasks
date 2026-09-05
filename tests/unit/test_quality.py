@@ -29,33 +29,33 @@ _DOCKERFILE_LISTING = "git ls-files --cached --others --exclude-standard -- 'Doc
 
 def test_lint_check(c):
     quality.lint_check.body(c)
-    c.run.assert_called_once_with("ruff check .", hide=True, warn=True)
+    c.run.assert_called_once_with("ruff check .", echo=True)
 
 
 def test_lint_apply(c):
     quality.lint_apply.body(c)
-    c.run.assert_called_once_with("ruff check --fix .", hide=True, warn=True)
+    c.run.assert_called_once_with("ruff check --fix .", echo=True)
 
 
 def test_format_check(c):
     quality.format_check.body(c)
     assert c.run.call_args_list == [
-        (("ruff format --check .",), {"hide": True, "warn": True}),
-        (("dprint check --config-discovery=ignore-descendants",), {"hide": True, "warn": True}),
+        (("ruff format --check .",), {"echo": True}),
+        (("dprint check --config-discovery=ignore-descendants",), {"echo": True}),
     ]
 
 
 def test_format_apply(c):
     quality.format_apply.body(c)
     assert c.run.call_args_list == [
-        (("ruff format .",), {"hide": True, "warn": True}),
-        (("dprint fmt --config-discovery=ignore-descendants",), {"hide": True, "warn": True}),
+        (("ruff format .",), {"echo": True}),
+        (("dprint fmt --config-discovery=ignore-descendants",), {"echo": True}),
     ]
 
 
 def test_type_check(c):
     quality.type_check.body(c)
-    c.run.assert_called_once_with("basedpyright", hide=True, warn=True)
+    c.run.assert_called_once_with("basedpyright", echo=True)
 
 
 def test_type_check_forwards_an_explicit_python_version(c):
@@ -63,7 +63,7 @@ def test_type_check_forwards_an_explicit_python_version(c):
     # normally agree on, and this overrides it for one run. Verified against basedpyright 1.39.10
     # that the flag beats the config file rather than only filling in for an absent value.
     quality.type_check.body(c, python_version="3.13")
-    c.run.assert_called_once_with("basedpyright --pythonversion 3.13", hide=True, warn=True)
+    c.run.assert_called_once_with("basedpyright --pythonversion 3.13", echo=True)
 
 
 def test_sh_files_empty():
@@ -99,13 +99,14 @@ def test_shell_check_runs_shellcheck_when_files_found():
     quality.shell_check.body(c)
     assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
         ("shellcheck ./a.sh",),
-        {"hide": True, "warn": True},
+        {"echo": True},
     )
 
 
 def test_workflow_check_noop_when_no_workflow_files():
     c = MockContext(run=Result(stdout="", exited=0))
     quality.workflow_check.body(c)
+    # The listing itself is an internal query, not a gate step: hidden, unechoed, and unreported.
     c.run.assert_called_once_with(_WORKFLOW_LISTING, hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
@@ -119,8 +120,8 @@ def test_workflow_check_runs_both_linters_when_files_found():
     )
     quality.workflow_check.body(c)
     assert c.run.call_args_list[-2:] == [  # pyright: ignore[reportAttributeAccessIssue]
-        (("actionlint .github/workflows/ci.yml",), {"hide": True, "warn": True}),
-        (("zizmor --offline .github/workflows/ci.yml",), {"hide": True, "warn": True}),
+        (("actionlint .github/workflows/ci.yml",), {"echo": True}),
+        (("zizmor --offline .github/workflows/ci.yml",), {"echo": True}),
     ]
 
 
@@ -161,7 +162,7 @@ def test_dockerfile_check_runs_hadolint_when_files_found():
     quality.dockerfile_check.body(c)
     assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
         ("hadolint Dockerfile svc/clean-os.Dockerfile",),
-        {"hide": True, "warn": True},
+        {"echo": True},
     )
 
 
@@ -249,7 +250,7 @@ def test_shell_format_check_runs_shfmt_diff_when_files_found():
     quality.shell_format_check.body(c)
     assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
         ("shfmt -d ./a.sh",),
-        {"hide": True, "warn": True},
+        {"echo": True},
     )
 
 
@@ -279,7 +280,7 @@ def test_shell_format_apply_runs_shfmt_when_files_found():
     quality.shell_format_apply.body(c)
     assert c.run.call_args_list[-1] == (  # pyright: ignore[reportAttributeAccessIssue]
         ("shfmt -w ./a.sh",),
-        {"hide": True, "warn": True},
+        {"echo": True},
     )
 
 

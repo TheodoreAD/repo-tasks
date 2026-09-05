@@ -1,6 +1,9 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
+import pytest
+from invoke import Collection
+
 from repo_tasks import (
     agents,
     configs,
@@ -14,6 +17,7 @@ from repo_tasks import (
     helm,
     ns,
     quality,
+    runner,
     selfinstall,
 )
 from repo_tasks import venv as venv_module
@@ -35,14 +39,25 @@ def test_quality_module_is_individually_importable():
     assert quality.precommit is not None
 
 
-def test_ns_declares_the_gate_verbosity_key_so_the_environment_can_set_it():
-    # invoke's `load_shell_env` only maps INVOKE_* variables onto keys the config already has, and a
-    # pre-task is called with no `called_as`, so only the root collection's config reaches the gate
-    # steps. Both facts put the default here rather than on the quality sub-collection.
-    assert ns.configuration()["quality"] == {"verbose": False}
-    quality_collection = ns.collections["quality"]
-    assert quality_collection is not None
-    assert "quality" not in quality_collection.configuration()
+def test_ns_configures_a_runner_only_when_report_mode_is_on():
+    """The property the whole design rests on: without `REPO_TASKS_RUN_REPORT`, this package does
+    not touch invoke's config at all, so `inv` behaves exactly as invoke documents.
+
+    Asserted as a biconditional against the collection built at import, rather than as a flat "no
+    runners key". The suite has to pass under both — `REPO_TASKS_RUN_REPORT=1 inv quality.check`
+    runs this very file with the variable set, and a one-sided assertion fails there for a reason
+    that has nothing to do with the code."""
+    assert ("runners" in ns.configuration()) is runner.enabled()
+
+
+def test_ns_installs_the_reporting_runner_when_report_mode_is_on(monkeypatch: pytest.MonkeyPatch):
+    """The install is one `if` at the end of `__init__.py`, so re-running it against a fresh
+    collection is the honest way to exercise it without reimporting the package."""
+    monkeypatch.setenv("REPO_TASKS_RUN_REPORT", "1")
+    collection = Collection()
+    if runner.enabled():
+        collection.configure({"runners": {"local": runner.ReportingLocal}})
+    assert collection.configuration()["runners"]["local"] is runner.ReportingLocal
 
 
 def test_ns_nests_dev_env_under_its_own_name():

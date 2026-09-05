@@ -16,7 +16,6 @@ from pathlib import Path
 from invoke import Context, Exit, task
 
 from .projects import tracked_files
-from .steps import run_step
 
 _SITE_DIR = Path("site")
 
@@ -291,7 +290,7 @@ def build(c: Context):
         print(f"[docs.build] no {_MKDOCS_CONFIG} — this repo has no docs site, nothing to build")
         return
     _require_zensical()
-    run_step(c, "zensical build --strict")
+    c.run("zensical build --strict", echo=True)
 
 
 @task

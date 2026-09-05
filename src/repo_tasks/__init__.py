@@ -20,6 +20,7 @@ from . import (
     helm,
     quality,
     release,
+    runner,
     selfinstall,
     testing,
     trunkflow,
@@ -54,9 +55,9 @@ ns.add_collection(Collection.from_module(helm), name="helm")
 ns.add_collection(Collection.from_module(configs), name="configs")
 ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")
 
-# Declared on the root, not on the quality sub-collection: invoke loads collection config per call
-# from the path a task was *called as*, and a pre-task has none, so a sub-collection's config never
-# reaches the steps a gate runs — only the root's does. Declaring the key at all is what lets
-# invoke's own env mapping set it (`INVOKE_QUALITY_VERBOSE=1`), since `load_shell_env` only reads
-# variables for keys the config already has. See steps.py for what the flag does.
-ns.configure({"quality": {"verbose": False}})
+# Report mode, and nothing at all when it is off: with REPO_TASKS_RUN_REPORT unset this package
+# never touches invoke's config, so `inv` behaves exactly as invoke documents. Swapping
+# `runners.local` is invoke's own extension point — `Context.run` builds its runner from that key —
+# so one line reaches every `c.run` in the package with no call-site changes. See runner.py.
+if runner.enabled():
+    ns.configure({"runners": {"local": runner.ReportingLocal}})
