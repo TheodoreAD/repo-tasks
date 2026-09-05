@@ -276,9 +276,16 @@ def _require_zensical() -> None:
 def build(c: Context):
     """Build the docs site with zensical in strict mode (fails on any warning).
 
-    In `quality.check`, because `--strict` is the only check in this family that sees a dangling
-    anchor: `link_check` strips the fragment by design, so a renamed heading passes it. That gap
-    shipped a red Pages deploy twice in one consumer while `CI` stayed green on both commits.
+    In `quality.precommit` and deliberately not in `check`, which must stay read-only —
+    `quality.precommit`'s own docstring carries that decision in full, and a second copy here is
+    exactly how this paragraph came to argue for `check` months after the build moved out of it.
+
+    Why the step exists at all: a renderer objects to things nothing else in the gate parses, and a
+    docs failure that no local check sees shipped a red Pages deploy twice in one consumer while
+    `CI` stayed green on both commits. It is defence in depth rather than the sole detector,
+    though — `link_check` now resolves a link's fragment against the target's real headings, across
+    every tracked `.md` rather than only `docs_dir`, needing no zensical and writing nothing. That
+    is a weaker justification than the one this docstring used to give, and it is the true one.
 
     No-ops cleanly on a repo with no `mkdocs.yml`, which is what makes it safe to run
     unconditionally in every consumer's gate — most of them have no docs site, and none of them
