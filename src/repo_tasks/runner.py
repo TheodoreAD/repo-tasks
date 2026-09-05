@@ -23,6 +23,11 @@ a human at a terminal and a CI log both get stock invoke. The population it is f
 beside the `PIPE_FAIL` it already sets there for the same reason, so nothing has to be typed by the
 session that would never think to type it.
 
+**The variable is not sufficient on its own, and a consumer with its own Collection has to say so.**
+`configure()` below is that line; `__init__.py` calls it for this package's `ns`, and a consumer
+whose `tasks.py` hand-builds a namespace calls it for that one. See `configure`'s docstring for why
+nothing here can reach a Collection it was not handed.
+
 **Why a Runner subclass and not a wrapper at each call site.** `Context.run` builds its runner from
 `config.runners.local` (invoke's own extension point — the stock config holds `Local` there), so
 swapping the class reaches all ~90 `c.run` calls in this package with no call-site changes and no
@@ -47,7 +52,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 
-from invoke import Exit, Result
+from invoke import Collection, Exit, Result
 from invoke.runners import Local
 
 _ENV_VAR = "REPO_TASKS_RUN_REPORT"
@@ -200,3 +205,31 @@ def verdict(gate: str) -> None:
         return
     steps = f"{_ledger.steps} step{'' if _ledger.steps == 1 else 's'}"
     print(f"{gate} | PASS | {steps} | {_ledger.seconds:.1f}s", flush=True)
+
+
+def configure(namespace: Collection) -> bool:
+    """Install report mode on a root `Collection` when the env var is set. Returns whether it was.
+
+    A consumer whose `tasks.py` is `from repo_tasks import ns` needs nothing — `__init__.py` calls
+    this for that collection. **A consumer that hand-builds its own root `Collection` has to call it
+    itself**, because `Collection.from_module` copies tasks and not the configuration held on some
+    other collection, so nothing this package does at import can reach an object it was never
+    handed. Reaching it anyway would mean patching `Config.global_defaults`, which is the
+    unsupported monkeypatch this whole design exists to avoid::
+
+        from repo_tasks import runner
+        runner.configure(namespace)
+
+    That gap is silent in both directions, which is why the line has a name and a docstring rather
+    than being re-derived per repo: with `REPO_TASKS_RUN_REPORT` exported and this call missing,
+    `enabled()` is true, the gate prints stock invoke output, and nothing anywhere says the mode is
+    off. Observed live in a consumer 2026-09-05.
+
+    Returns False having touched nothing when report mode is off, so the "stock invoke unless asked"
+    property the module docstring describes holds for a consumer's namespace exactly as it does for
+    this package's own.
+    """
+    if not enabled():
+        return False
+    namespace.configure({"runners": {"local": ReportingLocal}})
+    return True

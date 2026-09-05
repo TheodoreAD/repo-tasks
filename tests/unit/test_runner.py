@@ -8,7 +8,7 @@ milliseconds.
 """
 
 import pytest
-from invoke import Context, Exit
+from invoke import Collection, Config, Context, Exit
 from invoke.exceptions import UnexpectedExit
 
 from repo_tasks import runner
@@ -151,3 +151,40 @@ def test_stock_invoke_is_untouched_when_the_runner_is_not_installed(capsys: pyte
     assert "streamed-normally" in capsys.readouterr().out
     with pytest.raises(UnexpectedExit):
         c.run("exit 7", echo=True)
+
+
+def test_configure_installs_the_runner_on_a_collection_this_package_did_not_build(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The half the env var cannot do by itself. A consumer that hand-builds its own namespace gets
+    report mode from this call and from nothing else — `__init__.py` reaches `ns` and no other
+    object."""
+    monkeypatch.setenv("REPO_TASKS_RUN_REPORT", "1")
+    namespace = Collection()
+    assert runner.configure(namespace) is True
+    assert namespace.configuration()["runners"]["local"] is ReportingLocal
+
+
+def test_configure_touches_nothing_when_report_mode_is_off(monkeypatch: pytest.MonkeyPatch):
+    """Stock invoke unless asked, extended to a consumer's namespace: no `runners` key at all, so a
+    consumer can prove the claim by reading its own config rather than by trusting a branch."""
+    monkeypatch.delenv("REPO_TASKS_RUN_REPORT", raising=False)
+    namespace = Collection()
+    assert runner.configure(namespace) is False
+    assert "runners" not in namespace.configuration()
+
+
+def test_a_context_built_from_a_configured_collection_actually_reports(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """End to end through invoke rather than through the dict `configure` just wrote: it is invoke
+    that decides `runners.local` is the key a Context resolves its runner from, so asserting the key
+    back only proves this module is self-consistent."""
+    monkeypatch.setenv("REPO_TASKS_RUN_REPORT", "1")
+    namespace = Collection()
+    runner.configure(namespace)
+    c = Context(config=Config(overrides=namespace.configuration()))
+    c.config["run"]["in_stream"] = False
+    runner.reset()
+    c.run("echo wired", echo=True)
+    assert capsys.readouterr().out.splitlines() == ["echo wired | ok | 0.0s | wired"]

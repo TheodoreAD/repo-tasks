@@ -58,6 +58,9 @@ ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")
 # Report mode, and nothing at all when it is off: with REPO_TASKS_RUN_REPORT unset this package
 # never touches invoke's config, so `inv` behaves exactly as invoke documents. Swapping
 # `runners.local` is invoke's own extension point — `Context.run` builds its runner from that key —
-# so one line reaches every `c.run` in the package with no call-site changes. See runner.py.
-if runner.enabled():
-    ns.configure({"runners": {"local": runner.ReportingLocal}})
+# so one line reaches every `c.run` in the package with no call-site changes.
+#
+# This reaches `ns` and nothing else, which is the whole of what it can reach: a consumer that
+# hand-builds its own root Collection calls `runner.configure` on that object itself, or stays on
+# stock invoke with nothing saying so. See runner.py and contributing/quality-gate.md.
+runner.configure(ns)

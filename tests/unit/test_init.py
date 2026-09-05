@@ -51,12 +51,13 @@ def test_ns_configures_a_runner_only_when_report_mode_is_on():
 
 
 def test_ns_installs_the_reporting_runner_when_report_mode_is_on(monkeypatch: pytest.MonkeyPatch):
-    """The install is one `if` at the end of `__init__.py`, so re-running it against a fresh
-    collection is the honest way to exercise it without reimporting the package."""
+    """The install is one `runner.configure` call at the end of `__init__.py`, so re-running it
+    against a fresh collection is the honest way to exercise it without reimporting the package —
+    and since it became a call rather than an inline `if`, this runs the shipped code instead of a
+    copy of it that could drift."""
     monkeypatch.setenv("REPO_TASKS_RUN_REPORT", "1")
     collection = Collection()
-    if runner.enabled():
-        collection.configure({"runners": {"local": runner.ReportingLocal}})
+    assert runner.configure(collection) is True
     assert collection.configuration()["runners"]["local"] is runner.ReportingLocal
 
 
