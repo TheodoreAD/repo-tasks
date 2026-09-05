@@ -1,6 +1,7 @@
-"""Shared, reproducible quality-tooling invoke tasks. Every command is echoed
-(echo=True) so both a human and an agent see exactly what ran — the only
-exception is a step that would involve a secret, and none here do.
+"""Shared, reproducible quality-tooling invoke tasks. Every command is printed as its own step
+line so both a human and an agent see exactly what ran — the only exception is a step that would
+involve a secret, and none here do. A step's output is folded on success and replayed whole on
+failure, and a gate ends with a verdict line; `steps.py` owns that shape and says why.
 
 Running tests is not this module's job — that lives in testing.py, under its own `test` namespace
 with one task per tier. `check` pulls in only the unit tier from there, since it is the only tier
@@ -20,6 +21,7 @@ from .deps import check as deps_check
 from .docs import build as docs_build
 from .docs import link_check
 from .projects import tracked_files
+from .steps import run_step, verdict
 from .testing import unit, untested_modules
 
 
@@ -46,14 +48,14 @@ def _dockerfiles(c: Context):
 def lint_check(c: Context):
     """Run ruff's linter (no fixes)."""
     require_tool("ruff")
-    c.run("ruff check .", echo=True)
+    run_step(c, "ruff check .")
 
 
 @task
 def lint_apply(c: Context):
     """Run ruff's linter and apply auto-fixes."""
     require_tool("ruff")
-    c.run("ruff check --fix .", echo=True)
+    run_step(c, "ruff check --fix .")
 
 
 @task
@@ -61,8 +63,8 @@ def format_check(c: Context):
     """Check formatting (ruff format, dprint) without writing changes."""
     require_tool("ruff")
     require_tool("dprint")
-    c.run("ruff format --check .", echo=True)
-    c.run("dprint check --config-discovery=ignore-descendants", echo=True)
+    run_step(c, "ruff format --check .")
+    run_step(c, "dprint check --config-discovery=ignore-descendants")
 
 
 @task
@@ -70,8 +72,8 @@ def format_apply(c: Context):
     """Apply formatting: ruff format, then dprint fmt."""
     require_tool("ruff")
     require_tool("dprint")
-    c.run("ruff format .", echo=True)
-    c.run("dprint fmt --config-discovery=ignore-descendants", echo=True)
+    run_step(c, "ruff format .")
+    run_step(c, "dprint fmt --config-discovery=ignore-descendants")
 
 
 @task(help={"python_version": "Check against this Python instead of pyrightconfig.json's (e.g. 3.13)"})
@@ -90,7 +92,7 @@ def type_check(c: Context, python_version: str | None = None):
     too narrow to pay for everywhere. See plans/2026-08-29-python-floor-in-the-shipped-configs.md."""
     require_tool("basedpyright")
     override = f" --pythonversion {python_version}" if python_version else ""
-    c.run(f"basedpyright{override}", echo=True)
+    run_step(c, f"basedpyright{override}")
 
 
 @task
@@ -127,7 +129,7 @@ def shell_check(c: Context):
         # no shell scripts" into a hard failure and cost the no-op contract the docstring promises.
         # Same in every file-gated step below.
         require_tool("shellcheck")
-        c.run(f"shellcheck {' '.join(files)}", echo=True)
+        run_step(c, f"shellcheck {' '.join(files)}")
 
 
 @task
@@ -137,7 +139,7 @@ def shell_format_check(c: Context):
     files = _sh_files(c)
     if files:
         require_tool("shfmt")
-        c.run(f"shfmt -d {' '.join(files)}", echo=True)
+        run_step(c, f"shfmt -d {' '.join(files)}")
 
 
 @task
@@ -147,7 +149,7 @@ def shell_format_apply(c: Context):
     files = _sh_files(c)
     if files:
         require_tool("shfmt")
-        c.run(f"shfmt -w {' '.join(files)}", echo=True)
+        run_step(c, f"shfmt -w {' '.join(files)}")
 
 
 @task
@@ -171,8 +173,8 @@ def workflow_check(c: Context):
     if files:
         require_tool("actionlint")
         require_tool("zizmor")
-        c.run(f"actionlint {' '.join(files)}", echo=True)
-        c.run(f"zizmor --offline {' '.join(files)}", echo=True)
+        run_step(c, f"actionlint {' '.join(files)}")
+        run_step(c, f"zizmor --offline {' '.join(files)}")
 
 
 @task
@@ -194,7 +196,7 @@ def dockerfile_check(c: Context):
     files = _dockerfiles(c)
     if files:
         require_tool("hadolint")
-        c.run(f"hadolint {' '.join(files)}", echo=True)
+        run_step(c, f"hadolint {' '.join(files)}")
 
 
 @task(pre=[lint_apply, format_apply, shell_format_apply])
@@ -202,21 +204,27 @@ def fix(c: Context):
     """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
 
 
-@task(
-    pre=[
-        lint_check,
-        format_check,
-        type_check,
-        shell_check,
-        shell_format_check,
-        workflow_check,
-        dockerfile_check,
-        link_check,
-        deps_check,
-        untested_modules,
-        unit,
-    ]
+# The read-only gate, in order. One list so `precommit` can inline it: nesting `check` itself would
+# print check's verdict in the middle of a precommit run, with a step count that includes `fix`'s
+# steps, and the whole point of the verdict is that it is the last line. A tuple spread into each
+# `pre=[...]`: `pre` wants a list of unparameterized tasks, and a shared list literal infers the
+# narrower union of these tasks' signatures, which an invariant list cannot widen back.
+_CHECKS = (
+    lint_check,
+    format_check,
+    type_check,
+    shell_check,
+    shell_format_check,
+    workflow_check,
+    dockerfile_check,
+    link_check,
+    deps_check,
+    untested_modules,
+    unit,
 )
+
+
+@task(pre=[*_CHECKS])
 def check(c: Context):
     """CI-style gate: every check, no changes written. Shell formatting is checked here as well
     as linted — python has always had both `format_check` and a formatter in the gate, and shell
@@ -232,13 +240,17 @@ def check(c: Context):
     "No changes written" is literal and load-bearing: this half is safe to run concurrently, on a
     read-only checkout, and twice with the same answer. `docs.build` is deliberately **not** here
     for that reason — it writes a built site into the working tree — and lives in `precommit`
-    instead. See that task's docstring for the argument it beat."""
+    instead. See that task's docstring for the argument it beat.
+
+    The body runs only once every step has passed — invoke stops at the first failing pre-task,
+    and the step that failed has already printed the verdict — so all it does is print the PASS."""
+    verdict("quality.check")
 
 
-@task(pre=[fix, check, docs_build])
+@task(pre=[fix, *_CHECKS, docs_build])
 def precommit(c: Context):
-    """Fix, then check, then build the docs site — the one command to run before considering a
-    change done, with no need to know or invoke the individual tools.
+    """Fix, then every step of check, then build the docs site — the one command to run before
+    considering a change done, with no need to know or invoke the individual tools.
 
     `docs.build` is here rather than in `check`, and that placement is the whole decision.
     `zensical build --strict` catches what a renderer objects to and nothing else here sees, but it
@@ -255,6 +267,7 @@ def precommit(c: Context):
     such a repo now needs one, which is what `power-user-linux-setup` did rather than take the
     mutation. A gate half that quietly stopped being read-only would have been the worse trade, for
     every consumer including the majority with no docs site."""
+    verdict("quality.precommit")
 
 
 # Explicit namespace, not Collection.from_module's auto-scan: `unit` is imported above for

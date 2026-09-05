@@ -36,7 +36,8 @@ def test_build_runs_zensical_strict(c, tmp_cwd, monkeypatch):
     (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/zensical")
     docs.build.body(c)
-    c.run.assert_called_once_with("zensical build --strict", echo=True)
+    # A gate step (precommit), so the folded shape from steps.py; `serve` below keeps streaming.
+    c.run.assert_called_once_with("zensical build --strict", hide=True, warn=True)
 
 
 def test_build_noops_without_an_mkdocs_config(c, tmp_cwd, capsys):

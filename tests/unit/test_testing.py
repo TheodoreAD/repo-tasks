@@ -27,14 +27,16 @@ def test_unit_runs_a_bare_pytest_and_names_no_path():
     exist is a hard exit-4 usage error, where a missing testpaths entry is only a warning."""
     c = MockContext(run=Result(exited=0))
     testing.unit.body(c)
-    c.run.assert_called_once_with("pytest", echo=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
+    # hide=True: a gate step, folded on success and replayed on failure (see steps.py).
+    c.run.assert_called_once_with("pytest", hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_unit_noops_cleanly_when_no_tests_collected():
+def test_unit_noops_cleanly_when_no_tests_collected(capsys):
     # pytest's own exit code 5 — the same safe-to-run-unconditionally contract shell_check has,
     # needed for a quality-gates-only repo with no python tests at all to pass `check`.
     c = MockContext(run=Result(exited=5))
     testing.unit.body(c)  # must not raise
+    assert "no tests collected" in capsys.readouterr().out
 
 
 def test_unit_reraises_real_failures():
@@ -44,8 +46,31 @@ def test_unit_reraises_real_failures():
     assert exc_info.value.code == 1
 
 
+def test_unit_puts_the_pytest_count_on_its_step_line(capsys):
+    # The one number the gate reports: what a `| tail -3` on the old streaming output was for.
+    summary = "tests/unit/test_x.py ....\n\n====== 4 passed, 1 warning in 0.10s ======\n"
+    c = MockContext(run=Result(stdout=summary, exited=0))
+    testing.unit.body(c)
+    out = capsys.readouterr().out
+    assert "4 passed" in out
+    assert "1 warning" not in out
+    assert "test_x.py" not in out  # folded: the dots never reach the terminal on a green run
+
+
+def test_pytest_summary_reports_failures_and_errors_too():
+    result = Result(stdout="====== 2 failed, 40 passed, 1 error in 1.00s ======\n", exited=1)
+    assert testing._pytest_summary(result) == "2 failed, 40 passed, 1 error"
+
+
+def test_pytest_summary_is_none_when_there_is_nothing_to_count():
+    assert testing._pytest_summary(Result(stdout="", exited=0)) is None
+    assert testing._pytest_summary(Result(stdout="no summary line here\n", exited=0)) is None
+
+
 def test_integration_runs_the_whole_tier(c, integration_dir):
     testing.integration.body(c)
+    # echo, not hide: the integration tiers stream. They run for minutes with a human watching, and
+    # they are not gate steps — only `unit` is folded.
     c.run.assert_called_once_with("pytest tests/integration", echo=True, warn=True)
 
 
@@ -169,6 +194,8 @@ def test_coverage_scopes_to_each_package_under_src(c, tmp_cwd):
     (tmp_cwd / "src" / "other").mkdir()
     (tmp_cwd / "src" / "other" / "__init__.py").write_text("")
     testing.coverage.body(c)
+    # Streams (echo, not hide): the term-missing report is the task's whole output, so folding it
+    # on success would hide the one thing the task exists to show.
     c.run.assert_called_once_with("pytest --cov=other --cov=pkg --cov-report=term-missing", echo=True, warn=True)
 
 

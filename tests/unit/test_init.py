@@ -35,6 +35,16 @@ def test_quality_module_is_individually_importable():
     assert quality.precommit is not None
 
 
+def test_ns_declares_the_gate_verbosity_key_so_the_environment_can_set_it():
+    # invoke's `load_shell_env` only maps INVOKE_* variables onto keys the config already has, and a
+    # pre-task is called with no `called_as`, so only the root collection's config reaches the gate
+    # steps. Both facts put the default here rather than on the quality sub-collection.
+    assert ns.configuration()["quality"] == {"verbose": False}
+    quality_collection = ns.collections["quality"]
+    assert quality_collection is not None
+    assert "quality" not in quality_collection.configuration()
+
+
 def test_ns_nests_dev_env_under_its_own_name():
     # invoke dashifies the collection name for the CLI (`inv dev-env.setup`), same as it does for
     # underscored task names (`wire_claude_hook` -> `wire-claude-hook`) — the dict key reflects that.

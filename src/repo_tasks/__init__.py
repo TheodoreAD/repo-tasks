@@ -53,3 +53,10 @@ ns.add_collection(Collection.from_module(docker), name="docker")
 ns.add_collection(Collection.from_module(helm), name="helm")
 ns.add_collection(Collection.from_module(configs), name="configs")
 ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")
+
+# Declared on the root, not on the quality sub-collection: invoke loads collection config per call
+# from the path a task was *called as*, and a pre-task has none, so a sub-collection's config never
+# reaches the steps a gate runs — only the root's does. Declaring the key at all is what lets
+# invoke's own env mapping set it (`INVOKE_QUALITY_VERBOSE=1`), since `load_shell_env` only reads
+# variables for keys the config already has. See steps.py for what the flag does.
+ns.configure({"quality": {"verbose": False}})

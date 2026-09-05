@@ -49,7 +49,9 @@ def test_lock_reraises_other_failures_without_a_hint(capsys):
 def test_check():
     c = MockContext(run=Result())
     deps.check.body(c)
-    c.run.assert_called_once_with("uv lock --check", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+    # A gate step, so the folded shape (see steps.py); `lock` above keeps streaming, since its
+    # failure path reads stderr for the moved-member hint and is not a gate step.
+    c.run.assert_called_once_with("uv lock --check", hide=True, warn=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_audit(c):
