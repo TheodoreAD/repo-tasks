@@ -316,11 +316,14 @@ neither half of `configs.diff` can see it.
 
 [DEFERRED: whether `scaffoldapy`'s template should carry the call by default. For: it is the only
 place that stops the population growing, and a generated repo's owner has no reason to suspect the
-mode exists. Against: it puts an agent-oriented departure into every generated repo's
-`tasks/__init__.py`, where a human reader meets it first — the same least-surprise objection that
-inverted this design in the first place. **Not this repo's call**, which is why it is deferred here
-rather than left as an open question: filed for `scaffoldapy`, which has its own session and its own
-plans, and named in this plan's `depends_on`.]
+mode exists. Against: it puts an agent-oriented departure into every generated repo's `tasks.py`,
+where a human reader meets it first — the same least-surprise objection that inverted this design in
+the first place. **Not this repo's call**, which is why it is deferred here rather than left as an
+open question: filed 2026-09-06 as that repo's
+`2026-09-06-report-mode-wiring-in-the-generated-tasks-py.md`, and named in this plan's `depends_on`.
+That filing carries a third question this one had not asked — whether the generated `tasks.py` needs
+its own root `Collection` at all, since `from repo_tasks import ns` would dissolve the decision
+rather than settle it.]
 
 [DEFERRED: nothing measures whether report mode actually moves the piped-gate rate. The truthfulness
 property is what the design is for and is already achieved; a rate change would be a bonus.
@@ -380,6 +383,15 @@ its test file.
 3. **Docs**: `contributing/quality-gate.md`'s "What the gate prints" rewritten around two modes, the
    echo rule in `contributing/task-module-conventions.md`, `README.md`'s design paragraph, and three
    stale `steps.py` citations repointed.
+
+§9 landed separately, 2026-09-06, in two more:
+
+4. **`runner.configure` + three tests**, and `__init__.py` calling it instead of spelling the two
+   lines inline — which also means `test_init.py`'s install test exercises the shipped code rather
+   than a copy of it that could drift.
+5. **Docs**: `contributing/quality-gate.md` gains "Turning it on in a consumer" and the decision
+   behind the helper, `contributing/consumer-sweep.md` a one-time per-consumer check, `README.md` a
+   sentence in the design paragraph.
 
 `interactive.py` and the `docker.login`/`helm.login` change are untouched by all of this. That was a
 real hang on the interpreter this ships on, the fix is correct, and stepping outside invoke there is
@@ -448,3 +460,28 @@ repos and the `*-polite-mcp` family take `repo-tasks` as a pinned dependency and
 bumped. `contributing/consumer-sweep.md` owns that sequence, and an `agent-skills` plan
 (`sweep-misses-downstream-consumers-of-a-pushed-library.md`) names this very session as its
 example.]
+
+### §9 verified against a hand-built consumer namespace, 2026-09-06
+
+Three unit tests in `tests/unit/test_runner.py` — the install on a foreign `Collection`, the
+touched-nothing-when-off property, and one that runs a command through a `Context` built from the
+configured collection's configuration. The last is the one that matters: invoke owns the key name,
+so reading back the dict `configure` just wrote only proves the module is self-consistent.
+
+Then outside the suite, because the finding was about a whole `inv` invocation rather than about a
+`Context`. Two scratch `tasks.py` files with their own root `Collection` and one echoed command,
+identical apart from the call, run with the ambient `REPO_TASKS_RUN_REPORT=1` an agent shell already
+has:
+
+1. **`runner.configure(namespace)`, variable set** — `inv demo` prints one report line,
+   `echo All checks passed!` then `ok`, `0.0s` and the tool's own last line. On a `Collection` this
+   package never built and never saw.
+2. **No call, variable set** — what the template generates today. Invoke's bold echo, then the
+   streamed output.
+3. **`runner.configure(namespace)`, variable unset** (`env -u`) — invoke's bold echo, then the
+   streamed output.
+
+**Runs 2 and 3 are byte-identical**, which is the finding stated as evidence rather than as prose:
+an unwired consumer with the variable set cannot be told apart from a wired one with the variable
+unset. That is why §9 ships a named call, and why `contributing/consumer-sweep.md` carries
+`rg -n 'runner.configure' tasks/` as the check — there is nothing in the output to read it off.
