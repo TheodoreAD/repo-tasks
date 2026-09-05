@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-02
+status: landed
+updated: 2026-09-05
 source_repo: github.com-personal/agent-skills
 source_session: 2312636b-3f89-4cb5-95e8-48f986fb9ecb.jsonl
 source_moment: 2026-09-01T17:20:53.485Z
@@ -47,30 +47,45 @@ the family default, and every consumer inherits these two tasks.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: whether either login is reachable in practice, or whether both are always
-preceded by a non-interactive credential source. `docker login` and `helm registry login` both take
-`--password-stdin`, and CI almost certainly uses a token — so the hang may only bite an interactive
-first run on a developer machine. That is still the case worth fixing, but it changes the urgency
-and it decides whether this is a bug or a papercut.]
+[DECISION: both logins are reachable and interactive by design. Neither is called from CI
+(`contributing/release-workflows.md`: CI authenticates through `docker/login-action` and never runs
+`docker.login`), and both docstrings refuse to read, store, forward or echo a credential — the tool
+prompts, the tool stores. So this is a bug, not a papercut: the two tasks exist only for the case
+that hung. Settled 2026-09-05 by reading both call sites.]
 
-[NEEDS CLARIFICATION: whether the fix is `--password-stdin` with a token resolved from the
-environment or a keyring, or the `run_interactive()` shape — a plain `subprocess` inheriting the
-real terminal. The first removes the interactivity rather than accommodating it, which is the better
-answer where a token exists; the second is the general escape hatch. `power-user-linux-setup` has a
-worked implementation of the second in `util.run_interactive()`, with the reasoning in its
-`contributing/interactive-input.md`.]
+[DECISION: `run_interactive` — a plain `subprocess.run` inheriting stdin/stdout/stderr — in a new
+`interactive.py`, used by both logins. `--password-stdin` was rejected because it makes this package
+handle the credential, the opposite of both tasks' stated stance, and no token source exists at
+either site to feed it. Settled 2026-09-05.]
 
-[NEEDS CLARIFICATION: whether the two unit tests should change. They assert the current call shape,
-so they will fail on any fix and that is correct — but they are also the reason nothing caught this,
-since asserting a mock's arguments cannot see a runtime hang. Worth deciding whether a test that can
-observe the failure is available at all here, or whether this is a case where the container-level
-reproduction in `power-user-linux-setup`'s `tests/containers/` is the only real oracle.]
+[DECISION: the unit tests change to assert the `run_interactive` call and that `c.run` is never
+reached, with the same blind spot named in the test module's docstring: a mock's call shape cannot
+see a runtime hang, and the oracle for a login completing is a real terminal, which only
+`power-user-linux-setup`'s container tier has. Recorded as a pitfall in
+`contributing/task-module-conventions.md` rather than left as an open question. Settled 2026-09-05.]
 
 ## Recommended direction
 
 Confirm reachability first — it is one read of each call site's surroundings and it decides
 everything else. If a token is already available at both, `--password-stdin` is the smaller and
 better change and the interactivity disappears rather than being handled.
+
+## Migrated to
+
+Landed 2026-09-05.
+
+- Both causes, why `pty=True` looked right, and why a subprocess with inherited stdio is the fix:
+  `src/repo_tasks/interactive.py`'s module docstring, which both `docker.login` and `helm.login`
+  point at.
+- The rule, the pitfall that the tests passed throughout, and the rejected `--password-stdin`
+  alternative: `contributing/task-module-conventions.md`, "A task may not run anything that waits
+  for typed input through `c.run`".
+- The interpreter matrix and the reproduction stay where they were written, in `agent-skills`'
+  `invoke-task-conventions` skill; this repo cites it rather than copying it.
+
+Not migrated: the call-site table, which is now wrong by design, and the originating
+`inv
+wsl.install` incident, which belongs to `power-user-linux-setup`.
 
 ## Evidence
 
