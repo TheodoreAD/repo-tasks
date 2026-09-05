@@ -332,11 +332,50 @@ All four ran on 2026-09-05, against this repo's own gate.
   ended with `FAIL | ruff check . | exit=1 (output above)` and the Bash tool reported exit 1.
 - `rg INVOKE_QUALITY_VERBOSE` returns nothing outside this plan.
 
-[DEFERRED: §8's `power-user-linux-setup` half is not done, and until it is, this change is a
-regression against the piping measurement — report mode exists and no agent session is in it. Filed
-as its own plan for that repo. **This plan cannot reach `landed` before that one has.**]
+### §8's other half landed the same evening, and it works
 
-[UNVERIFIED: no consumer repo has been run against this yet. The eleven reverted call sites and the
-runner are exercised here, but `scaffoldapy`-generated repos and `power-user-linux-setup` take
-repo-tasks as a pinned dependency and none has been bumped — the consumer sweep in
-`contributing/consumer-sweep.md` is what closes this.]
+`power-user-linux-setup` took the filed plan and extended its `CLAUDECODE`-guarded `zshenv` snippet
+to two statements:
+
+```shell
+if [ -n "${CLAUDECODE:-}" ]; then
+  setopt PIPE_FAIL
+  export REPO_TASKS_RUN_REPORT=1
+fi
+```
+
+Verified end to end 2026-09-05 evening, in an agent session that set nothing by hand:
+
+- `env` in a Bash call shows `REPO_TASKS_RUN_REPORT=1` and `setopt` shows `pipefail`.
+- A bare `inv quality.precommit` in this repo prints fifteen report lines and
+  `quality.precommit | PASS | 15 steps | 4.9s`.
+- **In a consumer**: `inv quality.lint-check` in `power-user-linux-setup`, whose `uv.lock` pins
+  `repo-tasks` at `7bb880b`, prints `ruff check . | ok | 0.0s | All checks passed!` — **but only
+  because that repo added the wiring to its own `tasks/__init__.py` first.** The export alone did
+  nothing there.
+
+[PITFALL: **the environment half is not the whole change, and the gap is silent in both
+directions.** The `ns.configure` that installs the runner is on `repo_tasks`' own `ns`; a consumer
+that builds its own `Collection` — which `power-user-linux-setup` does and which `scaffoldapy`'s
+template generates — never touches it, so the variable is set, `runner.enabled()` is true, and the
+gate prints stock invoke output with nothing anywhere saying the mode is off. This plan predicted it
+in §"Known costs" and still recorded the export as the remaining half; a session hit it live on
+2026-09-05 before the prediction was connected to the filing.
+`2026-09-05-report-mode-reaches-no-consumer-by-itself.md`, filed for this repo, owns it — **read
+that before treating any consumer as done**, and note that `scaffoldapy`'s template is the
+multiplier, since every generated repo is in this state at birth.]
+
+[PITFALL: **no session restart is needed, and a session that assumes one will wait for nothing.**
+Each Bash call is a fresh non-interactive `zsh -c` that reads `~/.zshenv` every time, so a deployed
+snippet reaches the _running_ session's next call. This plan's own author predicted the opposite in
+a report — "existing agent sessions keep the old environment until they're restarted" — and was
+wrong; `setup.toml`'s comment on that field had said so all along. It is the same shape as the
+`SSH_AUTH_SOCK` export that does _not_ survive between calls, which is probably where the wrong
+intuition comes from: an `export` typed **in** a call dies with it, while one in `~/.zshenv` is
+re-read by every call.]
+
+[DEFERRED: the remaining consumers. `power-user-linux-setup` is verified; `scaffoldapy`-generated
+repos and the `*-polite-mcp` family take `repo-tasks` as a pinned dependency and none has been
+bumped. `contributing/consumer-sweep.md` owns that sequence, and an `agent-skills` plan
+(`sweep-misses-downstream-consumers-of-a-pushed-library.md`) names this very session as its
+example.]
