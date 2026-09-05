@@ -100,23 +100,42 @@ def test_tasks_no_op_cleanly_with_zero_charts(c, monkeypatch, capsys, task_name)
     assert "nothing to do" in capsys.readouterr().out
 
 
+def _capture_interactive(monkeypatch) -> list[str]:
+    """Record what `login` hands to the interactive runner instead of attaching a terminal."""
+    commands: list[str] = []
+    monkeypatch.setattr(helm, "run_interactive", commands.append)
+    return commands
+
+
 def test_login_targets_the_registry_host_not_the_push_reference(c, monkeypatch):
     # helm push takes the full oci:// reference; helm registry login takes the bare host.
     _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
     helm.login.body(c)
-    c.run.assert_called_once_with("helm registry login ghcr.io", echo=True, pty=True)
+    assert commands == ["helm registry login ghcr.io"]
 
 
 def test_login_registry_flag_overrides_the_entry_registry(c, monkeypatch):
     _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
     helm.login.body(c, registry="oci://localhost:5000/charts")
-    c.run.assert_called_once_with("helm registry login localhost:5000", echo=True, pty=True)
+    assert commands == ["helm registry login localhost:5000"]
+
+
+def test_login_never_goes_through_c_run(c, monkeypatch):
+    # Same reason as docker.login: a prompt needs the real terminal, and c.run cannot give it one
+    # on Python 3.14 (interactive.py).
+    _stub(monkeypatch)
+    _capture_interactive(monkeypatch)
+    helm.login.body(c)
+    c.run.assert_not_called()
 
 
 def test_login_never_puts_a_credential_in_the_command(c, monkeypatch):
     _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
     helm.login.body(c)
-    assert c.run.call_args.args == ("helm registry login ghcr.io",)
+    assert commands == ["helm registry login ghcr.io"]
 
 
 def test_login_errors_when_the_chart_has_no_registry(c, monkeypatch):

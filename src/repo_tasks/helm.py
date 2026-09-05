@@ -9,6 +9,7 @@ from pathlib import Path
 
 from invoke import Collection, Context, task
 
+from .interactive import run_interactive
 from .projects import discover_helm_charts
 from .requirements import NETWORK, requires
 from .version import Version, current_version, set_dev
@@ -113,8 +114,8 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
 
     Like docker.login, nothing here reads, stores, forwards or echoes a credential — helm prompts
     and writes the result itself. The registry host comes from repo-tasks.toml rather than being
-    retyped. Runs under a pty so helm can prompt. No-ops cleanly in a repo with no [[helm]]
-    entries.
+    retyped. Runs as a plain subprocess with the real terminal attached, for the reasons
+    `interactive.py` gives. No-ops cleanly in a repo with no [[helm]] entries.
 
     helm stores this in its own registry config, but that config honours a `credsStore` exactly as
     docker's does — helm resolves credentials through oras, whose store checks `credHelpers`, then
@@ -136,7 +137,7 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     resolved_registry = registry or chart.registry
     if resolved_registry is None:
         raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
-    c.run(f"helm registry login {_registry_host(resolved_registry)}", echo=True, pty=True)
+    run_interactive(f"helm registry login {_registry_host(resolved_registry)}")
 
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a

@@ -5,6 +5,7 @@ consumer repo even though image names/registries legitimately differ per repo.""
 
 from invoke import Collection, Context, task
 
+from .interactive import run_interactive
 from .projects import discover_docker_images
 from .requirements import DOCKER, NETWORK, requires
 from .version import Version, current_version, set_dev
@@ -147,13 +148,16 @@ def login(c: Context, project: str | None = None):
     This task never reads, stores, forwards or echoes a credential — docker prompts for it, and
     where `~/.docker/config.json` names a `credsStore` docker's own helper puts it in the OS
     secret store. The only thing being automated is the registry host, which comes from
-    repo-tasks.toml rather than being retyped. Runs under a pty because docker refuses to prompt
-    from a non-TTY device. No-ops cleanly in a repo with no images."""
+    repo-tasks.toml rather than being retyped. No-ops cleanly in a repo with no images.
+
+    Runs as a plain subprocess with the real terminal attached, never through `c.run` — with or
+    without `pty=True`, invoke cannot forward a typed password on Python 3.14 and races the child
+    for it on every earlier version. `interactive.py` has both causes."""
     image = _resolve_image(c, project)
     if image is None:
         print(f"[docker.login] {_NO_IMAGES}")
         return
-    c.run(f"docker login {_registry_host(image.image)}", echo=True, pty=True)
+    run_interactive(f"docker login {_registry_host(image.image)}")
 
 
 ns = Collection(check, build, push, release, login)

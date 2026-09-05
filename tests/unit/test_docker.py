@@ -158,19 +158,36 @@ def test_explicit_project_still_errors_with_zero_images(c, monkeypatch):
         docker.build.body(c, project="nonexistent")
 
 
+def _capture_interactive(monkeypatch) -> list[str]:
+    """Record what `login` hands to the interactive runner instead of attaching a terminal."""
+    commands: list[str] = []
+    monkeypatch.setattr(docker, "run_interactive", commands.append)
+    return commands
+
+
 def test_login_targets_the_registry_the_image_pushes_to(c, monkeypatch):
     _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
     docker.login.body(c)
-    # pty because docker refuses to prompt for a password from a non-TTY device.
-    c.run.assert_called_once_with("docker login ghcr.io", echo=True, pty=True)
+    assert commands == ["docker login ghcr.io"]
+
+
+def test_login_never_goes_through_c_run(c, monkeypatch):
+    # Not `c.run(..., pty=True)`: invoke cannot forward a typed password on Python 3.14 and races
+    # the child for it on earlier versions (interactive.py). The prompt needs the real terminal.
+    _stub(monkeypatch)
+    _capture_interactive(monkeypatch)
+    docker.login.body(c)
+    c.run.assert_not_called()
 
 
 def test_login_never_puts_a_credential_in_the_command(c, monkeypatch):
-    # The whole point of letting docker prompt: c.run echoes its command, so anything
-    # interpolated here would be printed to the terminal and into any CI log.
+    # The whole point of letting docker prompt: the command is printed, so anything interpolated
+    # here would be printed to the terminal and into any CI log.
     _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
     docker.login.body(c)
-    assert c.run.call_args.args == ("docker login ghcr.io",)
+    assert commands == ["docker login ghcr.io"]
 
 
 @pytest.mark.parametrize(
