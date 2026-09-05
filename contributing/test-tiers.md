@@ -419,6 +419,27 @@ filesystem/JSON logic against `tmp_path`:
 - `agents.wire-claude-hook` wires a fresh project on a fresh `$HOME`, including the env cache file
   materializing under the real `~/.cache/claude-code`.
 
+`tests/integration/test_clean_os_gate_integration.py` covers the gate itself, in its own container:
+`uv sync --group dev` on a machine with none of the gate binaries, then every binary-dependent
+`quality.*` step green with `.venv/bin` on PATH. ~60s.
+
+[PITFALL: **the dev machine can pass the gate for reasons a consumer does not have, and until
+2026-09-06 nothing anywhere noticed.** Measured that day with the project venv taken off PATH, four
+of the eight gate binaries — `dprint`, `shellcheck`, `shfmt`, `actionlint` — still resolved from
+`~/.local/bin`, installed there machine-wide by a sibling repo. So `configs.require_tool`, the
+preflight written for exactly the drift where a consumer's `dependency-groups.dev` falls behind the
+manifest, **cannot fire for those four on the machine where the code is written** — and `actionlint`
+is the tool whose missing entry caused the incident it was written for. The absence check in this
+module's `synced_repo` fixture is the load-bearing half for that reason: without it the gate run
+would pass just as happily on a machine that had the tools all along, which is the state being
+guarded against. `require_tool` now also warns when a binary resolves from outside the project, so
+the state is at least visible where it is created — see [`quality-gate.md`](quality-gate.md).]
+
+It is also the only place dprint's plugin fetch runs cold. Those five plugins are remote `.wasm`
+URLs cached under `~/.cache/dprint`, and the dev machine's cache predates the gate that uses them —
+so this container, whose cache starts empty, is what would notice a bad `@<sha256>` in the shipped
+`dprint.json`.
+
 ### Fixture scope: one container per module, disjoint mutations within one
 
 `clean_os_container` is module-scoped, which means one fresh container _per test module_ — the
