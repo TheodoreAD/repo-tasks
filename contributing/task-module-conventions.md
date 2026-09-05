@@ -256,6 +256,37 @@ files, and querying remote tags. Those use `hide=True` (plus `warn=True` where a
 normal answer) and are not echoed, because echoing plumbing the caller didn't ask for is noise. The
 rule is about actions, not about every subprocess.
 
+## A task may not run anything that waits for typed input through `c.run`
+
+A command that prompts — `docker login`, `helm registry login`, anything reading `/dev/tty` — goes
+through `interactive.run_interactive`, a plain subprocess inheriting the real terminal. Never
+`c.run(...)`, and **never `c.run(..., pty=True)`**, which is the shape that looks right.
+
+[PITFALL: `pty=True` hides one bug and not the other. Without a pty, invoke echoes stdin itself and
+races the child for every keystroke, so the password is printed and the child re-prompts; a pty
+fixes that. On Python 3.14 invoke's stdin thread dies on the first keystroke — a 2-byte buffer
+handed to `fcntl.ioctl(FIONREAD)` for a 4-byte result, which 3.14 hardened into `SystemError` — so
+nothing reaches the child, pty or not, and the prompt hangs forever with no output. Upstream
+pyinvoke/invoke#1070, unreleased as of invoke 3.0.3. Both were reproduced in a container across
+3.10–3.14 (the `invoke-task-conventions` skill has the matrix). This package is a uv tool on the
+family's default interpreter, 3.14, so the hang was the shipped behaviour of both `login` tasks from
+2026-08-30 to 2026-09-05.]
+
+[DECISION: step out of invoke's way rather than accommodate the prompt. `--password-stdin` with a
+token from the environment was the other candidate and was rejected because it makes this package
+handle the credential — read it, hold it, pipe it — which both `login` docstrings refuse on purpose:
+the tool prompts and the tool stores, and the only thing automated is the registry host. A
+subprocess with inherited stdio is exactly what typing the command at the shell does, so echo
+suppression is the child's own business and nothing races it.]
+
+[PITFALL: the unit tests asserted `c.run(..., pty=True)` verbatim and passed throughout — a mock's
+call shape cannot see a runtime hang. They now assert the `run_interactive` call the same way and
+have the same blind spot; the oracle for "a login actually completes" is a real terminal, which
+`power-user-linux-setup`'s `tests/containers/` is the only place in the family that has.]
+
+Audit for it with `rg 'pty=True'`; the shape is most common around credential prompts, which is
+exactly where a hang is least welcome.
+
 ## Configuration lives in its own file
 
 Each tool gets its own dedicated config file rather than being consolidated into `pyproject.toml` —
