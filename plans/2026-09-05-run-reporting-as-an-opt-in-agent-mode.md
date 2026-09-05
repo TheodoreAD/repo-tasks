@@ -7,6 +7,17 @@ updated: 2026-09-05
 
 ## Context
 
+**This supersedes layer 2 of a four-layer design in another repo, which was not known to this
+session while it worked.** `agent-skills`' `plans/2026-09-05-a-piped-gate-that-cannot-lie.md`
+(`status: planned`) specifies fold-by-default with a flag to restore streaming, and records the
+landed `ba9e8e6`..`4c0bd3a` as satisfying it. That parent plan, and
+`2026-09-05-quiet-gate-changes-what-the-instruments-see.md` filed against the same repo, both still
+describe the old mechanism; the correction is filed for them as
+`2026-09-05-layer-2-was-replaced-after-the-parent-plan-recorded-it.md`. Two consequences belong here
+rather than there: the week-later `audit.py --compare` that plan schedules cannot be read until the
+`power-user-linux-setup` export lands, and layer 2's stated "the verdict survives in CI logs"
+property is deliberately dropped by §8's decision — see that filing's open question.
+
 `plans/`-less background: the gate-folding change landed and was pushed on 2026-09-05 (`ba9e8e6`,
 `f532707`). It replaced eleven `c.run(cmd, echo=True)` gate steps with `steps.run_step`, which
 captures output, prints one dotted status line per step, replays on failure and ends the gate with a
