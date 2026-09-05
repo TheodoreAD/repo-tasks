@@ -1,8 +1,8 @@
 """Publishing an existing tag as a GitHub Release.
 
 Deliberately model-agnostic: a release is a repo-level event, not a property of whichever branching
-model produced the tag. `gitflow.release-finalize` tags `main` after a PR merges and `trunkflow.cut`
-tags `main` directly — either can be published from here, and a third model added later needs
+model produced the tag. `gitflow.release-finalize` tags the trunk after a PR merges and
+`trunkflow.cut` tags it directly — either can be published from here, and a third model added later needs
 nothing new. That is why this is its own module rather than a task inside one of the flows, and why
 it is not in `dist`, whose scope is Python distributions (a Release may reference a wheel, an image,
 a chart, or no artifact at all).
@@ -14,6 +14,7 @@ tag can sit unpublished indefinitely and be released later by naming it.
 
 from invoke import Context, task
 
+from .projects import trunk_branch
 from .requirements import GH, NETWORK, requires
 
 
@@ -71,10 +72,10 @@ def _require_tag_on_branch(c: Context, tag: str, branch: str):
 @task(
     help={
         "tag": "Tag to push (default: the most recent tag reachable from HEAD)",
-        "branch": "The branch the tag must sit on, pushed alongside it (default: main)",
+        "branch": "The branch the tag must sit on, pushed alongside it (default: this repo's trunk)",
     }
 )
-def push_tag(c: Context, tag: str | None = None, branch: str = "main"):
+def push_tag(c: Context, tag: str | None = None, branch: str | None = None):
     """Push a local tag, and the branch carrying it, to origin.
 
     **This is the release gate**, and it is a task of its own for that reason. Across this ecosystem
@@ -87,6 +88,7 @@ def push_tag(c: Context, tag: str | None = None, branch: str = "main"):
     a commit reachable only from a tag.
     """
     tag = tag or _latest_tag(c)
+    branch = branch or trunk_branch()
     if not c.run(f"git rev-parse --verify --quiet refs/tags/{tag}", hide=True, warn=True).ok:
         raise ValueError(f"tag {tag} does not exist locally — `inv trunkflow.cut` creates one")
     if c.run(f"git ls-remote --exit-code --tags origin refs/tags/{tag}", hide=True, warn=True).ok:

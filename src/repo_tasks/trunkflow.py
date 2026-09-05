@@ -19,6 +19,7 @@ gitflow.
 
 from invoke import Context, task
 
+from .projects import trunk_branch
 from .requirements import NETWORK, requires
 
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
@@ -57,12 +58,12 @@ def _require_in_sync(c: Context, branch: str):
 @task(
     help={
         "bump": "Version part to bump: major, minor or patch",
-        "branch": "The trunk to release from (default: main)",
+        "branch": "The trunk to release from (default: this repo's trunk)",
         "group": "Version group to bump (default: the repo's own root project)",
         "push": "Push the branch and tag as well. Off by default -- see the docstring",
     }
 )
-def cut(c: Context, bump: str = "minor", branch: str = "main", group: str | None = None, push: bool = False):
+def cut(c: Context, bump: str = "minor", branch: str | None = None, group: str | None = None, push: bool = False):
     """Bump the version on the trunk and tag it, locally.
 
     Straight to a final version — no release candidate, since this model has no branch to stabilise
@@ -78,6 +79,7 @@ def cut(c: Context, bump: str = "minor", branch: str = "main", group: str | None
     when anything a consumer inherits changed, patch when it did not. See
     contributing/release-flow.md.
     """
+    branch = branch or trunk_branch()
     current = _current_branch(c)
     if current != branch:
         raise ValueError(f"on {current}, not {branch} — check out {branch} first, or pass --branch")

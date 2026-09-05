@@ -65,6 +65,45 @@ def _load_toml(path: Path) -> dict[str, object]:
         return cast(dict[str, object], tomllib.load(f))
 
 
+# The branch names every git-flow-shaped task assumed as literals until 2026-09-06. `main`/`develop`
+# stay the defaults — they are this family's convention and no consumer following it has to write
+# anything — but they are now one answer read from one place instead of ~25 string literals across
+# four modules, so a repo on a different trunk has something to set.
+_DEFAULT_TRUNK = "main"
+_DEFAULT_DEVELOP = "develop"
+
+
+def _branch_setting(key: str, default: str, root: Path) -> str:
+    config = root / _REPO_TASKS_TOML
+    if not config.is_file():
+        return default
+    branches = _load_toml(config).get("branches")
+    if not isinstance(branches, dict):
+        return default
+    value = cast(dict[str, object], branches).get(key)
+    return value if isinstance(value, str) and value else default
+
+
+def trunk_branch(root: Path = _CWD) -> str:
+    """The branch releases land on and hotfixes come off — `repo-tasks.toml`'s `[branches] trunk`,
+    else `main`.
+
+    Read rather than hardcoded because a repo on `master` could not use `gitflow` at all: its tasks
+    had `main` written into `_start`, `_pr_finish`, `_finalize` and the merged-PR check with no flag
+    to override, so `hotfix_start` branched off a branch that does not exist there. `ci.status`,
+    `trunkflow.cut` and `release.push_tag` each took a `--branch` defaulting to `main`, which worked
+    but had to be typed on every single call — recorded as a per-consumer ergonomic on
+    `power-user-linux-setup`, which is on `master`. Both are the same missing setting."""
+    return _branch_setting("trunk", _DEFAULT_TRUNK, root)
+
+
+def develop_branch(root: Path = _CWD) -> str:
+    """The integration branch features come off and releases merge back into — `repo-tasks.toml`'s
+    `[branches] develop`, else `develop`. Only `gitflow` uses it; `trunkflow` has no such branch by
+    definition."""
+    return _branch_setting("develop", _DEFAULT_DEVELOP, root)
+
+
 def python_floor(root: Path = _CWD) -> str | None:
     """The `major.minor` a project declares as its lowest supported Python, or None when it declares
     no `requires-python` at all.

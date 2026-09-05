@@ -585,3 +585,23 @@ def test_support_hotfix_raises_for_a_different_support_lines_branch():
     c = MockContext(run=_rev_parse("support-hotfix/1.5.x/0.1.1"))
     with pytest.raises(ValueError, match=re.escape("support-hotfix/1.4.x/")):
         gitflow.support_hotfix_finish.body(c, support="1.4.x")
+
+
+def test_hotfix_start_branches_off_the_configured_trunk(c, monkeypatch):
+    """The finding the setting exists for. On a repo whose trunk is `master` this task used to run
+    `git checkout main` — a ref that does not exist there — with no flag to override, which made the
+    whole gitflow module unusable rather than merely awkward.
+
+    The resolver is stubbed rather than driven from a real `repo-tasks.toml`: reading one needs a
+    `tmp_cwd`, and these version-dependent tasks resolve their branch name from *this* repo's real
+    pyproject.toml (see the module docstring), so moving cwd takes the version away with it.
+    `test_projects.py` owns whether the file parses; this owns whether gitflow asks."""
+    monkeypatch.setattr(gitflow, "trunk_branch", lambda: "master")
+    gitflow.hotfix_start.body(c, bump="patch")
+    assert c.run.call_args_list[0] == (("git checkout master",), {"echo": True})
+
+
+def test_feature_start_branches_off_the_configured_development_branch(c, monkeypatch):
+    monkeypatch.setattr(gitflow, "develop_branch", lambda: "integration")
+    gitflow.feature_start.body(c, name="foo")
+    assert c.run.call_args_list[0] == (("git checkout -b feature/foo integration",), {"echo": True})

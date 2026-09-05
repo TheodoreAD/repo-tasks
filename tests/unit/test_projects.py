@@ -219,3 +219,48 @@ def test_python_floor_is_none_without_a_requires_python(tmp_cwd):
 
 def test_python_floor_is_none_without_a_pyproject(tmp_cwd):
     assert projects.python_floor(tmp_cwd) is None
+
+
+# ---------------------------------------------------------------------------
+# trunk_branch / develop_branch
+# ---------------------------------------------------------------------------
+
+
+def test_branches_default_to_main_and_develop_without_any_config(tmp_cwd):
+    """The family convention, and what every consumer following it gets for free — the point of the
+    setting is that a repo on a different trunk has something to write, not that everyone must."""
+    assert projects.trunk_branch() == "main"
+    assert projects.develop_branch() == "develop"
+
+
+def test_branches_come_from_repo_tasks_toml(tmp_cwd):
+    """The case that could not be expressed at all until 2026-09-06: gitflow had `main` as ~20
+    string literals, so a repo on `master` had `hotfix_start` branching off a ref that does not
+    exist there and no flag to say so."""
+    (tmp_cwd / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\ndevelop = "integration"\n')
+    assert projects.trunk_branch() == "master"
+    assert projects.develop_branch() == "integration"
+
+
+def test_one_branch_can_be_set_without_the_other(tmp_cwd):
+    (tmp_cwd / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\n')
+    assert projects.trunk_branch() == "master"
+    assert projects.develop_branch() == "develop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '[[docker]]\nname = "x"\npath = "."\nimage = "i"\ngroup = "g"\n',  # a real config, no [branches]
+        "branches = 1\n",  # the key present but not a table
+        "[branches]\ntrunk = 3\n",  # present, wrong type
+        '[branches]\ntrunk = ""\n',  # present, empty — a branch name that cannot be checked out
+    ],
+    ids=["absent", "not-a-table", "wrong-type", "empty"],
+)
+def test_a_config_that_says_nothing_usable_falls_back(tmp_cwd, body):
+    """Falling back beats raising: `repo-tasks.toml` is read by every git-flow-shaped task, so a
+    malformed `[branches]` would take out release, hotfix and feature flows at once for a typo in a
+    section none of them requires."""
+    (tmp_cwd / "repo-tasks.toml").write_text(body)
+    assert projects.trunk_branch() == "main"

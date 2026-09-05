@@ -1,7 +1,7 @@
 """Raw git plumbing implementing nvie's gitflow branch-naming and merge-back conventions.
 
 PR mode (the default) is primary: every merge-back goes through a GitHub pull request via the `gh`
-CLI, since a real team repo protects main/develop with required reviews/CI and a direct git
+CLI, since a real team repo protects the trunk and development branch with required reviews/CI and a direct git
 push/merge just gets rejected. Local mode (`local=True`) keeps the old direct-merge-and-push
 behavior available for a single-person repo, trunk-based development, or fast local testing — no
 `gh`, no network, no waiting on a human reviewer.
@@ -10,16 +10,25 @@ release/hotfix branches are cut *before* the version is bumped — the branch ex
 and the bump commit lands on the branch itself — matching nvie's actual sequence from "A successful
 Git branching model", not bump-the-base-then-branch.
 
-A PR can't merge synchronously, so PR-mode finish is two steps: `*_finish` opens the PR (into main)
-and stops — no tag, no develop merge yet. `*_finalize`, run once a human has actually merged that PR
-on GitHub, fetches main, tags it, and opens a second PR carrying the release/hotfix into develop —
-or, per nvie, into any release branch that's still open, if this is a hotfix.
+A PR can't merge synchronously, so PR-mode finish is two steps: `*_finish` opens the PR (into the
+trunk) and stops — no tag, no merge back yet. `*_finalize`, run once a human has actually merged
+that PR on GitHub, fetches the trunk, tags it, and opens a second PR carrying the release/hotfix
+into the development branch — or, per nvie, into any release branch that's still open, if this is a
+hotfix.
+
+**"The trunk" and "the development branch" are `main` and `develop` unless the repo says otherwise**
+— `repo-tasks.toml`'s `[branches] trunk` / `develop`, resolved by `projects.trunk_branch` and
+`projects.develop_branch`. Until 2026-09-06 both were string literals here, roughly twenty of them,
+which made this whole module unusable in a repo on `master`: `hotfix_start` branched off a ref that
+does not exist there, and there was no flag to say so. Prose below says "the trunk" for the same
+reason — a reader on `master` should not have to translate.
 
 Every command that stops short of "the whole flow is done" — a PR was opened, a guard clause
 tripped — prints exactly what to run next, so nobody has to read this file to find out."""
 
 from invoke import Context, task
 
+from .projects import develop_branch, trunk_branch
 from .requirements import GH, NETWORK, requires
 from .version import Version, current_version, next_version
 
@@ -87,8 +96,9 @@ def _require_tag_absent(c: Context, tag: str):
 
 @task
 def feature_start(c: Context, name: str):
-    """Branch feature/<name> off develop."""
-    c.run(f"git checkout -b feature/{name} develop", echo=True)
+    """Branch feature/<name> off the development branch (`develop` unless `repo-tasks.toml`'s
+    `[branches] develop` says otherwise)."""
+    c.run(f"git checkout -b feature/{name} {develop_branch()}", echo=True)
     _next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
 
 
@@ -99,13 +109,14 @@ def feature_finish(c: Context, name: str, local: bool = False):
     directly — a protected develop branch rejects a direct push. --local keeps the old
     direct-merge-and-delete behavior, for a single-person repo or fast local testing."""
     branch = f"feature/{name}"
+    develop = develop_branch()
     if local:
-        c.run("git checkout develop", echo=True)
+        c.run(f"git checkout {develop}", echo=True)
         c.run(f"git merge --no-ff {branch}", echo=True)
         c.run(f"git branch -d {branch}", echo=True)
         return
 
-    url = _open_pr(c, branch, "develop", f"Feature: {name}", f"Merging {branch} into develop.")
+    url = _open_pr(c, branch, develop, f"Feature: {name}", f"Merging {branch} into {develop}.")
     _next_steps(
         f"PR opened: {url}",
         "Once it's approved and merged on GitHub, there's nothing else to run — this feature is done.",
@@ -134,7 +145,7 @@ def release_start(c: Context, bump: str, group: str | None = None):
     """Branch release/<version> off develop, then bump the version on the release branch to its
     first release candidate (`X.Y.0rc1`, no tag yet). `release-candidate` tags candidates from
     there; `release-finish` drops the rc when the release ships."""
-    branch = _start(c, "release", "develop", bump, group, rc=True)
+    branch = _start(c, "release", develop_branch(), bump, group, rc=True)
     _next_steps(
         f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)",
         f"When ready to ship: inv gitflow.release-finish (from the {branch} branch)",
@@ -149,10 +160,10 @@ def release_start(c: Context, bump: str, group: str | None = None):
     }
 )
 def hotfix_start(c: Context, bump: str, group: str | None = None, rc: bool = False):
-    """Branch hotfix/<version> off main, then bump the version on the hotfix branch (no tag
+    """Branch hotfix/<version> off the trunk, then bump the version on the hotfix branch (no tag
     yet). Straight to the final version by default — a hotfix ships as soon as it is reviewed;
     --rc opts into the same candidate cycle a release gets."""
-    branch = _start(c, "hotfix", "main", bump, group, rc=rc)
+    branch = _start(c, "hotfix", trunk_branch(), bump, group, rc=rc)
     steps = [f"When ready to ship: inv gitflow.hotfix-finish (from the {branch} branch)"]
     if rc:
         steps.insert(0, f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)")
@@ -190,7 +201,7 @@ def release_candidate(c: Context, group: str | None = None):
 
 
 def _drop_rc(c: Context, group: str | None):
-    """Bump a release candidate to its final version before the branch merges into main — the
+    """Bump a release candidate to its final version before the branch merges into the trunk — the
     version main receives is the one the branch was named after. A branch that never had an rc
     (a hotfix by default) has nothing to drop."""
     if Version.parse(current_version(c, group=group)).rc is not None:
@@ -207,12 +218,13 @@ def _local_finish(c: Context, kind: str, push: bool, group: str | None):
         )
     tag = f"v{branch.removeprefix(prefix)}"
     _drop_rc(c, group)
+    trunk = trunk_branch()
 
-    c.run("git checkout main", echo=True)
+    c.run(f"git checkout {trunk}", echo=True)
     c.run(f"git merge --no-ff {branch}", echo=True)
     c.run(f"git tag {tag}", echo=True)
 
-    merge_back = "develop"
+    merge_back = develop_branch()
     if kind == "hotfix":
         release_branch = _open_release_branch(c)
         if release_branch is not None:
@@ -223,7 +235,7 @@ def _local_finish(c: Context, kind: str, push: bool, group: str | None):
     c.run(f"git branch -d {branch}", echo=True)
 
     if push:
-        c.run(f"git push origin main {merge_back}", echo=True)
+        c.run(f"git push origin {trunk} {merge_back}", echo=True)
         c.run(f"git push origin {tag}", echo=True)
 
 
@@ -237,7 +249,8 @@ def _pr_finish(c: Context, kind: str, group: str | None):
         )
     version = branch.removeprefix(prefix)
     _drop_rc(c, group)
-    url = _open_pr(c, branch, "main", f"{kind.capitalize()} {version}", f"Merging {branch} into main.")
+    trunk = trunk_branch()
+    url = _open_pr(c, branch, trunk, f"{kind.capitalize()} {version}", f"Merging {branch} into {trunk}.")
     _next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, run: inv gitflow.{kind}-finalize (from the {branch} branch)",
@@ -255,7 +268,7 @@ _FINISH_HELP = {
 @task(help=_FINISH_HELP)
 def release_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
     """Drop the release candidate (`X.Y.0rcN` → `X.Y.0`, one more commit on the branch), then —
-    PR mode (default) — open a PR merging the release branch into main and stop; run
+    PR mode (default) — open a PR merging the release branch into the trunk and stop; run
     release_finalize once it's merged. --local does the old direct merge+tag+develop-merge+delete
     in one step; push (--local only) additionally pushes branches + tag to the remote."""
     if local:
@@ -268,7 +281,7 @@ def release_finish(c: Context, push: bool = False, local: bool = False, group: s
 @task(help=_FINISH_HELP)
 def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: str | None = None):
     """Drop the release candidate if the hotfix ran one (`--rc`), then — PR mode (default) — open
-    a PR merging the hotfix branch into main and stop; run hotfix_finalize once it's merged.
+    a PR merging the hotfix branch into the trunk and stop; run hotfix_finalize once it's merged.
     --local does the old direct merge+tag+develop-or-release-merge+delete in one step; push
     (--local only) additionally pushes branches + tag to the remote."""
     if local:
@@ -286,15 +299,16 @@ def _finalize(c: Context, kind: str):
             "just merged, then re-run this"
         )
     tag = f"v{branch.removeprefix(prefix)}"
+    trunk = trunk_branch()
 
-    _require_merged_pr(c, branch, "main")
-    c.run("git fetch origin main", echo=True)
-    c.run("git checkout main", echo=True)
-    c.run("git merge --ff-only origin/main", echo=True)
+    _require_merged_pr(c, branch, trunk)
+    c.run(f"git fetch origin {trunk}", echo=True)
+    c.run(f"git checkout {trunk}", echo=True)
+    c.run(f"git merge --ff-only origin/{trunk}", echo=True)
     c.run(f"git tag {tag}", echo=True)
     c.run(f"git push origin {tag}", echo=True)
 
-    target = "develop"
+    target = develop_branch()
     if kind == "hotfix":
         release_branch = _open_release_branch(c)
         if release_branch is not None:
@@ -302,7 +316,7 @@ def _finalize(c: Context, kind: str):
 
     sync_branch = f"sync/{tag}"
     c.run(f"git checkout -b {sync_branch}", echo=True)
-    url = _open_pr(c, sync_branch, target, f"Sync {tag} into {target}", f"Merging {tag} (main) into {target}.")
+    url = _open_pr(c, sync_branch, target, f"Sync {tag} into {target}", f"Merging {tag} ({trunk}) into {target}.")
     _next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, the {kind} is fully finished — nothing else to run.",

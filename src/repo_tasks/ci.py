@@ -16,7 +16,7 @@ from typing import TypedDict, cast
 from invoke import Context, Exit, task
 
 from .configs import require_tool
-from .projects import tracked_files
+from .projects import tracked_files, trunk_branch
 from .requirements import GH, NETWORK, requires
 
 # A run whose conclusion is one of these is a failure worth stopping for. `cancelled` is not: it is
@@ -118,11 +118,11 @@ def _describe(run: Run) -> str:
 @requires(GH, NETWORK)
 @task(
     help={
-        "branch": "Branch to report on (default: main)",
+        "branch": "Branch to report on (default: this repo's trunk)",
         "limit": "How many recent runs to list (default: 10)",
     }
 )
-def status(c: Context, branch: str = "main", limit: int = 10):
+def status(c: Context, branch: str | None = None, limit: int = 10):
     """Report recent GitHub Actions runs for a branch, and stop if the latest one failed.
 
     Needs network and an authenticated `gh` — never part of `quality.check`, which stays offline.
@@ -136,6 +136,7 @@ def status(c: Context, branch: str = "main", limit: int = 10):
     notice lives — the one signal a green conclusion hides. Those report only; nothing here stops
     on an annotation."""
     require_tool("gh")
+    branch = branch or trunk_branch()
     result = c.run(f"gh run list --branch {branch} --limit {limit} --json {_FIELDS}", echo=True, warn=True, hide=True)
     if not result.ok:
         raise Exit(f"[ci.status] gh run list failed: {result.stderr.strip()}", code=result.exited)
