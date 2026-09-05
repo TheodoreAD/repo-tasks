@@ -47,6 +47,23 @@ FAIL | ruff check . | exit=1 (output above)
 
 `runner.py` owns the shape and carries the short form of every decision below.
 
+### Turning it on in a consumer
+
+**The variable is not the whole switch.** A consumer whose `tasks.py` is `from repo_tasks import ns`
+needs nothing — that collection is configured at import. **A consumer that hand-builds its own root
+`Collection`** — which is what `scaffoldapy`'s template generates — has to say so on that object:
+
+```python
+from repo_tasks import runner
+
+runner.configure(namespace)  # no-op unless REPO_TASKS_RUN_REPORT is set
+```
+
+Without it the export does nothing there, and **nothing says so**: the variable is set,
+`runner.enabled()` is true, and the gate prints stock invoke output with no warning, no probe, and
+no way to tell "unset" from "set and unreachable" by looking at it. Add the call in the same sweep
+that bumps the pin ([`consumer-sweep.md`](consumer-sweep.md)).
+
 [DECISION: **stock invoke is the default; report mode is opt-in through the environment** — the
 user's call, 2026-09-05, on the rule of least surprise, replacing a fold-by-default design landed
 hours earlier the same day. That design changed what every consumer saw on upgrade having asked for
@@ -134,9 +151,23 @@ That is the price of the zero-call-site-churn property, and it is not fully miti
 
 [PITFALL: a consumer that hand-builds its own `Collection` from individual modules instead of
 `from repo_tasks import ns` never receives the `ns.configure` call, so report mode does nothing for
-it, with no error. Declare `{"runners": {"local": ReportingLocal}}` on your own root collection.
-Reaching those consumers would mean patching `Config.global_defaults`, which is the unsupported
-monkeypatch this design avoids.]
+it, with no error — see "Turning it on in a consumer" above. Reaching those consumers without their
+cooperation would mean patching `Config.global_defaults`, which is the unsupported monkeypatch this
+design avoids, so `runner.configure` gives the line a name rather than closing the gap.]
+
+[DECISION: `runner.configure(namespace)` rather than a documented `{"runners": {"local": ...}}`
+one-liner, chosen 2026-09-06 after a consumer was found silently on stock invoke with the variable
+exported. One call owns both the `enabled()` check and the config key, so no consumer re-derives
+either and a later change to the mechanism does not need every consumer edited. Rejected alongside
+it: printing a warning when the variable is set and the runner is unconfigured — a detectable state,
+but a warning on every gate run of every repo that has not opted in is worse than the silence. It
+stays available as an addition to an existing diagnostic if the silence bites twice.]
+
+[PITFALL: the naive spelling can fail a consumer's own type check, which is a second reason the call
+exists. `power-user-linux-setup` imports `repo_tasks` through an optional-import helper returning
+Nones-or-modules; that return widens to `Any` under `basedpyright`, so reading `runner.enabled` and
+`runner.ReportingLocal` off it fails that repo's gate. A single `configure(namespace)` imported
+directly is the shape that type-checks.]
 
 [PITFALL: `pipefail` in the agent shell (landed the same day, in `power-user-linux-setup`) is what
 makes `inv quality.check 2>&1 | tail -3` exit 1 on a red run; report mode is what makes those three

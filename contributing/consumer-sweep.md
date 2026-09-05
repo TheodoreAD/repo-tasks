@@ -73,6 +73,12 @@ In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `i
 (~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
 pitfall below.
 
+One-time per consumer, and the easiest thing in this file to miss because nothing anywhere reports
+it: a consumer that hand-builds its own root `Collection` instead of importing `ns` needs
+`runner.configure(namespace)` in its `tasks.py`, or report mode does nothing there however the
+environment is set — [`quality-gate.md`](quality-gate.md), "Turning it on in a consumer".
+`rg -n 'runner.configure' tasks/` answers it in one call.
+
 [PITFALL: `configs.pull` prints "pulled" for every file whether or not it wrote anything. Seen live
 2026-08-25: a consumer's installed `repo_tasks` was still the pre-change commit, so the first pull
 "pulled" the old config unchanged and looked successful. `inv repo-tasks.update` genuinely first,

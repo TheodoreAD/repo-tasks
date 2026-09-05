@@ -52,8 +52,10 @@ ran, except a step that would involve a secret (none here do). Output is invoke'
 setting `REPO_TASKS_RUN_REPORT` collapses each echoed command to one line
 (`basedpyright | ok | 2.5s | 0 errors, 0 warnings, 0 notes`), folds its output on success, replays
 it whole on failure, and ends a gate with a verdict — for agent sessions, which read a summary
-better than a scrollback. `shell_check`/`shell_format_*` no-op cleanly on a repo with zero `*.sh`
-files, `workflow_check` (actionlint + zizmor) on one with no `.github/workflows`, and
+better than a scrollback. A consumer whose `tasks.py` builds its own root `Collection` rather than
+importing `ns` calls `runner.configure(namespace)` to get that, since the variable alone reaches
+only this package's own collection. `shell_check`/`shell_format_*` no-op cleanly on a repo with zero
+`*.sh` files, `workflow_check` (actionlint + zizmor) on one with no `.github/workflows`, and
 `dockerfile_check` (hadolint) on one with no Dockerfiles, so they're safe to run unconditionally —
 no per-repo opt-out needed.
 
