@@ -237,9 +237,14 @@ def check(c: Context):
 
     Lock drift (`deps.check`) is gated here for the same reason: CI covered it only by accident,
     through `bootstrap.sh`'s `uv sync --locked`, so a pyproject.toml edit without a re-lock passed
-    locally and failed in CI. Every step here stays deterministic and offline — `deps.audit`, whose
-    answer moves with the OSV database rather than with the code, is deliberately not in this
-    chain.
+    locally and failed in CI. Every step here stays deterministic — `deps.audit`, whose answer moves
+    with the OSV database rather than with the code, is deliberately not in this chain.
+
+    Offline holds for every step but the first `dprint` run on a given machine: its formatting
+    plugins are remote `.wasm` URLs fetched once into `~/.cache/dprint` and read from there
+    afterwards, so a cold cache needs the network and a warm one does not. CI is a fresh machine
+    every run, so CI is always the cold case. The URLs carry `@<sha256>` checksums, which dprint
+    enforces, so what arrives is pinned even though it arrives over the wire.
 
     "No changes written" is literal and load-bearing: this half is safe to run concurrently, on a
     read-only checkout, and twice with the same answer. `docs.build` is deliberately **not** here

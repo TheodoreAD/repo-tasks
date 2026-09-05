@@ -14,6 +14,25 @@ The two rules that decide in-or-out are in
 — the chain stays deterministic and offline, and anything outside it declares what it needs. What
 follows is how each tool falls out of them.
 
+[PITFALL: **"offline" has exactly one exception, and it is invisible on a machine that has already
+run `dprint`.** `dprint.json`'s five formatting plugins are remote `.wasm` URLs, fetched once into
+`~/.cache/dprint` and read from there ever after — so the first run on any machine needs the
+network, and every run after it does not. **CI is a fresh machine every run, so CI is always the
+cold case**: measured 2026-09-06, a cold `DPRINT_CACHE_DIR` pulls 14 MB from `plugins.dprint.dev`
+before the gate can format anything. This went unnoticed here because this machine's dprint cache
+predates the gate itself, so the cold path had never once been exercised where the code is written.
+Two consequences worth stating rather than rediscovering: a `plugins.dprint.dev` outage turns every
+consumer's CI red on a step documented as offline, and whatever that host serves is what formats
+every consumer's code — which is why the URLs carry `@<sha256>` (see below).]
+
+[DECISION: pin each plugin with dprint's own `@<sha256>` suffix rather than vendoring the `.wasm`
+files into this package. Vendoring would make the step genuinely offline, and costs 14 MB in a wheel
+every consumer installs plus a manual re-vendor on every plugin bump — too much for a step that
+needs the network once per machine. The checksum buys the half that actually matters: what arrives
+is pinned even though it arrives over the wire. It is enforced, not decorative — verified 2026-09-06
+that a wrong checksum fails with "Invalid checksum specified in configuration file" and exit 12
+rather than being ignored. Recompute with `curl -sL <url> | sha256sum` when bumping a plugin.]
+
 Everything in `check` ships to every consumer through `repo-tasks-quality`, so each addition is a
 dependency added to `power-user-linux-setup`, `scaffoldapy`, and every generated repo — see
 [`consumer-sweep.md`](consumer-sweep.md).
