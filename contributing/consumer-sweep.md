@@ -54,6 +54,11 @@ inv repo-tasks.update       # move the global uv tool install forward to what yo
 Then in each consumer's own checkout:
 
 ```shell
+# Only where this consumer pins repo-tasks in its own uv.lock — and genuinely first, above
+# configs.diff, because everything below reads the installed package (see the pitfall below).
+inv deps.lock --package repo-tasks
+inv venv.sync               # or plain `uv sync` where the consumer publishes no `venv` collection
+
 repo-tasks configs.diff     # what this consumer has drifted from — both configs and dev group
 repo-tasks configs.ensure-deps
 inv deps.lock               # re-resolve uv.lock; review the diff
@@ -62,12 +67,12 @@ inv configs.pull
 inv quality.precommit       # the gate, against the new tool and the new configs
 ```
 
-`configs.diff` is first for a reason: it reports both halves of the drift (stale config files _and_
-`dependency-groups.dev` entries the manifest has grown), so it tells you which of the four steps
-between it and the gate this particular consumer actually needs — often none, when the change was to
-task code rather than to the manifest or the shipped configs. Run the gate regardless; that is what
-says the new tool works here. `ensure-deps` is additive and idempotent — it never touches an entry
-already present — so running it when nothing is missing costs nothing.
+`configs.diff` is first _of the reading steps_ for a reason: it reports both halves of the drift
+(stale config files _and_ `dependency-groups.dev` entries the manifest has grown), so it tells you
+which of the four steps between it and the gate this particular consumer actually needs — often
+none, when the change was to task code rather than to the manifest or the shipped configs. Run the
+gate regardless; that is what says the new tool works here. `ensure-deps` is additive and idempotent
+— it never touches an entry already present — so running it when nothing is missing costs nothing.
 
 In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `inv test.integration`
 (~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
@@ -89,7 +94,13 @@ and `configs.diff` to confirm, or the sweep silently does nothing.]
 `repo_tasks` out of that repo's `.venv`, not out of the global tool, so the pull writes the old
 configs while reporting success in exactly the shape above. Hit again 2026-08-27, one day after the
 pitfall it repeats. `uv lock --upgrade-package repo-tasks` and re-sync before pulling;
-`configs.diff` listing a file you know changed is the tell.]
+`configs.diff` listing a file you know changed is the tell.
+
+**Its worse form is a `configs.diff` that reads clean, and that is why the bump is in the command
+list above rather than only here.** Hit 2026-09-05 sweeping that consumer: with `diff` run first, it
+reports drift against the _old_ shipped configs, `pull` then writes those, and a second `diff` after
+the bump reports the same thing — an identical report on both sides of the bump, which reads as "the
+bump changed nothing" rather than as "nothing has been measured yet".]
 
 ## What the sweep actually costs
 
