@@ -257,6 +257,43 @@ def test_require_tool_exits_naming_the_distribution_and_the_fix(monkeypatch, cap
     assert "inv deps.lock" in out
 
 
+def test_require_tool_warns_when_the_binary_is_present_but_undeclared(monkeypatch, capsys):
+    """The masking the warning exists for: on a workstation with the tool installed user-wide,
+    `which` finds it, the preflight cannot fire, and the gate passes here while CI — which has only
+    the project's own environment — fails. Measured on the dev machine 2026-09-06: four of the eight
+    gate binaries resolved from ~/.local/bin with the venv off PATH."""
+    monkeypatch.setattr(shutil, "which", lambda name: f"/home/dev/.local/bin/{name}")
+    monkeypatch.setattr(configs, "_missing_quality_deps", lambda: ["actionlint-py"])
+    configs.require_tool("actionlint")  # a warning, never a raise — see _warn_if_undeclared
+    out = capsys.readouterr().out
+    assert "/home/dev/.local/bin/actionlint" in out, "name where it actually resolved from"
+    assert "actionlint-py" in out, "the entry to add, which the binary name does not give you"
+    assert "fail in CI" in out
+    assert "configs.ensure-deps" in out
+
+
+def test_require_tool_warns_against_a_real_stale_pyproject(tmp_path, monkeypatch, capsys):
+    """The same path with nothing about the drift stubbed — a real consumer pyproject whose dev
+    group predates the manifest entry, read by the real `_missing_quality_deps`. The stubbed test
+    above proves the message; this one proves the two halves are actually wired together."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "stale-consumer"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = ["ruff"]\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/home/dev/.local/bin/{name}")
+    configs.require_tool("actionlint")
+    assert "actionlint-py" in capsys.readouterr().out
+
+
+def test_require_tool_stays_silent_when_the_binary_is_present_and_declared(monkeypatch, capsys):
+    """The ordinary case, pinned explicitly rather than relying on this repo's own pyproject being
+    complete — which is what makes the silence above meaningful."""
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(configs, "_missing_quality_deps", list)
+    configs.require_tool("actionlint")
+    assert capsys.readouterr().out == ""
+
+
 def test_ensure_deps_creates_pyproject_when_missing(tmp_path, monkeypatch):
     project_dir = tmp_path / "some-repo"
     project_dir.mkdir()

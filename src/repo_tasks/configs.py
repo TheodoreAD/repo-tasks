@@ -221,6 +221,36 @@ _DEV_GROUP_FIX = (
 )
 
 
+def _warn_if_undeclared(tool: str) -> None:
+    """Say so when a gate binary runs only because it is on PATH from outside this project.
+
+    `require_tool` asks `shutil.which`, which answers "can I run this here" — and that is a
+    different question from "will CI be able to run it", which is the one the drift actually
+    breaks. The two diverge on exactly one kind of machine: a developer workstation with the tools
+    installed user-wide. Measured on this package's own 2026-09-06, with the project venv taken off
+    PATH, four of the eight gate binaries — `dprint`, `shellcheck`, `shfmt`, `actionlint` — still
+    resolved from `~/.local/bin`, so the preflight below could not fire for any of them however
+    stale a consumer's dev group was. `actionlint` is in that set, and `actionlint` is the tool
+    whose missing entry caused the 2026-08-24 incident the preflight was written for.
+
+    A warning rather than a failure, deliberately. A consumer relying on a system-installed tool
+    instead of the dev group is unusual but not wrong, and turning that into a hard stop would
+    change the gate's verdict for every consumer whose group is behind — a default change with the
+    blast radius the `REPO_TASKS_RUN_REPORT` argument was about. What was actually missing is that
+    nobody could *see* the state; this makes it visible where it is created and leaves the verdict
+    alone. CI has only the venv, so CI still fails the honest way."""
+    distribution = _GATE_TOOL_DISTRIBUTIONS.get(tool, tool)
+    if _bare_name(distribution) not in _missing_quality_deps():
+        return
+    resolved = shutil.which(tool)
+    print(
+        f"[configs] {tool} is running from {resolved}, which is outside this project — "
+        f"dependency-groups.dev does not declare {distribution}. This gate passes here and will "
+        "fail in CI, which has only the project's own environment."
+    )
+    _next_steps(*_DEV_GROUP_FIX)
+
+
 def require_tool(tool: str) -> None:
     """Preflight a gate step's binary, stopping with the command that fixes it instead of leaving
     the caller the shell's bare exit 127.
@@ -230,6 +260,7 @@ def require_tool(tool: str) -> None:
     and CI failed with `actionlint: command not found` on every push for a day with nothing linking
     the message back to the drift that caused it."""
     if shutil.which(tool) is not None:
+        _warn_if_undeclared(tool)
         return
     distribution = _GATE_TOOL_DISTRIBUTIONS.get(tool, tool)
     print(
