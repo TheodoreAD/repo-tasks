@@ -367,3 +367,75 @@ def test_ensure_deps_idempotent_on_second_run(tmp_cwd):
     first = (tmp_cwd / "pyproject.toml").read_text()
     configs.ensure_deps.body(c)
     assert (tmp_cwd / "pyproject.toml").read_text() == first
+
+
+# ---------------------------------------------------------------------------
+# version-constraint drift (the half a bare-name comparison cannot see)
+# ---------------------------------------------------------------------------
+
+
+def _consumer_pyproject(tmp_path, dev_entries: str) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "c"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = [{dev_entries}]\n'
+    )
+
+
+def test_a_bare_name_does_not_carry_the_manifests_constraint(tmp_path, monkeypatch):
+    """The finding this exists for, reproduced: `hadolint-py` gained `!=2.15.1.2` because that
+    release's macOS wheel is a corrupt zip, and a consumer declaring a bare `hadolint-py` was
+    reported up to date — so the fix reached nobody."""
+    _consumer_pyproject(tmp_path, '"hadolint-py"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["hadolint-py!=2.15.1.2"])
+    assert configs._missing_quality_deps() == [], "the name is present — which is exactly the blind spot"
+    assert configs._unconstrained_quality_deps() == ["hadolint-py!=2.15.1.2"]
+
+
+def test_carrying_the_constraint_is_not_drift(tmp_path, monkeypatch):
+    _consumer_pyproject(tmp_path, '"hadolint-py!=2.15.1.2"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["hadolint-py!=2.15.1.2"])
+    assert configs._unconstrained_quality_deps() == []
+
+
+def test_a_consumer_may_pin_tighter_without_drifting_forever(tmp_path, monkeypatch):
+    """Containment, not equality. A consumer that carries the manifest's clauses plus its own is
+    doing nothing wrong, and a check that flagged it every run would be turned off."""
+    _consumer_pyproject(tmp_path, '"hadolint-py>=2.14,!=2.15.1.2"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["hadolint-py!=2.15.1.2"])
+    assert configs._unconstrained_quality_deps() == []
+
+
+def test_whitespace_in_a_retyped_entry_is_not_drift(tmp_path, monkeypatch):
+    """The one difference a human retyping an entry actually introduces."""
+    _consumer_pyproject(tmp_path, '"hadolint-py != 2.15.1.2"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["hadolint-py!=2.15.1.2"])
+    assert configs._unconstrained_quality_deps() == []
+
+
+def test_an_unconstrained_manifest_entry_never_reports_drift(tmp_path, monkeypatch):
+    """Most of the manifest carries no constraint at all, and those must stay a presence check —
+    otherwise every consumer would report drift on every entry."""
+    _consumer_pyproject(tmp_path, '"ruff"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["ruff"])
+    assert configs._unconstrained_quality_deps() == []
+
+
+def test_a_package_not_declared_at_all_is_missing_not_unconstrained(tmp_path, monkeypatch):
+    """The two findings must not double-report: an absent entry is `ensure-deps`' job, and saying
+    it twice would send the reader to a hand edit that ensure-deps is about to make unnecessary."""
+    _consumer_pyproject(tmp_path, '"ruff"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["hadolint-py!=2.15.1.2"])
+    assert configs._missing_quality_deps() == ["hadolint-py"]
+    assert configs._unconstrained_quality_deps() == []
+
+
+def test_version_clauses_ignores_extras_and_markers():
+    assert configs._version_clauses("pkg") == frozenset()
+    assert configs._version_clauses("pkg[extra]>=1.0") == frozenset({">=1.0"})
+    assert configs._version_clauses('pkg>=1.0; python_version < "3.12"') == frozenset({">=1.0"})
+    assert configs._version_clauses("pkg>=1.0,!=1.2") == frozenset({">=1.0", "!=1.2"})

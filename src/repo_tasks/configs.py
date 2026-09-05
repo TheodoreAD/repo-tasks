@@ -161,14 +161,30 @@ def _bare_name(spec: str) -> str:
     return match.group(0).lower() if match else spec.lower()
 
 
-def _declared_dev_names(path: Path) -> set[str]:
-    """Bare package names this project's own `dependency-groups.dev` resolves to, following
+def _version_clauses(spec: str) -> frozenset[str]:
+    """The version clauses of a dependency spec, whitespace-normalised — `{"!=2.15.1.2"}` for
+    `hadolint-py != 2.15.1.2`, and empty for a bare `hadolint-py`.
+
+    Compared as a set of strings rather than resolved with `packaging.SpecifierSet`, which would be
+    the general answer but is not a declared dependency here (only a transitive one) and is not
+    needed: every entry in `repo-tasks-quality` is authored in this repo and spliced into a consumer
+    verbatim by `ensure_deps`, so the strings on both sides are the same strings. Whitespace is
+    normalised because that is the one difference a human retyping an entry actually introduces."""
+    body = spec.split(";", 1)[0]  # an environment marker is not a version constraint
+    body = re.sub(r"\[[^\]]*\]", "", body)  # nor are extras
+    match = _BARE_NAME_RE.match(body.strip())
+    tail = body.strip()[match.end() :] if match else ""
+    return frozenset(part.replace(" ", "") for part in tail.split(",") if part.strip())
+
+
+def _declared_dev_specs(path: Path) -> dict[str, frozenset[str]]:
+    """This project's own `dependency-groups.dev`, as bare name -> version clauses, following
     `include-group` references. Read with tomllib rather than `ensure_deps`' `_DEV_ARRAY_RE`, which
     exists only because that task has to splice text back into the file: a regex over the array
     would see repo-tasks' own `dev = [{ include-group = "repo-tasks-quality" }, ...]` as declaring
     nothing and report the whole manifest as missing in the very repo that owns it."""
     groups = cast(dict[str, list[object]], tomllib.loads(path.read_text()).get("dependency-groups", {}))
-    names: set[str] = set()
+    specs: dict[str, frozenset[str]] = {}
     seen: set[str] = set()
 
     def walk(group: str) -> None:
@@ -177,14 +193,19 @@ def _declared_dev_names(path: Path) -> set[str]:
         seen.add(group)
         for entry in groups.get(group, []):
             if isinstance(entry, str):
-                names.add(_bare_name(entry))
+                specs[_bare_name(entry)] = _version_clauses(entry)
             elif isinstance(entry, dict):
                 included = cast(dict[str, object], entry).get("include-group")
                 if isinstance(included, str):
                     walk(included)
 
     walk("dev")
-    return names
+    return specs
+
+
+def _declared_dev_names(path: Path) -> set[str]:
+    """Bare package names this project's own `dependency-groups.dev` resolves to."""
+    return set(_declared_dev_specs(path))
 
 
 def _missing_quality_deps() -> list[str]:
@@ -196,6 +217,33 @@ def _missing_quality_deps() -> list[str]:
     pyproject_path = Path("pyproject.toml")
     declared = _declared_dev_names(pyproject_path) if pyproject_path.exists() else set[str]()
     return [_bare_name(dep) for dep in canonical if _bare_name(dep) not in declared]
+
+
+def _unconstrained_quality_deps() -> list[str]:
+    """Manifest entries this project declares by name but **without the version constraint the
+    manifest puts on them** — the drift a bare-name comparison structurally cannot see.
+
+    Found 2026-09-06, by hitting it: `hadolint-py` gained `!=2.15.1.2` here because that release's
+    macOS wheel is a corrupt zip, and every consumer already declaring a bare `hadolint-py` was
+    reported as up to date. So the fix reached nobody — `configs.diff` said "up to date" and
+    `ensure_deps` saw the name present and did nothing. A ceiling added for a security advisory
+    would have propagated exactly as badly, which is what makes this worth reporting rather than a
+    one-off.
+
+    Reported as full entries, since the whole point is the constraint the bare name omits. A
+    consumer that carries the manifest's clauses *plus* its own tighter ones is not drift — the
+    check is containment, not equality, so a deliberate extra pin does not flag forever."""
+    pyproject_path = Path("pyproject.toml")
+    if not pyproject_path.exists():
+        return []
+    declared = _declared_dev_specs(pyproject_path)
+    drifted: list[str] = []
+    for dep in _quality_deps():
+        required = _version_clauses(dep)
+        carried = declared.get(_bare_name(dep))
+        if required and carried is not None and not required <= carried:
+            drifted.append(dep)
+    return drifted
 
 
 # Every binary a gate step shells out to, mapped to the `repo-tasks-quality` entry providing it.
@@ -304,27 +352,55 @@ def _diff_config_files(source: str | None) -> bool:
     return changed
 
 
+def _report_unconstrained(drifted: list[str]) -> None:
+    """Print the entries whose constraint this project is missing, and the exact edit that fixes
+    each — a hand edit, deliberately.
+
+    `ensure_deps` could rewrite the line instead, and that was considered and rejected: its
+    documented contract is "additive only: never touches an entry already present", which is what
+    makes it safe to run at any time, and quietly rewriting a dependency line the consumer owns is
+    not what that promises. This is also rare by construction — it fires only when the manifest
+    gains or changes a constraint, which happened for the first time on 2026-09-06 — so a one-line
+    edit named precisely beats a rewrite that has to be trusted on every future run."""
+    if not drifted:
+        return
+    print(
+        "[configs] dependency-groups.dev declares these without the version constraint the "
+        f"repo-tasks-quality manifest puts on them: {', '.join(_bare_name(d) for d in drifted)}"
+    )
+    for dep in drifted:
+        print(f'[configs]   edit dependency-groups.dev: "{_bare_name(dep)}" -> "{dep}"')
+
+
 @task(help={"source": _SOURCE_HELP})
 def diff(c: Context, source: str | None = None):
     """Show what `configs.pull` would change, plus any repo-tasks-quality entry this project's
-    dependency-groups.dev has fallen behind on, without writing anything. Exits nonzero if
-    anything differs.
+    dependency-groups.dev is missing or declares without the manifest's version constraint, without
+    writing anything. Exits nonzero if anything differs.
 
-    Both halves in one command deliberately: a consumer snapshots the shipped config files and the
+    All of it in one command deliberately: a consumer snapshots the shipped config files and the
     dependency manifest at the same moment and drifts from both the same way, so the check that
     already reports a stale pyrightconfig.json is the one place a stale dev group should surface
-    too — rather than being discovered from a gate step's exit 127 hours later in CI."""
+    too — rather than being discovered from a gate step's exit 127 hours later in CI.
+
+    The constraint half was added 2026-09-06, after the name-only comparison let a real fix reach
+    nobody: `hadolint-py` gained `!=2.15.1.2` because that release's macOS wheel is a corrupt zip,
+    and every consumer already declaring a bare `hadolint-py` was told it was up to date."""
     changed = _diff_config_files(source)
     missing = _missing_quality_deps()
+    unconstrained = _unconstrained_quality_deps()
     if missing:
         print(f"[configs.diff] dependency-groups.dev is missing: {', '.join(missing)}")
-    if not changed and not missing:
+    _report_unconstrained(unconstrained)
+    if not changed and not missing and not unconstrained:
         print("[configs.diff] up to date")
         return
     steps: list[str] = []
     if changed:
         steps.append("inv configs.pull                # overwrite the drifted files with the canonical copies")
-    if missing:
+    if unconstrained:
+        steps.append("edit the entries named above by hand — ensure-deps is additive and will not rewrite them")
+    if missing or unconstrained:
         steps.extend(_DEV_GROUP_FIX)
     _next_steps(*steps)
     raise Exit(code=1)
@@ -395,6 +471,8 @@ def ensure_deps(c: Context):
     for dep in canonical:
         status = "added" if _bare_name(dep) in {_bare_name(m) for m in missing} else "already present"
         print(f"[configs.ensure-deps] {_bare_name(dep)} {status}")
+
+    _report_unconstrained(_unconstrained_quality_deps())
 
     if not missing:
         return
