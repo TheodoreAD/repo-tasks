@@ -47,14 +47,15 @@ reasoning behind this repo's own design — decisions, rejected alternatives, pi
 No per-repo allowances: every consumer uses the identical `fix`/`check`/`precommit` composite,
 unmodified. `precommit` (`fix` then `check`) is the one command an agent always runs — no need to
 know or invoke the individual tools. Every task, leaf and composite alike, carries a succinct
-one-line docstring — what `inv -l` shows as help text. Every command is printed as it runs, except a
-step that would involve a secret (none here do); a gate step's output is folded on success and
-replayed on failure, and the gate's last line is its verdict (`quality.check: PASS` with the step
-and test counts, or `FAIL basedpyright exited 1`); `INVOKE_QUALITY_VERBOSE=1` streams everything
-instead. `shell_check`/`shell_format_*` no-op cleanly on a repo with zero `*.sh` files,
-`workflow_check` (actionlint + zizmor) on one with no `.github/workflows`, and `dockerfile_check`
-(hadolint) on one with no Dockerfiles, so they're safe to run unconditionally — no per-repo opt-out
-needed.
+one-line docstring — what `inv -l` shows as help text. Every command echoes (`echo=True`) what it
+ran, except a step that would involve a secret (none here do). Output is invoke's own by default;
+setting `REPO_TASKS_RUN_REPORT` collapses each echoed command to one line
+(`basedpyright | ok | 2.5s | 0 errors, 0 warnings, 0 notes`), folds its output on success, replays
+it whole on failure, and ends a gate with a verdict — for agent sessions, which read a summary
+better than a scrollback. `shell_check`/`shell_format_*` no-op cleanly on a repo with zero `*.sh`
+files, `workflow_check` (actionlint + zizmor) on one with no `.github/workflows`, and
+`dockerfile_check` (hadolint) on one with no Dockerfiles, so they're safe to run unconditionally —
+no per-repo opt-out needed.
 
 Each tool gets its own dedicated config file (`ruff.toml`, `pyrightconfig.json`, `pytest.ini`) — not
 consolidated into `pyproject.toml` — so a template-driven config update across many repos can

@@ -48,7 +48,7 @@ def lock(c: Context, upgrade: bool = False, package: str | None = None):
 @task
 def check(c: Context):
     """Check uv.lock is up-to-date with pyproject.toml, read-only, no .venv needed. A gate step,
-    so it runs in the gate's folded shape (see steps.py)."""
+    echoed like every effectful command, so report mode reports it (see runner.py)."""
     c.run("uv lock --check", echo=True)
 
 

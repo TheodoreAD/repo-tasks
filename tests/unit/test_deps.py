@@ -49,8 +49,9 @@ def test_lock_reraises_other_failures_without_a_hint(capsys):
 def test_check():
     c = MockContext(run=Result())
     deps.check.body(c)
-    # A gate step, so the folded shape (see steps.py); `lock` above keeps streaming, since its
-    # failure path reads stderr for the moved-member hint and is not a gate step.
+    # A gate step: echoed and with no `hide`, so report mode reports and folds it (see runner.py).
+    # `lock` above passes warn=True instead, because its failure path reads stderr for the
+    # moved-member hint — the runner replays a failure either way, but only raises for this one.
     c.run.assert_called_once_with("uv lock --check", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 

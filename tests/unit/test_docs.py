@@ -36,7 +36,7 @@ def test_build_runs_zensical_strict(c, tmp_cwd, monkeypatch):
     (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/zensical")
     docs.build.body(c)
-    # A gate step (precommit), so the folded shape from steps.py; `serve` below keeps streaming.
+    # A gate step (precommit): echoed, so report mode reports it (see runner.py).
     c.run.assert_called_once_with("zensical build --strict", echo=True)
 
 
