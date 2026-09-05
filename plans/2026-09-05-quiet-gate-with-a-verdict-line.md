@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-05
 source_repo: github.com-personal/agent-skills
 source_session: 4e6fc3cc-eebb-4ea1-b035-ca0112dc9982.jsonl
@@ -79,9 +79,9 @@ quality.check: FAIL  type_check exited 1 (output above)
 
 ## Open questions
 
-[NEEDS CLARIFICATION: how a step's timing and the pytest count are captured without parsing
-tool-specific output too cleverly — `N passed` from pytest's summary is stable; nothing else needs a
-number. Decide in the implementation whether steps other than pytest report only ok/FAIL.]
+[DECISION: only pytest reports a number, read from its closing summary line (`N passed`, `N failed`,
+`N errors`); every other step reports ok/FAIL and wall time, measured around the call rather than
+parsed from anything. Settled in the implementation 2026-09-05.]
 
 ## Recommended direction
 
@@ -89,3 +89,27 @@ Implement in `src/repo_tasks/quality.py` with tests asserting the folded/replaye
 verdict line; document the shape in `contributing/`. Lands after layer 1 (`power-user-linux-setup`
 pipefail snippet) and layer 3 (`agent-skills` scripts), with a `session-bash-audit` baseline saved
 before it so its effect on the 58% is measured on its own.
+
+## Migrated to
+
+Landed 2026-09-05, one day after filing, with layer 1 live and layer 3 not yet landed — so the
+per-layer measurement the plan asked for waits on layer 3, and the baseline saved after layer 1
+(`~/.local/state/session-bash-audit/2026-09-05-pipefail-live.json`) is the one this change is
+measured against.
+
+- The shape and its mechanics: `src/repo_tasks/steps.py` (module docstring), which every gate step
+  in `quality.py`, `testing.py`, `deps.py` and `docs.py` runs through, and
+  `tests/unit/test_steps.py` for the folded/replayed/verdict contract.
+- Every decision — fold by default with `INVOKE_QUALITY_VERBOSE=1` to stream, the verdict naming the
+  command rather than the task, `precommit` inlining `check`'s steps, verbosity as invoke config on
+  the root collection, pytest as the only parsed output, which pytest tiers fold — and the two
+  pitfalls (stream flushing under `2>&1 |`, pipefail and this change covering different halves):
+  `contributing/quality-gate.md`, "What the gate prints".
+- The echo rule's carve-out for gate steps: `contributing/task-module-conventions.md`, "Echo every
+  command that does something". The README's design paragraph describes the new shape.
+
+Not migrated: the machine-wide measurements in Context, which `agent-skills`'
+`plans/2026-09-05-a-piped-gate-that-cannot-lie.md` owns and will carry into that skill's research
+notes when its own layers land; the numbers that justify this repo's decision are quoted in the
+`[DECISION:` above. The recommended-direction note that the design shape is `pre-commit run`'s
+survives as the first sentence of the new contributing section.
