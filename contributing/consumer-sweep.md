@@ -84,6 +84,15 @@ it: a consumer that hand-builds its own root `Collection` instead of importing `
 environment is set — [`quality-gate.md`](quality-gate.md), "Turning it on in a consumer".
 `rg -n 'runner.configure' tasks/` answers it in one call.
 
+[PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
+_constraint_ is a hand edit.** It is additive by contract — never touches an entry already present —
+which is what makes it safe to run at any time, and that same property means a `hadolint-py` that
+grew `!=2.15.1.2` in the manifest stays a bare `hadolint-py` in every consumer that already had one.
+Until 2026-09-06 nothing reported this either, because both `configs.diff` and `ensure-deps`
+compared by bare name; `configs.diff` now names each such entry and the exact edit. Do those edits
+in the sweep, before `deps.lock`, or the re-lock resolves the version the constraint exists to
+exclude.]
+
 [PITFALL: `configs.pull` prints "pulled" for every file whether or not it wrote anything. Seen live
 2026-08-25: a consumer's installed `repo_tasks` was still the pre-change commit, so the first pull
 "pulled" the old config unchanged and looked successful. `inv repo-tasks.update` genuinely first,
