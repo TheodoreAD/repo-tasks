@@ -166,7 +166,10 @@ consumer does go red on this, the inert-by-default reasoning in
 selection criterion needs revisiting, not just this sweep.
 
 [DEFERRED: run the sweep and record which way it went. Until then the drift is known and benign, not
-forgotten — that distinction is the whole reason this section exists rather than a memory entry.]
+forgotten — that distinction is the whole reason this section exists rather than a memory entry.
+**Answered for `power-user-linux-setup` 2026-09-05** and recorded at the end of this file: the
+prediction held, and `pytest-timeout` turned out to be missing from that consumer's group too.
+`scaffoldapy` is still unswept.]
 
 ## The second unswept change (2026-08-29) — the sweep is now batched
 
@@ -199,11 +202,14 @@ is moved — `configs.pull` reads the installed `repo_tasks` package by default,
 measures the old package and reports "up to date" for changes that have not shipped, which looks
 identical to a clean sweep.]
 
-[DEFERRED: one batched sweep once the current run of work here is done. Record which way each
-prediction went — the `[UNVERIFIED:]` above is still waiting on a preflight that has never fired
-from a consumer's own CI, and none of the changes below will make it fire, since none is a gate
-binary. What the sweep has to cover, kept here rather than in a session handoff so it survives the
-session that wrote it:
+[DEFERRED: one batched sweep once the current run of work here is done. **Half done** — the
+`power-user-linux-setup` half ran 2026-09-05 and every prediction below is answered for it in "The
+batched sweep's first half ran" at the end of this file; `scaffoldapy` still owes its half, and it
+is the half that matters most, since its e2e tier is the only thing testing what it generates.
+Record which way each prediction went — the `[UNVERIFIED:]` above is still waiting on a preflight
+that has never fired from a consumer's own CI, and none of the changes below will make it fire,
+since none is a gate binary. What the sweep has to cover, kept here rather than in a session handoff
+so it survives the session that wrote it:
 
 - `ae54087` — `pytest-socket`/`pytest-cov` added to the `repo-tasks-quality` manifest.
 - `8f384d7` — `ignore:unclosed file:ResourceWarning` in the shipped `pytest.ini`.
@@ -264,3 +270,63 @@ session that wrote it:
   template would hand the caller to every generated repo for free — and it is already filed there as
   `plans/2026-08-31-security-workflow-caller.md`. Note while doing it that a pinned caller currently
   goes stale silently, per [`../contributing/quality-gate.md`](../contributing/quality-gate.md).]
+
+## The batched sweep's first half ran (2026-09-05): `power-user-linux-setup`
+
+32 commits' worth, `9d57d464` -> `7bb880b0`. **`scaffoldapy` is untouched and still owes the other
+half**, including the e2e tier that is the only thing in the family testing what it generates — so
+the `[DEFERRED:]` above is half discharged, not closed.
+
+What ran: `inv deps.lock --package repo-tasks`, `uv sync`, `configs.pull`, `configs.ensure-deps`,
+`deps.lock`, `uv sync`, gate. Two corrections to `contributing/consumer-sweep.md` came out of
+walking it, and are made there rather than left here: **the pin bump belongs above `configs.diff`
+for a lock-pinning consumer** (running `diff` first reports drift against the _old_ shipped configs
+and a `pull` then writes them — an identical report before and after the bump, which reads as though
+the bump changed nothing), and `inv venv.sync` has no meaning in a consumer publishing no `venv`
+collection, where plain `uv sync` is the step.
+
+### Which way each prediction went
+
+| item                                   | prediction                       | outcome                                          |
+| -------------------------------------- | -------------------------------- | ------------------------------------------------ |
+| `ae54087` `pytest-socket`/`pytest-cov` | `configs.diff` exits 1, CI green | **diff fired**; `pytest-timeout` was missing too |
+| `8f384d7` `pytest.ini` ResourceWarning | inert here                       | **inert** — 573 tests, no change in outcome      |
+| `949607c` `ruff.toml` `target-version` | check `requires-python` exists   | **exists** (`>=3.11`), linter stays at 3.11      |
+| `c514bd9` derived `pythonVersion`      | can turn a green consumer red    | **it did** — the one real finding, below         |
+| `c514bd9` derived `anyio_mode`         | emitted iff the lock has AnyIO   | **emitted**, correctly — AnyIO is in that lock   |
+| packaged-`tests/` pair                 | inert, no ordering hazard        | **inert** — no `src/`, `tests/` left unpackaged  |
+| `b79b76a` `--python-version`           | additive, nothing to check       | present, unused                                  |
+| `de596ce` `venv.check`/`venv.recreate` | reports a mismatch everywhere    | **not run** — no `venv` collection published     |
+| `3a58b1d` `docs.link-check` fix        | could turn red to green          | no change; that repo's docs were already green   |
+
+**Both halves of `configs.diff` fired on the same run for the first time**, as the section above
+predicted they would: config-file drift on three files and dev-group drift on two entries.
+
+### The one real finding, and it is the predicted one
+
+**`pythonVersion` derived into `pyrightconfig.json` moved the type checker from the developer's 3.14
+venv to the declared 3.11 floor, and two test modules failed immediately** —
+`from typing import
+override`, which is 3.12+. They had been passing only because nothing was
+checking at the floor. That repo had even declared `typing-extensions` as a dev dependency for
+exactly this, with a comment saying so, and a third test module already used the right import; the
+two others had simply drifted.
+
+This is the finding rather than a regression, and it is the strongest evidence the sweep produced:
+`c514bd9` is doing precisely what its design says, on the first consumer it reached.
+
+**CI is green, so the prediction holds for this consumer.** Pushed 2026-09-05; run `33985012776` and
+its siblings on `d193783` report `success` for `CI`, `Deploy docs to GitHub Pages` and
+`Dependency Graph`. That is the half that could not be tested locally, and it went the way this plan
+said it would: `configs.diff` fired on both halves while nothing in CI changed outcome, because none
+of the pending changes is a binary a gate step shells out to.
+
+[UNVERIFIED: **still unanswered, and this sweep could not answer it** — the `[UNVERIFIED:]` above
+about `require_tool`'s preflight never having fired from a consumer's own CI. None of these changes
+is a gate binary, so nothing here could make it fire. It waits on the first family-wide manifest
+change that adds one.]
+
+This section is merged in from `2026-09-05-power-user-linux-setup-swept.md`, filed for this repo
+from that consumer's own session (`25ea8788-b99d-43a2-9611-2d0c1f207694.jsonl`, around
+2026-09-05T18:00Z) and absorbed 2026-09-06 — the name to search for with `plans.py archive` if the
+original filing is ever wanted.
