@@ -59,7 +59,14 @@ repo-tasks-quality = [
   "dprint-py",
   "actionlint-py",
   "zizmor",
-  "hadolint-py",
+  # 2.15.1.2's macOS universal2 wheel is a corrupt zip and cannot be installed: uv reports
+  # "deflate decompression error: invalid block type", and CPython's own zipfile.testzip() fails on
+  # the same member after a download whose size and sha256 match what PyPI declares — so the archive
+  # is broken as published, not in transit. 2.14.0.1's macOS wheel extracts cleanly and the Linux
+  # wheels of both are fine, which is why this is an exclusion rather than a ceiling: the next
+  # release is presumed good and gets picked up with no edit here. Found by the macOS CI job on its
+  # very first run, 2026-09-06.
+  "hadolint-py!=2.15.1.2",
   "act-bin",
 ]
 # The only group install/sync tasks address, alongside the main dependencies. Everything this repo
