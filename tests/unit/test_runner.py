@@ -7,12 +7,29 @@ past a green suite for five days. The commands are `printf`/`exit` one-liners, s
 milliseconds.
 """
 
+import re
+
 import pytest
 from invoke import Collection, Config, Context, Exit
 from invoke.exceptions import UnexpectedExit
 
 from repo_tasks import runner
 from repo_tasks.runner import ReportingLocal
+
+_DURATION = re.compile(r"\d+\.\ds")
+
+
+def _fields(line: str) -> list[str]:
+    """A successful report line's fields, with the duration collapsed to `<s>`.
+
+    The duration is measured elapsed time, so pinning it to `0.0s` asserts that the machine was
+    idle — which CI disproved: `unit (3.13)` alone went red on a `0.1s` for a `seq 3` while three
+    other interpreters passed the identical commit. The field's _shape_ is what is worth asserting,
+    and is asserted here rather than dropped."""
+    fields = line.split(" | ")
+    assert len(fields) >= 3, f"not a report line: {line!r}"
+    assert _DURATION.fullmatch(fields[2]), f"no duration in the third field of {line!r}"
+    return [*fields[:2], "<s>", *fields[3:]]
 
 
 def _context() -> Context:
@@ -51,7 +68,9 @@ def test_an_echoed_command_reports_one_line_and_folds_its_output(
     reporting.run("seq 3; echo All checks passed!", echo=True)
     out = capsys.readouterr().out
     assert "\n1\n" not in out, "a successful command's output should be folded away"
-    assert out.splitlines() == ["seq 3; echo All checks passed! | ok | 0.0s | All checks passed!"]
+    lines = out.splitlines()
+    assert len(lines) == 1, "one report line and nothing else"
+    assert _fields(lines[0]) == ["seq 3; echo All checks passed!", "ok", "<s>", "All checks passed!"]
 
 
 def test_the_summary_is_the_last_non_empty_line(reporting: Context, capsys: pytest.CaptureFixture[str]):
@@ -63,7 +82,9 @@ def test_the_summary_is_the_last_non_empty_line(reporting: Context, capsys: pyte
 
 def test_a_command_with_no_output_gets_no_summary_column(reporting: Context, capsys: pytest.CaptureFixture[str]):
     reporting.run("true", echo=True)
-    assert capsys.readouterr().out.splitlines() == ["true | ok | 0.0s"]
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1
+    assert _fields(lines[0]) == ["true", "ok", "<s>"]
 
 
 def test_a_failure_replays_everything_and_raises_exit(reporting: Context, capsys: pytest.CaptureFixture[str]):
@@ -187,4 +208,22 @@ def test_a_context_built_from_a_configured_collection_actually_reports(
     c.config["run"]["in_stream"] = False
     runner.reset()
     c.run("echo wired", echo=True)
-    assert capsys.readouterr().out.splitlines() == ["echo wired | ok | 0.0s | wired"]
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1
+    assert _fields(lines[0]) == ["echo wired", "ok", "<s>", "wired"]
+
+
+def test_two_report_lines_differing_only_in_the_clock_are_the_same_line():
+    """The regression `_fields` exists for, asserted rather than trusted: the tests above pinned
+    `0.0s`, which held on an idle machine for a day and then failed one CI interpreter on `0.1s`
+    while three others passed the same commit."""
+    idle = "basedpyright | ok | 0.0s | 0 errors, 0 warnings, 0 notes"
+    loaded = "basedpyright | ok | 12.3s | 0 errors, 0 warnings, 0 notes"
+    assert _fields(idle) == _fields(loaded)
+
+
+def test_a_line_with_no_duration_is_not_accepted_as_a_report_line():
+    """Otherwise `_fields` would launder a genuinely broken line into a passing assertion, which is
+    the way a loosened matcher usually goes wrong."""
+    with pytest.raises(AssertionError):
+        _fields("basedpyright | ok | not-a-duration | 0 errors")
