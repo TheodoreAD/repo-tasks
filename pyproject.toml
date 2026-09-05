@@ -2,6 +2,18 @@
 name = "repo-tasks"
 version = "0.2.0"
 requires-python = ">=3.11"
+# The platforms this actually claims. Linux and macOS are each exercised by a CI job; Windows is
+# not claimed, and the reasons are concrete rather than caution — see plans/. Declared here so the
+# claim has one machine-readable home, even though this package is installed from git rather than
+# an index.
+classifiers = [
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
 dependencies = [
   "invoke",
   "python-dotenv",

@@ -52,3 +52,21 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: ./bootstrap.sh
       - run: inv test.unit
+
+  # macOS is a supported platform, so something has to run there. Ubuntu covers the interpreter
+  # matrix above; this covers the OS, on one interpreter, because the two questions are independent
+  # and the product of them buys nothing. Added 2026-09-06 with the platform claim itself: every
+  # gate tool was checked to have a macOS build (`actionlint-py` ships checksummed darwin binaries,
+  # `basedpyright` is py3-none-any, the rest publish macOS wheels), and a claim backed only by a
+  # dependency audit is the kind this repo tags `[UNVERIFIED:`. Windows is deliberately not here —
+  # see plans/.
+  unit-macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: ./bootstrap.sh
+      - run: inv test.unit
