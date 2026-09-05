@@ -1,5 +1,5 @@
 ---
-status: idea
+status: in-progress
 updated: 2026-09-05
 ---
 
@@ -81,8 +81,8 @@ The mechanism was proven before this plan was written: a probe ran it against in
 in one task. All four claims held — the subclass intercepts `c.run` with zero call-site changes,
 sees raw kwargs, can force `hide`, and replays more than `UnexpectedExit`'s 10-line cap.
 
-[UNVERIFIED: that probe was a scratchpad `tasks.py`, thrown away. Nothing in this repo's suite
-covers the mechanism until `tests/unit/test_runner.py` exists — see Verification.]
+It is now covered by `tests/unit/test_runner.py`, which runs real subprocesses rather than a
+`MockContext` for exactly the reason the `docker login` hang gives.
 
 `__init__.py`, at the end, and only then:
 
@@ -140,21 +140,59 @@ Dotted alignment goes. It buys an agent nothing, and `_STATUS_COLUMN = 56` is a 
 comment apologising for commands that overrun it.
 
 ```
-ruff check . | ok | 0.4s
-pytest | ok | 4.5s | 465 passed
-basedpyright | FAIL | exit=1 | 3.1s
-<everything basedpyright printed>
-quality.check: PASS | 11 steps | 465 passed | 8.0s
+ruff check . | ok | 0.0s | All checks passed!
+ruff format . | ok | 0.0s | 1 file reformatted
+dprint check --config-discovery=ignore-descendants | ok | 0.1s
+basedpyright | ok | 2.5s | 0 errors, 0 warnings, 0 notes
+uv lock --check | ok | 0.0s | Resolved 64 packages in 1ms
+pytest | ok | 1.4s | 592 passed in 1.30s
 ```
 
-[DECISION: **command first, status second**, against the `FAIL | exit=127 | 20s | …` shape proposed.
-Command-first is pre-printable: the runner writes `basedpyright |` before starting and completes the
-line after, so a hung or killed step names itself. Status-first cannot do that, and a silent hang is
-exactly what cost this package five days on `docker login`. Greps stay clean either way —
-`rg '\| FAIL \|'`. This one is worth confirming, since the other shape was the one asked for.]
+[DECISION: **command first, status second**, against the `FAIL | exit=127 | 20s | …` shape proposed
+— confirmed by the user 2026-09-05. Command-first is pre-printable: the runner writes
+`basedpyright |` before starting and completes the line after, so a hung or killed step names
+itself. Status-first cannot do that, and a silent hang is exactly what cost this package five days
+on `docker login`. Greps stay clean either way — `rg '\| FAIL \|'`.]
 
 The verdict stays the last line of a gate run, which is the property that made `| tail -3`
 survivable on a red run.
+
+### 4a. The fourth column is the last non-empty line of the tool's own output
+
+The user's question on reading the design — does a successful step hide its output completely,
+leaving only the command and stats? Under what landed, yes. That is a real loss, and it is the same
+one this plan's own critique names: `ruff format .` reformatting three files reports `ok`.
+
+Measured rather than argued, over this repo's own gate on 2026-09-05:
+
+| command                 | lines on success | last non-empty line             |
+| ----------------------- | ---------------: | ------------------------------- |
+| `ruff check .`          |                1 | `All checks passed!`            |
+| `ruff format --check .` |                1 | `96 files already formatted`    |
+| `ruff format .` (dirty) |                1 | `1 file reformatted`            |
+| `basedpyright`          |                1 | `0 errors, 0 warnings, 0 notes` |
+| `uv lock --check`       |                1 | `Resolved 64 packages in 1ms`   |
+| `pytest -q`             |               10 | `592 passed in 1.30s`           |
+| `dprint check`          |                0 | —                               |
+| `shellcheck`            |                0 | —                               |
+| `shfmt -d`              |                0 | —                               |
+
+[DECISION: **carry the last non-empty output line onto the report line, for every tool.** Five of
+nine emit exactly one line and it _is_ the summary, so nothing whatsoever is lost for those; three
+emit nothing at all on success, so there is nothing to lose; pytest is the only multi-line case and
+nine of its ten lines are progress noise. The answer to "does it hide the output" therefore becomes
+"only where the output was progress noise" rather than "yes".]
+
+[DECISION: this **replaces** the pytest-specific `_PYTEST_COUNT_RE` parser and the
+`contributing/quality-gate.md` decision that pytest's count is "the only number read out of a tool's
+output". A generic tail line reads no tool's format, so there is nothing to break when a tool
+changes its summary — it is one line either way — and `steps.note` is no longer needed at all.
+Strictly less machinery than what landed, and it covers eight more commands.]
+
+[PITFALL: the tail line is only meaningful because these tools are quiet on success. A chatty
+command would put its least interesting line there. That is acceptable — the line is a hint beside
+`ok`, never the record — but it is the reason the log-file axis in §7 exists rather than being
+dismissed.]
 
 ### 5. What survives from `steps.py`
 
@@ -164,8 +202,8 @@ survivable on a red run.
 - **`ok=frozenset({0, 5})` moves back to `testing.py`.** pytest's exit 5 being a pass is
   correctness, not display, and must hold in both modes; absorbing it into a display wrapper was a
   mistake independent of everything else here.
-- The pytest count moves to `testing.py`, which parses its own tool's output and calls
-  `steps.note("465 passed")` — a no-op when report mode is off.
+- `_pytest_summary`, `_PYTEST_COUNT_RE` and the planned `steps.note` all go — §4a's generic tail
+  line does the job for every command, not just pytest's.
 
 ### 6. Failure handling
 
@@ -182,11 +220,12 @@ has.]
 `warn=True` means the caller owns the exit code, so the runner prints the line and returns without
 raising, leaving `testing.py` to decide.
 
-[NEEDS CLARIFICATION: with that rule, a pytest run that exits 5 prints `pytest | FAIL | exit=5`
-before `testing.py` accepts it as a pass. Cosmetic, and only reachable in a consumer repo with no
-tests yet. Options: live with it, have the runner print `exit=5` with no FAIL token whenever
-`warn=True` was passed, or give the runner a declarative tolerated-exit map. Leaning on the second —
-`warn=True` already means "this exit code is not necessarily an error".]
+[DECISION: on a `warn=True` call the runner prints `exit=N` **without** a `FAIL` token, because
+`warn=True` already means "a non-zero exit here is not necessarily an error" and the caller is about
+to decide. So a pytest run in a repo with no tests reads `pytest | exit=5 | 0.1s | no tests ran`
+rather than claiming a failure the gate then ignores. The alternative — a declarative tolerated-exit
+map on the runner — was rejected as a second place where "which exit codes are OK" lives, when
+`warn=True` already says it at the call site.]
 
 ### 7. Second axis, deferred: per-step logs to files
 
@@ -211,16 +250,16 @@ and no agent session would be in it.
 writing into another repo's tree. **This plan is not landable until that one has landed**, which is
 what `depends_on` is for once this reaches `planned`.]
 
-## Open questions
+## Settled while drafting
 
-[NEEDS CLARIFICATION: the env var name. `REPO_TASKS_RUN_REPORT` states ownership and subject. An
-`INVOKE_`-prefixed name is available and would read as native, but invoke maps `INVOKE_<KEY>` onto
-declared config keys, so the prefix would claim an ownership it does not have.]
+[DECISION: the env var is `REPO_TASKS_RUN_REPORT`, stating ownership and subject. An
+`INVOKE_`-prefixed name would read as native and is exactly why it was rejected: invoke maps
+`INVOKE_<KEY>` onto its own declared config keys, so the prefix would claim an ownership it does not
+have.]
 
-[NEEDS CLARIFICATION: whether to do this as a revert-and-redo or as an evolution of the pushed
-commits. The landed work is four hours old and already on `main`; roughly half of `steps.py`
-survives either way. Evolution keeps the ledger and verdict history intact and is what the commit
-split below assumes.]
+[DECISION: evolve the pushed commits rather than revert-and-redo. The landed work is hours old and
+already on `main`; roughly half of `steps.py` — the ledger and `verdict` — survives either way, and
+a revert would put the same code back through history twice. Chosen by the user 2026-09-05.]
 
 ## Known costs, recorded so they are not rediscovered
 
@@ -241,26 +280,22 @@ it on your own root collection. Reaching those consumers would mean patching
 
 ## Files touched
 
-- `src/repo_tasks/runner.py` — new, `ReportingLocal`.
-- `src/repo_tasks/steps.py` — keep the ledger and `verdict`, delete `run_step`, add `note`.
-- `src/repo_tasks/__init__.py` — env-gated `ns.configure`, drop the `quality.verbose` key.
-- `src/repo_tasks/quality.py`, `deps.py`, `docs.py`, `testing.py` — revert to
-  `c.run(..., echo=True)`; restore pytest's exit-5 tolerance and its count to `testing.py`;
-  `hide=False` on `test.coverage` and `deps.lock`.
-- `contributing/quality-gate.md` — rewrite "What the gate prints"; the fold-by-default decision
-  becomes the report-mode decision with this plan's reconciliation.
-- `contributing/task-module-conventions.md` — replace the gate-step carve-out under the echo rule
-  with the `echo=True`-is-the-trigger rule.
-- `README.md` — the design paragraph.
-- Tests: `tests/unit/test_runner.py` new; `test_steps.py`, `test_quality.py`, `test_testing.py`,
-  `test_init.py` updated.
+Landed 2026-09-05 in three commits, not the four planned: commits 1 and 3 below could not be
+separated without a red intermediate, because deleting `steps.py` needs the call sites reverted and
+`runner.py` present in the same state, and `test.untested_modules` fails the moment a module loses
+its test file.
 
-Commit split, each standing on its own:
-
-1. Restore pytest's exit-5 tolerance and count parsing to `testing.py` (correctness, no mode).
-2. Add `runner.py` and the env-gated install; keep `run_step` working alongside it.
-3. Revert the eleven call sites to `c.run(echo=True)`; delete `run_step`.
-4. Docs.
+1. **`runner.py` + `tests/unit/test_runner.py`**, used by nothing yet — so the switchover commit is
+   only a switchover, and the new file can be read against the stock `Local` it replaces. Verified
+   green on its own with the old `steps.py` still in place (605 tests, both suites).
+2. **The switchover**: the eleven call sites in `quality.py`/`deps.py`/`docs.py` back to
+   `c.run(..., echo=True)`; `testing.py` regains pytest's exit-5 tolerance and passes `hide=False`
+   on the streaming tiers; `__init__.py` installs the runner behind the env var and drops the
+   `quality.verbose` key; `steps.py` and `test_steps.py` deleted; `test_deps.py`, `test_docs.py`,
+   `test_init.py`, `test_quality.py`, `test_testing.py` updated.
+3. **Docs**: `contributing/quality-gate.md`'s "What the gate prints" rewritten around two modes, the
+   echo rule in `contributing/task-module-conventions.md`, `README.md`'s design paragraph, and three
+   stale `steps.py` citations repointed.
 
 `interactive.py` and the `docker.login`/`helm.login` change are untouched by all of this. That was a
 real hang on the interpreter this ships on, the fix is correct, and stepping outside invoke there is
@@ -268,14 +303,29 @@ not a least-surprise question — it is the only way those tasks work at all.
 
 ## Verification
 
-- The probe behind §1 was a scratchpad `tasks.py`, not a test. It becomes
-  `tests/unit/test_runner.py`: a `Local` subclass intercepting a failing multi-line command, an
-  explicit `hide=False`, and an internal `hide=True` query, asserting the report line, the full
-  replay, and that the last two are passed through untouched.
-- The property that actually matters and that a `MockContext` cannot see: **with the env var unset,
-  output is byte-identical to invoke's.** Capture `inv quality.lint-check` before and after the
-  change with the var unset and diff them.
-- `INVOKE_QUALITY_VERBOSE` must stop being read anywhere — `rg INVOKE_QUALITY_VERBOSE` returns
-  nothing outside retired plans.
-- Re-run the red-gate check from `quality-gate.md`'s pipefail pitfall: with report mode on,
-  `inv quality.check 2>&1 | tail -3` shows the failing command and exits non-zero.
+All four ran on 2026-09-05, against this repo's own gate.
+
+- **`tests/unit/test_runner.py`**, 13 tests on real subprocesses rather than a `MockContext` — the
+  module is about what output and exit codes turn into, and a mock supplies both. Covers the report
+  line, the full replay, the `warn=True` path, the untouched `hide=True` query, the load-bearing
+  `hide=False`, elision, the verdict, and that stock invoke still raises `UnexpectedExit`.
+- **With the env var unset, output is invoke's own.** `inv quality.precommit` prints invoke's bold
+  echo and every tool's full output, and a red `inv quality.check` ends with ruff's own diagnostic
+  and no verdict line.
+- **With it set**, the same gate prints fifteen report lines and
+  `quality.precommit | PASS | 15 steps | 4.6s`, and the summary column carries real content:
+  `96 files left unchanged`, `0 errors, 0 warnings, 0 notes`, `Resolved 64 packages in 1ms`,
+  `No findings to report. Good job! (15 suppressed)`.
+- **The red-run property from `quality-gate.md`'s pipefail pitfall.**
+  `REPO_TASKS_RUN_REPORT=1 inv quality.check 2>&1 | tail -3` on a deliberately unlint-clean file
+  ended with `FAIL | ruff check . | exit=1 (output above)` and the Bash tool reported exit 1.
+- `rg INVOKE_QUALITY_VERBOSE` returns nothing outside this plan.
+
+[DEFERRED: §8's `power-user-linux-setup` half is not done, and until it is, this change is a
+regression against the piping measurement — report mode exists and no agent session is in it. Filed
+as its own plan for that repo. **This plan cannot reach `landed` before that one has.**]
+
+[UNVERIFIED: no consumer repo has been run against this yet. The eleven reverted call sites and the
+runner are exercised here, but `scaffoldapy`-generated repos and `power-user-linux-setup` take
+repo-tasks as a pinned dependency and none has been bumped — the consumer sweep in
+`contributing/consumer-sweep.md` is what closes this.]
