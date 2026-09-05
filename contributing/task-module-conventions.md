@@ -245,6 +245,11 @@ real name. Both modules now end with `ns = Collection(<the tasks they actually o
 `c.run(..., echo=True)` for any command with an effect — what ran should be visible and
 copy-pasteable, not inferred from output.
 
+A **gate step** — anything in `quality.check`'s or `precommit`'s chain — goes through
+`steps.run_step` instead, which prints the command as the step's own line and folds its output on
+success (see [`quality-gate.md`](quality-gate.md#what-the-gate-prints)). The command is still
+printed, so the rule holds; what changes is that a passing step's output does not.
+
 The exceptions are internal queries whose _output_ is the point rather than the command: reading the
 current branch, listing open release branches, resolving the origin URL, finding `*.sh` and workflow
 files, and querying remote tags. Those use `hide=True` (plus `warn=True` where a non-zero exit is a

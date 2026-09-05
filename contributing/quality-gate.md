@@ -18,6 +18,87 @@ Everything in `check` ships to every consumer through `repo-tasks-quality`, so e
 dependency added to `power-user-linux-setup`, `scaffoldapy`, and every generated repo — see
 [`consumer-sweep.md`](consumer-sweep.md).
 
+## What the gate prints
+
+One line per step, the verdict last, everything else folded — `pre-commit run`'s shape, the tool
+this gate replaced:
+
+```
+ruff check . ........................................... ok  0.0s
+basedpyright ........................................... ok  2.5s
+uv lock --check ........................................ ok  0.0s
+pytest ................................................. ok  1.4s  586 passed
+quality.precommit: PASS  15 steps, 586 passed, 4.4s
+```
+
+A failing step replays its captured output in full between its line and a verdict that names it, and
+the task exits with the step's own code:
+
+```
+ruff check . ........................................... FAIL  exit 1
+F401 [*] `os` imported but unused
+ --> bad.py:1:8
+...
+Found 2 errors.
+FAIL  ruff check . exited 1 (output above)
+```
+
+`steps.py` owns the shape; every gate step runs through its `run_step` and the two gates end with
+its `verdict`. `INVOKE_QUALITY_VERBOSE=1` (or `quality: {verbose: true}` in an `invoke.yaml`)
+streams every step's output as before, with the step line after it.
+
+[DECISION: **fold by default, stream on request** — the user's call, 2026-09-05, with the
+measurement behind it. Over the seven days to that date, across every consumer of this package (60
+sessions, 14,611 Bash calls), 812 of 1,396 `inv quality.*` runs — 58% — were piped through `head` or
+`tail`, 466 of them asking for the last 3 to 8 lines of a ~50-line success: the pytest summary. The
+gate was the single largest source of exit-masking pipes machine-wide, and four rewordings of the
+rule against them had each measured null. The fix is to remove what the pipe buys: nothing to tail
+for on a green run, and the verdict as the last line on a red one. Opt-in quiet would have left the
+58% where it was, because the session that pipes is the one that never reaches for a flag; the cost
+— a human watching a long step sees nothing until it ends — is what the flag is for.]
+
+[DECISION: the verdict names the **command**, not the task. `FAIL ruff check . exited 1` is what to
+re-run, and the step lines are commands too; a task name would need every call site to pass one in
+or a walk up the call stack to find it. The gate's name is on the PASS line only, because that is
+the one printed by the gate's own body — invoke stops at the first failing pre-task, so no code that
+knows which gate is running ever executes on a red run.]
+
+[DECISION: `precommit` inlines `check`'s steps (`pre=[fix, *_CHECKS, docs_build]`) rather than
+nesting `check`. Nested, `check`'s body would print `quality.check: PASS` in the middle of a
+precommit run, with a step count that includes `fix`'s steps — and the whole property is that the
+verdict is the last line. The behaviour is identical; only the chain is flat.]
+
+[DECISION: verbosity is invoke config, not a `--verbose` flag on the gates. Invoke runs a task's
+`pre=[...]` chain before its body, so a flag on `check` cannot reach the steps it governs, and
+pre-tasks take no arguments. The key is declared on the root `ns` in `__init__.py`, which is what
+lets invoke's own env mapping set it: `load_shell_env` only reads `INVOKE_*` variables for keys the
+config already has, and a pre-task is called with no `called_as`, so a sub-collection's config never
+reaches it. A consumer hand-building a Collection from individual modules gets quiet with no way to
+switch — declare the key on your root collection too.]
+
+[DECISION: pytest's `N passed` is the **only** number read out of a tool's output. It is stable, it
+is what the `tail -3` habit was reaching for, and `3 failed, 462 passed` on a red step line is the
+first thing anyone wants. Every other step reports ok/FAIL and wall time; a `ruff format .` that
+reformatted three files says `ok`, and `git status` says which three.]
+
+[DECISION: only `test.unit` is folded among the pytest tiers. `test.coverage`'s output _is_ the
+report, so folding it on success would hide the one thing the task exists to show; the integration
+tiers run for minutes with a human usually watching, and are not gate steps. Same for `deps.lock`,
+which streams because its failure path reads stderr for the moved-member hint — `deps.check` is the
+gate step and folds.]
+
+[PITFALL: the replay writes stdout to stdout and stderr to stderr, flushed at each hand-off. Under
+`2>&1 | tail` a block-buffered stdout and an unbuffered stderr otherwise arrive out of order, and
+the verdict has to be last. Everything else printed on the failure path is flushed as it is printed,
+for the same reason.]
+
+[PITFALL: `pipefail` in the agent shell (landed the same day, in `power-user-linux-setup`) is what
+makes `inv quality.check 2>&1 | tail -3` exit 1 on a red run; this change is what makes those three
+lines say why. Neither substitutes for the other: without the shell change the pipe still returns
+`tail`'s 0, and without this change the three lines are whatever the tool printed last. Verified
+together 2026-09-05 — the tailed red run showed `FAIL ruff check . exited 1 (output above)` and the
+Bash tool reported exit 1.]
+
 ## In the gate
 
 **`deps.check` (`uv lock --check`)** — a `pyproject.toml` edit without a re-lock used to pass
