@@ -1,6 +1,7 @@
 ---
 status: in-progress
 updated: 2026-09-05
+depends_on: [scaffoldapy]
 ---
 
 # Run reporting as an opt-in agent mode, not as invoke's new default
@@ -261,6 +262,75 @@ and no agent session would be in it.
 writing into another repo's tree. **This plan is not landable until that one has landed**, which is
 what `depends_on` is for once this reaches `planned`.]
 
+### 9. `runner.configure(ns)` — the half a consumer with its own `Collection` has to call
+
+§1's `ns.configure` is on **`repo_tasks`' own `ns`**. A consumer that hand-builds its Collection —
+`power-user-linux-setup` does, and `scaffoldapy`'s template generates one — never touches that
+object, so the configure never runs. The variable is set, `runner.enabled()` is true, and the gate
+prints stock invoke output with nothing anywhere saying the mode is off.
+
+Observed live 2026-09-05 from `power-user-linux-setup`'s session
+(`25ea8788-b99d-43a2-9611-2d0c1f207694.jsonl`, around 18:20Z), in this order, which is why it is
+recorded as a finding rather than as a reading of the code:
+
+1. The `CLAUDECODE`-guarded `zshenv` snippet gained `export REPO_TASKS_RUN_REPORT=1`, deployed with
+   `inv zsh.configure`.
+2. `env | rg REPO_TASKS_RUN_REPORT` in a fresh agent Bash call returned it set.
+3. `inv quality.precommit` printed stock invoke output — every command echoed, every line streamed,
+   no verdict.
+4. Nothing anywhere reported that the mode was off. There is no warning, no probe, and no way to
+   tell "the variable is unset" from "the variable is set and unreachable" by looking at the output.
+5. Adding the same one line to that repo's own namespace produced the expected shape immediately:
+   `quality.check | PASS | 11 steps | 6.1s`.
+
+[DECISION: **ship `runner.configure(ns)`** — one import and one call, owning both the `enabled()`
+check and the `{"runners": {"local": ReportingLocal}}` key, so no consumer re-derives either and a
+later change to the mechanism does not need every consumer edited. Chosen by the user 2026-09-06
+over two alternatives. A documented one-liner — cheapest, and honest about the consumer owning its
+own Collection — was rejected because it is exactly the state that produced this finding. Something
+that _notices_ was rejected as a new print: a consumer running its gate with the variable set and
+the runner unconfigured is a detectable state, but a warning on every gate run of every repo that
+has not opted in is worse than the silence. It stays available as an addition to an existing
+diagnostic if the silence bites a second time.]
+
+[PITFALL: **the helper does not close the gap, it only gives the fix a name.** A consumer that never
+calls it is exactly as silent as before. That is the price of not patching `Config.global_defaults`,
+the unsupported monkeypatch this whole design avoids, and it is why reaching the consumers is sweep
+work rather than something this package can settle on its own.]
+
+[PITFALL: `power-user-linux-setup` wrapped the line in a local helper rather than reading the two
+attributes inline, for a reason worth knowing before writing the call anywhere else: that repo's
+optional-import helper returns Nones-or-modules, which widens to `Any` under `basedpyright`, so
+reading `runner.enabled` and `runner.ReportingLocal` off that value fails its own gate. A single
+`configure(ns)` imported directly is the shape that type-checks.]
+
+**`scaffoldapy`'s template is the multiplier**, and it is why this is a design section rather than a
+line in the sweep. Every repo generated from it builds its own Collection, so every generated repo
+is in this state at birth — and the population the whole design exists to reach, agent sessions
+running a consumer's gate, is exactly the population that gets nothing. `power-user-linux-setup` is
+one repo somebody noticed; the template keeps producing more. That is the same "true of the repo's
+own tree, false of what it generates" shape
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) records for
+`failOnWarnings`, arriving in a change that has no config file and no dependency-group entry, so
+neither half of `configs.diff` can see it.
+
+[DEFERRED: whether `scaffoldapy`'s template should carry the call by default. For: it is the only
+place that stops the population growing, and a generated repo's owner has no reason to suspect the
+mode exists. Against: it puts an agent-oriented departure into every generated repo's
+`tasks/__init__.py`, where a human reader meets it first — the same least-surprise objection that
+inverted this design in the first place. **Not this repo's call**, which is why it is deferred here
+rather than left as an open question: filed for `scaffoldapy`, which has its own session and its own
+plans, and named in this plan's `depends_on`.]
+
+[DEFERRED: nothing measures whether report mode actually moves the piped-gate rate. The truthfulness
+property is what the design is for and is already achieved; a rate change would be a bonus.
+`power-user-linux-setup`'s `plans/2026-09-05-pipefail-in-the-agent-shell.md` owns that measurement
+and names the baseline to compare against.]
+
+This section is merged in from `2026-09-05-report-mode-reaches-no-consumer-by-itself.md`, filed for
+this repo from that session and absorbed 2026-09-06 — the name to search for with `plans.py archive`
+if the original filing is ever wanted.
+
 ## Settled while drafting
 
 [DECISION: the env var is `REPO_TASKS_RUN_REPORT`, stating ownership and subject. An
@@ -285,9 +355,12 @@ a consumer that does will see its sudo calls reported.]
 
 [PITFALL: a consumer that hand-builds its own `Collection` from individual modules instead of
 `from repo_tasks import ns` never receives the `ns.configure` call and so never gets report mode,
-with no error. Identical to the gap `quality.verbose` already has, and identical in its fix: declare
-it on your own root collection. Reaching those consumers would mean patching
-`Config.global_defaults`, which is the unsupported monkeypatch this design avoids.]
+with no error. Predicted here as "identical to the gap `quality.verbose` already has, and identical
+in its fix: declare it on your own root collection" — **the prediction was right about the gap and
+wrong about the fix being one line a consumer can just write**, which §9 records after hitting it
+live. Reaching those consumers without their cooperation would mean patching
+`Config.global_defaults`, the unsupported monkeypatch this design avoids, so the gap is real and
+what §9 ships is a named call rather than a closure.]
 
 ## Files touched
 
@@ -355,15 +428,11 @@ Verified end to end 2026-09-05 evening, in an agent session that set nothing by 
   nothing there.
 
 [PITFALL: **the environment half is not the whole change, and the gap is silent in both
-directions.** The `ns.configure` that installs the runner is on `repo_tasks`' own `ns`; a consumer
-that builds its own `Collection` — which `power-user-linux-setup` does and which `scaffoldapy`'s
-template generates — never touches it, so the variable is set, `runner.enabled()` is true, and the
-gate prints stock invoke output with nothing anywhere saying the mode is off. This plan predicted it
-in §"Known costs" and still recorded the export as the remaining half; a session hit it live on
-2026-09-05 before the prediction was connected to the filing.
-`2026-09-05-report-mode-reaches-no-consumer-by-itself.md`, filed for this repo, owns it — **read
-that before treating any consumer as done**, and note that `scaffoldapy`'s template is the
-multiplier, since every generated repo is in this state at birth.]
+directions.** This plan predicted it in §"Known costs" and still recorded the export as the
+remaining half; a session hit it live on 2026-09-05 before the prediction was connected to the
+filing, which is the whole reason §9 exists. **Read §9 before treating any consumer as done** — the
+line above is evidence about a consumer that had already added its own wiring, not about what the
+export does on its own.]
 
 [PITFALL: **no session restart is needed, and a session that assumes one will wait for nothing.**
 Each Bash call is a fresh non-interactive `zsh -c` that reads `~/.zshenv` every time, so a deployed
