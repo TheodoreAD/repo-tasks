@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-30
+status: abandoned
+updated: 2026-09-05
 ---
 
 # Turn a push's auth failure into the login task that already fixes it
@@ -101,3 +101,17 @@ plan already made once.
 Otherwise close this as `abandoned` and let the tools' own errors stand. That is a legitimate
 outcome and the plan should not be kept alive out of momentum: what it was filed to protect has been
 built, and what it originally designed has been rejected on the evidence.
+
+## Migrated to
+
+Abandoned 2026-09-05, taking the recommendation above: the tools' own errors stand. The three open
+questions close with it — they were questions about how to build the print, and the print is not
+built.
+
+- The decision and the reasoning for it, including why the residual print was rejected rather than
+  deferred: `contributing/release-workflows.md`, "Docker images go to GHCR", the `[DECISION:` that
+  replaces the sentence which used to call this plan open.
+
+Not migrated: the three overtaking shifts as narrative — the CI finding is already in
+`release-workflows.md`, the login tasks are their own docstrings, and the keyring rule is
+`plans/2026-08-30-registry-credentials-in-the-os-store.md`'s to keep.

@@ -16,8 +16,18 @@ for no offsetting benefit. A human publishing from their own machine does a one-
 `docker login ghcr.io` with a PAT scoped to `write:packages`, kept in their own secret manager.
 `docker.py` carries no auth handling in the CI path and none is planned — the token does not expire
 mid-job and `docker/login-action` runs once up front. Its `docker.login` task exists for a human's
-own machine and CI never calls it. Turning a stale-credential push failure into a pointer at that
-task is still open in `plans/2026-08-23-registry-auth-retry.md`.
+own machine and CI never calls it.
+
+[DECISION: a push that fails on a stale credential is left with the tool's own error — no retry, no
+re-auth cycle, and not even a printed pointer at `docker.login`/`helm.login`. Closed as abandoned
+2026-09-05 (the now-retired `plans/2026-08-23-registry-auth-retry.md`), after its original design
+was overtaken three times: CI turned out never to need it; the `login` tasks landed, dividing the
+problem with the OS secret store (`plans/2026-08-30-registry-credentials-in-the-os-store.md`); and a
+re-auth cycle would have this package drive an interactive login on the user's behalf, the opposite
+of the stance both `login` tasks take. The residual print was rejected on its own terms: it would
+key off string-matching another tool's human-readable, locale-sensitive output, helm's failure text
+had never been measured, and `denied: unauthorized` is not actually a bad last word. Revisit only if
+a real stale-credential failure turns out to confuse someone.]
 
 The image ref comes entirely from `repo-tasks.toml`'s `[[docker]]` entry; the workflow
 (`docker-release.yml`) only logs in and runs `inv docker.release --project <name>`.
