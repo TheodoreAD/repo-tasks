@@ -366,7 +366,22 @@ deprecation hid in. Its `branch` also defaults to `main` against a repo on `mast
 halves have to land together — a `repo_tasks` bump in that repo's `pyproject.toml`/lock, then the
 collection — and the bump was deliberately not taken mid-session while `repo-tasks` itself was being
 worked on. Worth doing as one change afterwards, and worth checking whether `scaffoldapy` and
-`agent-skills` publish the namespace either.]
+`agent-skills` publish the namespace either.
+
+**Resolved for that consumer 2026-09-05.** The collection was wired there on 2026-09-04 and the pin
+bumped to `7bb880b` in the batched sweep the next day
+([`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), "The batched sweep's
+first half ran"). Run against the bumped pin, `inv ci.status --branch master --limit 3` printed
+three green runs and no annotations, and `inv ci.check-actions` reported `0 of 5 action(s) behind`.
+Silence from `ci.status` is the result that matters — the same command printed the Node 20 warning
+under green runs there before the bump.
+
+**The ordering hazard above turned out not to have existed, and that was checked rather than
+assumed**: `e51e062` and `9f3a03f` were both already ancestors of the _old_ pin `9d57d464`, so the
+collection wired on 2026-09-04 was never publishing the blind-spot version. The bump was owed
+anyway. Recorded so nobody re-derives it. `--branch master` is still needed on every call there,
+since the task's default is `main`; a per-consumer ergonomic rather than a defect, but that consumer
+can never use the bare form. `scaffoldapy` and `agent-skills` are still unchecked.]
 
 ## Built: both halves (2026-08-29)
 
