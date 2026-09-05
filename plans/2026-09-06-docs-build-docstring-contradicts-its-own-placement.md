@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-06
 source_repo: github.com-personal/power-user-linux-setup
 source_session: 245a4cb0-8e05-451d-9bcc-501922241f86.jsonl
@@ -50,10 +50,12 @@ The `link_check` behaviour it denies is at `docs.py:113-196` (`_anchors`, `_toc_
 
 ## Open questions
 
-[NEEDS CLARIFICATION: is there a second place in this package still arguing the `check` placement?
-Only `docs.py`'s `build` was checked. `quality.check`, `quality.precommit` and `docs.link_check` are
-correct; the README, the module docstring of `docs.py` itself and any `configs`-side prose were not
-read.]
+**Answered 2026-09-06: no second place.** `rg -n 'docs.build|docs_build|zensical'` over `README.md`,
+`contributing/`, `docs.py` and `quality.py` returns `quality.py:245` and `:260` (both correct),
+`quality-gate.md:258` and `:270` (both correct, and `:270` quotes the user's own words settling it),
+and `docs.py`'s module docstring at `:5`, which says "in the gate" rather than naming a composite
+and is therefore right either way. `docs.py`'s `build` at `:279-281` was the only wrong text in the
+package.
 
 ## Recommended direction
 
@@ -68,3 +70,19 @@ now catches the dangling anchor, covers every tracked `.md` rather than only `do
 zensical and writes nothing — so the docs build is defence in depth behind it, not the sole
 detector. That is a weaker justification than the original one, and saying so is better than leaving
 a stronger claim standing that the code contradicts.
+
+## Migrated to
+
+Landed 2026-09-06, exactly as recommended.
+
+- **The fix**: `src/repo_tasks/docs.py`'s `build` docstring, rewritten to name `precommit`, point at
+  `quality.precommit`'s docstring rather than restate its argument, and state the weaker
+  division-of-labour justification.
+- **Design rationale**: `contributing/task-module-conventions.md`, "A decision lives in one
+  docstring; the others point at it" — the transferable half, which is not that this paragraph was
+  wrong but that the paragraph holding a second copy of an argument is the one that drifts, and it
+  drifted in both its claims while three sibling docstrings stayed correct.
+
+**Deliberately not migrated**: the survey answering this plan's open question (a grep, re-runnable
+in seconds, and its answer is now the state of the tree), and the two file:line citations of the old
+text, which are what `git show` is for.
