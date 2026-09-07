@@ -9,13 +9,13 @@ release from a terminal is a different risk profile, and `gh` already does it fo
 
 import json
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict, cast
 
 from invoke import Context, Exit, task
 
-from .configs import require_tool
 from .projects import tracked_files, trunk_branch
 from .requirements import GH, NETWORK, requires
 
@@ -52,6 +52,26 @@ class Annotation(TypedDict, total=False):
     annotation_level: str
     message: str
     title: str
+
+
+def _require_gh() -> None:
+    """Preflight the `gh` CLI, naming what actually installs it.
+
+    Deliberately not `configs.require_tool`, for the same reason `docs._require_zensical` is not:
+    that message names the `repo-tasks-quality` manifest and `dependency-groups.dev`, and tells the
+    reader to run `configs.ensure-deps`, `deps.lock` and `venv.sync`. `gh` is in no manifest and is
+    not a Python package at all, so a consumer following that remediation syncs a dependency group
+    and finds nothing has changed. Every other tool this package preflights does come from the
+    manifest, which is what makes `require_tool` right everywhere else and wrong here."""
+    if shutil.which("gh") is not None:
+        return
+    print(
+        "[ci] gh not found on PATH — these tasks read the GitHub API through the GitHub CLI, which "
+        "is installed with the system package manager (see https://cli.github.com), not from any "
+        "Python dependency group."
+    )
+    print("[ci] next: install gh, then `gh auth login`")
+    raise Exit(code=1)
 
 
 def _runs(stdout: str) -> list[Run]:
@@ -135,7 +155,7 @@ def status(c: Context, branch: str | None = None, limit: int = 10):
     Also prints the latest run's warning and failure annotations, which is where a deprecation
     notice lives — the one signal a green conclusion hides. Those report only; nothing here stops
     on an annotation."""
-    require_tool("gh")
+    _require_gh()
     branch = branch or trunk_branch()
     result = c.run(f"gh run list --branch {branch} --limit {limit} --json {_FIELDS}", echo=True, warn=True, hide=True)
     if not result.ok:
@@ -250,7 +270,7 @@ def check_actions(c: Context, path: str = ".github/workflows"):
 
     `--path` because the highest-value call site in this family is a template's workflows rather
     than a repo's own — a generated repo inherits whatever the template pins."""
-    require_tool("gh")
+    _require_gh()
     files = tracked_files(c, f"{path}/*.yml", f"{path}/*.yaml")
     if not files:
         print(f"[ci.check-actions] no workflow files under {path} — nothing to do")

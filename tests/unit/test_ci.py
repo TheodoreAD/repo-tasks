@@ -3,6 +3,7 @@ deciding which conclusion is worth stopping for, which run's conclusion counts, 
 are worth printing, and when a pinned action counts as behind."""
 
 import json
+import shutil
 
 import pytest
 from invoke import Exit, MockContext, Result
@@ -283,3 +284,25 @@ def test_check_actions_does_not_stop_on_a_behind_action(tmp_path):
     # only train its reader to ignore it.
     c = _workflow_repo(tmp_path, "      - uses: astral-sh/setup-uv@v9.0.0\n")
     ci.check_actions.body(c, path=str(tmp_path))
+
+
+def test_require_gh_returns_silently_when_gh_is_present(monkeypatch, capsys):
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/gh")
+    ci._require_gh()
+    assert capsys.readouterr().out == ""
+
+
+def test_require_gh_names_the_cli_and_never_the_dependency_group(monkeypatch, capsys):
+    """The remediation `configs.require_tool` prints is wrong for `gh` and only for `gh`: that
+    message names the repo-tasks-quality manifest and tells the reader to sync a dependency group,
+    and no dependency group has ever supplied the GitHub CLI. A consumer following it would run
+    three commands and find nothing changed."""
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    with pytest.raises(Exit) as exc_info:
+        ci._require_gh()
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "cli.github.com" in out
+    assert "gh auth login" in out
+    assert "dependency-groups.dev" not in out
+    assert "repo-tasks-quality" not in out
