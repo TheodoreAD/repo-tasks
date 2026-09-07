@@ -1,6 +1,6 @@
 ---
-status: blocked on the user wanting releases, which wait for real artifact stores to release into
-updated: 2026-09-05
+status: in-progress
+updated: 2026-09-08
 ---
 
 # What a version number means here, and cutting the first real release
@@ -36,14 +36,54 @@ was last edited:
 
 ## What is left
 
-**The GitHub Release for `v0.2.0` has not been created.** `inv release.create --tag v0.2.0` is one
-task run — `gh` is authenticated and the tag is on origin, so nothing else is needed — and it is the
-step that turns `ci.check-actions`' stale-pin check on, since that check reads `releases/latest` and
-a tag is not a Release. The user parked it 2026-09-05: no releases yet, those would need actual
-artifact stores to work with. Until then the pitfall recorded in
-[`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Consumers pin a full SHA",
-stays live: a pinned consumer goes stale silently. There are no pinned consumers today (checked
-2026-09-04), so nothing is degraded by waiting.
+~~**The GitHub Release for `v0.2.0` has not been created.**~~ Superseded 2026-09-08 — see the
+release below. The pitfall it was holding open, in
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Consumers pin a full SHA", is
+now closed rather than merely undegraded.
+
+## `v0.3.0` was cut and released, 2026-09-08
+
+At the user's request, and `v0.2.0`'s Release was skipped rather than created retroactively — a
+Release exists to be `releases/latest`, and cutting the newer version answered that question without
+publishing a superseded one.
+
+**Minor, decided mechanically rather than by assessment**, which is what the rule in
+[`../contributing/versioning.md`](../contributing/versioning.md) is for. Diffing the enumerated
+surface over the 125 commits since `v0.2.0` showed four shipped files moved — `pytest.ini`,
+`ruff.toml`, `dprint.json`, and the `repo-tasks-quality` entries in `pyproject.toml` — plus three
+new task modules (`runner.py`, `interactive.py`, `nextsteps.py`), and module names are API here. No
+judgement call was needed at any point, which is the rule working.
+
+The documented three-step sequence ran as written: `trunkflow.cut --bump minor`, then
+`release.push-tag`, then `release.create`. Gate green on the bump commit, and CI green on it after
+the push.
+
+[PITFALL: **the safety property that makes a tag push cheap is worth re-checking rather than
+remembering, because it was once false in this very repo.** `publish.yml` used to fire on
+`push: tags: v*` with an unconditional TestPyPI job, so a cut meant an upload. Confirmed before
+pushing 2026-09-08: that file is `workflow_dispatch:` only and no workflow in the repo triggers on
+tags at all, so the tag reached no index. That check costs one `rg` and is the difference between a
+version number and a publication.]
+
+**`ci.check-actions`' stale-pin check is now live**, which was the stated reason the Release
+mattered. It cannot be observed from this repo — this repo calls its own reusable workflow by
+relative path, which resolves to no `owner/repo`, so the check correctly prints no line for it. The
+evidence is one step lower: `gh api repos/<this repo>/releases/latest --jq .tag_name` returns
+`v0.3.0` where it previously 404'd, and a 404 is exactly what `_latest_tag` turns into `None` and
+skips. A consumer pinning `security-reusable.yml` at a SHA will now get a verdict instead of
+silence.
+
+**The global install on this machine was moved to `v0.3.0`** with `inv repo-tasks.update`. That
+surfaced a real defect in `repo-tasks.status`, which reported `0.2.0` immediately after a successful
+upgrade — filed as
+[`2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md`](2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md),
+because the fix needs a decision this plan should not make in passing.
+
+**Deliberately not done: `inv repo-tasks.stamp`.** Pinning consumers is not a step in cutting a
+release — it is the open "is the fix pinning, or a release cadence?" question in
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), and stamping would have
+answered it silently by making every consumer stop tracking `main`. `bootstrap-repo-tasks.sh` stays
+unpinned until that is decided on its own terms.
 
 [DEFERRED: **a task that computes the part for you.** `inv version.next-part --since v0.2.0` diffing
 the surfaces enumerated in `versioning.md` and printing `minor` or `patch` is the natural end state,
@@ -63,8 +103,14 @@ finds both, and they mean opposite things.
 
 ## Recommended direction
 
-Nothing until the user wants releases. When they do: `inv release.create --tag v0.2.0`, confirm
-`ci.check-actions` now reports the reusable workflow's pin as current or stale rather than skipping
-it, then land and retire this plan. The `stable` question can be answered in the same session, and
-the deferred `next-part` task becomes its own plan if the rule turns out to be tedious to apply by
-hand.
+The release this plan was waiting on has happened, so what is left is the `stable` question above
+and nothing else. Answer it, then this plan lands and retires — the versioning rule and the release
+mechanism both have permanent homes in `contributing/` already, so the retirement is mostly a
+question of whether anything in the `v0.3.0` section is worth keeping there. Two candidates: the
+check-before-you-push pitfall, and the note that the stale-pin check cannot be observed from this
+repo, which will otherwise be re-derived by whoever next wonders why `check-actions` says nothing
+about it.
+
+The deferred `next-part` task stays deferred. It was to be reconsidered once the rule had been
+applied a few times; it has now been applied twice, both times in under a minute with an unambiguous
+answer, which is evidence against building it rather than for.
