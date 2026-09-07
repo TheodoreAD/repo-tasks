@@ -127,6 +127,28 @@ def test_pull_from_local_source(c, tmp_path, monkeypatch):
         assert (dest_dir / name).read_text(encoding="utf-8") == f"content for {name}"
 
 
+def test_staged_source_removes_the_clone_a_git_source_makes(tmp_path, monkeypatch):
+    """Nothing removed it before, so every `--source git:<url>` left a shallow clone in the temp
+    directory for good. The clone itself is not run here — the tier has no network — so the
+    resolution is stubbed and what is under test is the lifetime around it."""
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    (clone / "ruff.toml").write_text("", encoding="utf-8")
+    monkeypatch.setattr(configs, "_source_dir", lambda source: clone)
+    with configs._staged_source("git:https://example.invalid/repo") as staged:
+        assert staged.exists()
+    assert not clone.exists()
+
+
+def test_staged_source_never_removes_a_directory_it_did_not_make(tmp_path, monkeypatch):
+    # The packaged configs and a `local:` path the caller named are not ours to delete.
+    monkeypatch.setattr(configs, "_source_dir", lambda source: tmp_path)
+    for source in (None, f"local:{tmp_path}"):
+        with configs._staged_source(source):
+            pass
+        assert tmp_path.exists()
+
+
 def test_source_dir_rejects_unknown_prefix():
     with pytest.raises(ValueError, match=r"git:.*local:"):
         configs._source_dir("bogus:whatever")

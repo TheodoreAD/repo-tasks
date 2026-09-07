@@ -25,6 +25,8 @@ import shutil
 import subprocess
 import tempfile
 import tomllib
+from collections.abc import Generator
+from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
 from typing import cast
@@ -59,6 +61,8 @@ dev = [
 
 
 def _source_dir(source: str | None) -> Path:
+    """Where the canonical files are read from. Only the `git:` form allocates anything, which is
+    why the lifetime is a separate concern — see `_staged_source`."""
     if source is None:
         return Path(str(resources.files("repo_tasks"))) / "configs"
     if source.startswith("git:"):
@@ -69,6 +73,26 @@ def _source_dir(source: str | None) -> Path:
     if source.startswith("local:"):
         return Path(source.removeprefix("local:")).expanduser()
     raise ValueError(f"--source must start with 'git:' or 'local:', got {source!r}")
+
+
+@contextmanager
+def _staged_source(source: str | None) -> Generator[Path]:
+    """`_source_dir`, plus removing the shallow clone the `git:` form makes.
+
+    Nothing removed it before, so every `configs.pull --source git:<url>` left a clone of that repo
+    in the temp directory for the life of the machine. The other two forms own nothing — the
+    packaged directory and a path the caller named are not ours to delete — which is why the
+    cleanup is keyed on the prefix rather than on "was it temporary".
+
+    A wrapper rather than making `_source_dir` itself the context manager: the resolution is what
+    both this repo's own tests and its integration tier ask for by path, including at module scope,
+    and a `with` is not available there."""
+    src_dir = _source_dir(source)
+    try:
+        yield src_dir
+    finally:
+        if source is not None and source.startswith("git:"):
+            shutil.rmtree(src_dir, ignore_errors=True)
 
 
 # The two lines in the shipped configs that are correct for some consumers and wrong for others.
@@ -331,32 +355,32 @@ def pull(c: Context, source: str | None = None):
     """Materialize ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/zizmor.yml/.editorconfig
     from the canonical source into this repo's root. Overwrites unconditionally. Verbatim, except
     for the two lines `_derive_for_project` resolves against what this project declares."""
-    src_dir = _source_dir(source)
-    for name in _CONFIG_FILES:
-        Path(name).write_text(
-            _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path()), encoding="utf-8"
-        )
-        print(f"[configs.pull] {name} pulled")
+    with _staged_source(source) as src_dir:
+        for name in _CONFIG_FILES:
+            Path(name).write_text(
+                _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path()), encoding="utf-8"
+            )
+            print(f"[configs.pull] {name} pulled")
 
 
 def _diff_config_files(source: str | None) -> bool:
-    src_dir = _source_dir(source)
     changed = False
-    for name in _CONFIG_FILES:
-        src_text = _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path())
-        dst_path = Path(name)
-        dst_text = dst_path.read_text(encoding="utf-8") if dst_path.exists() else ""
-        if src_text == dst_text:
-            continue
-        changed = True
-        print(f"[configs.diff] {name} differs:")
-        lines = difflib.unified_diff(
-            dst_text.splitlines(keepends=True),
-            src_text.splitlines(keepends=True),
-            fromfile=f"{name} (current)",
-            tofile=f"{name} (pulled)",
-        )
-        print("".join(lines))
+    with _staged_source(source) as src_dir:
+        for name in _CONFIG_FILES:
+            src_text = _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path())
+            dst_path = Path(name)
+            dst_text = dst_path.read_text(encoding="utf-8") if dst_path.exists() else ""
+            if src_text == dst_text:
+                continue
+            changed = True
+            print(f"[configs.diff] {name} differs:")
+            lines = difflib.unified_diff(
+                dst_text.splitlines(keepends=True),
+                src_text.splitlines(keepends=True),
+                fromfile=f"{name} (current)",
+                tofile=f"{name} (pulled)",
+            )
+            print("".join(lines))
     return changed
 
 
