@@ -346,8 +346,11 @@ raises `UnicodeEncodeError`. Linux and macOS are safe by luck rather than by des
 UTF-8 mode on for the `C` and `POSIX` locales, verified on 3.14, so the ordinary agent and CI cases
 never see it — which is exactly the shape of bug that only ever appears on somebody else's machine.]
 
-[PITFALL: **nothing enforces this.** ruff's `PLW1514` (`unspecified-encoding`) is the rule for it
+[PITFALL: **no linter enforces this.** ruff's `PLW1514` (`unspecified-encoding`) is the rule for it
 and is preview-only, so selecting it means turning preview on in a config every consumer pulls, and
-preview rules change between releases. Until that changes the convention is this paragraph and code
-review. The sweep is re-runnable as an `ast` walk over `read_text`/`write_text`/`open` calls looking
-for a missing `encoding` keyword — that is how the 182 were found and how the zero was confirmed.]
+preview rules change between releases. So the check is this repo's own instead:
+`tests/unit/test_source_conventions.py` walks the package and the suite with `ast` and fails on a
+text read or write naming no encoding — the same walk that found the 182 and confirmed the zero,
+committed rather than described, and shown failing by putting one back. It guards this repo only; a
+consumer inherits the convention through this document, and its own copy of that test if it wants
+one.]
