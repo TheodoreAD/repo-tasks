@@ -33,11 +33,7 @@ from invoke import Context, task
 from .nextsteps import next_steps
 from .projects import current_branch, develop_branch, trunk_branch
 from .requirements import GH, NETWORK, requires
-from .version import Version, current_version, next_version
-
-# `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
-# namespace, not out of sibling modules.
-from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
+from .version import Version, bump_version, current_version, next_version
 
 
 def _open_release_branch(c: Context) -> str | None:
@@ -140,7 +136,7 @@ def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: b
     _require_tag_absent(c, f"v{version}")
     branch = f"{kind}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
-    version_bump(c, bump, group=group, tag=False, rc=rc)
+    bump_version(c, bump, group=group, tag=False, rc=rc)
     return branch
 
 
@@ -219,7 +215,7 @@ def release_candidate(c: Context, group: str | None = None):
     branch = _release_branch(c)
     tag = f"v{next_version(current_version(c, group=group), 'rc')}"
     _require_tag_absent(c, tag)
-    version_bump(c, "rc", group=group, tag=True)
+    bump_version(c, "rc", group=group, tag=True)
     c.run(f"git push origin {branch} {tag}", echo=True)
     next_steps(
         f"{tag} pushed — the tag-triggered workflows build it; deploy that to staging.",
@@ -232,7 +228,7 @@ def _drop_rc(c: Context, group: str | None) -> None:
     version main receives is the one the branch was named after. A branch that never had an rc
     (a hotfix by default) has nothing to drop."""
     if Version.parse(current_version(c, group=group)).rc is not None:
-        version_bump(c, "final", group=group, tag=False)
+        bump_version(c, "final", group=group, tag=False)
 
 
 def _local_finish(c: Context, kind: str, push: bool, group: str | None) -> None:
@@ -378,7 +374,7 @@ def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None
     _require_tag_absent(c, f"v{version}")
     branch = f"support-hotfix/{support}/{version}"
     c.run(f"git checkout -b {branch}", echo=True)
-    version_bump(c, bump, group=group, tag=False, rc=False)
+    bump_version(c, bump, group=group, tag=False, rc=False)
     return branch
 
 

@@ -136,14 +136,30 @@ restatement wherever the two are available.
 ## Stop loudly, and say what to run next
 
 Any command that stops short of "the whole flow is done" — a PR was opened and needs a human, a
-guard clause tripped — prints exactly what to run next, via `gitflow.py`'s private
-`_next_steps(*lines)` helper. Established there, but meant to apply to any task anywhere in this
-package with the same "stops for an external reason" shape: `deps.lock` imports it for the
-moved-workspace-member failure that a plain re-run never fixes, the same way `gitflow.py` imports
-`version.py`'s private `_bump`.
+guard clause tripped — prints exactly what to run next, via `nextsteps.next_steps(*lines)`. It
+applies to any task anywhere in this package with that "stops for an external reason" shape:
+`deps.lock` calls it for the moved-workspace-member failure that a plain re-run never fixes,
+`venv.check` for a venv on the wrong interpreter, `configs.diff` for a stale dev group.
 
 The alternative is leaving the caller to read source to find out what happens now, which is what
 this avoids.
+
+[DECISION: `nextsteps.py` is its own module, and a small one. It was `gitflow.py`'s private
+`_next_steps` until 2026-09-07 — established where the flow tasks that print it most often live —
+and by then three modules imported that private name behind a `reportPrivateUsage` suppression each,
+while two more printed the two lines themselves rather than add a fourth. A block of output five
+modules produce belongs to none of them; what the next step actually _is_ stays in the task that
+knows the condition.]
+
+[PITFALL: **an underscore does not keep a function out of the CLI namespace, and two modules said it
+did.** `version._bump` carried that comment where the real reason was only that a plain function
+cannot share the name of the `bump` task beside it. `Collection.from_module` collects `Task` objects
+and nothing else (verified against invoke 3.0.3), so a public plain function is not published either
+— the underscore bought nothing and cost `gitflow` and `trunkflow` a suppression apiece for
+importing something they legitimately depend on. It is `version.bump_version` now. If a name
+genuinely must stay out of a collection, the mechanism is an explicit `Collection(...)` listing what
+it publishes, which is what `quality.py`, `docker.py`, `helm.py`, `dist.py` and `dev_env.py` already
+do for exactly this reason.]
 
 ## Release-time actions stay out of the quality composite
 

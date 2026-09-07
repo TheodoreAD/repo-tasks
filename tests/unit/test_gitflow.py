@@ -156,7 +156,7 @@ def test_release_candidate_bumps_rc_tags_and_pushes(monkeypatch, capsys):
     monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc1")
     bumps = []
     monkeypatch.setattr(
-        gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append((part, tag))
+        gitflow, "bump_version", lambda c, part, group=None, tag=True, rc=True: bumps.append((part, tag))
     )
     gitflow.release_candidate.body(c)
     assert bumps == [("rc", True)]
@@ -174,7 +174,7 @@ def test_release_candidate_bumps_rc_tags_and_pushes(monkeypatch, capsys):
 def test_release_candidate_works_on_a_hotfix_branch_that_opted_in(monkeypatch, capsys):
     c = _candidate_context("hotfix/0.1.1", "0.1.1rc1", "v0.1.1rc2")
     monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.1.1rc1")
-    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: None)
+    monkeypatch.setattr(gitflow, "bump_version", lambda c, part, group=None, tag=True, rc=True: None)
     gitflow.release_candidate.body(c)
     assert "inv gitflow.hotfix-finish" in capsys.readouterr().out
 
@@ -272,7 +272,7 @@ def test_release_finish_drops_the_rc_before_opening_the_pr(monkeypatch):
     monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc3")
     events = []
     monkeypatch.setattr(
-        gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: events.append(("bump", part, tag))
+        gitflow, "bump_version", lambda c, part, group=None, tag=True, rc=True: events.append(("bump", part, tag))
     )
     gitflow.release_finish.body(c)
     assert events == [("bump", "final", False)]
@@ -282,7 +282,7 @@ def test_release_finish_local_drops_the_rc_before_merging(monkeypatch):
     c = _local_finish_context("release/0.2.0")
     monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.2.0rc1")
     bumps = []
-    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
+    monkeypatch.setattr(gitflow, "bump_version", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
     gitflow.release_finish.body(c, local=True)
     assert bumps == ["final"]
     assert c.run.call_args_list[1][0][0] == "git checkout main"  # pyright: ignore[reportAttributeAccessIssue]
@@ -292,7 +292,7 @@ def test_hotfix_finish_has_nothing_to_drop_without_an_rc(monkeypatch):
     c = _local_finish_context("hotfix/0.1.1")
     monkeypatch.setattr(gitflow, "current_version", lambda c, group=None: "0.1.1")
     bumps = []
-    monkeypatch.setattr(gitflow, "version_bump", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
+    monkeypatch.setattr(gitflow, "bump_version", lambda c, part, group=None, tag=True, rc=True: bumps.append(part))
     gitflow.hotfix_finish.body(c, local=True)
     assert bumps == []
 

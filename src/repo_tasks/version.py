@@ -33,7 +33,7 @@ _SEMVER_SERIALIZE = '["{major}.{minor}.{patch}-{pre_l}.{pre_n}", "{major}.{minor
 
 # `part` names accepted by `bump`/`next_version`, and the bump-my-version component each drives.
 # major/minor/patch land on rc1 (the scheme's first pre-release value) unless the caller asks for
-# a final version outright, which goes through --new-version instead — see _bump.
+# a final version outright, which goes through --new-version instead — see bump_version.
 _PARTS = {"major": "major", "minor": "minor", "patch": "patch", "rc": "pre_n", "final": "pre_l"}
 
 
@@ -138,7 +138,7 @@ def next_version(current: str, part: str, rc: bool = True) -> str:
 
     `major`/`minor`/`patch` land on `rc1` of the bumped base, exactly as bump-my-version's part
     arithmetic does once a pre-release component exists; `rc=False` asks for the final version
-    outright (a hotfix), which `_bump` then passes as `--new-version`. `rc` increments the
+    outright (a hotfix), which `bump_version` then passes as `--new-version`. `rc` increments the
     candidate number, `final` drops it."""
     v = Version.parse(current)
     if v.dev is not None:
@@ -272,7 +272,17 @@ def _lock_path() -> Path | None:
     return Path("uv.lock") if Path("uv.lock").exists() else None
 
 
-def _bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True) -> str:
+def bump_version(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True) -> str:
+    """The bump itself, as a plain function: `gitflow` and `trunkflow` both drive it as a step of a
+    longer flow, and the `bump` task below is the same thing under a name invoke can publish.
+
+    Public, and not `_bump` as it was until 2026-09-07. The underscore was documented in two
+    modules as keeping the function out of the CLI namespace, and it never did: `Collection.
+    from_module` collects `Task` objects and nothing else, verified against invoke 3.0.3, so a
+    public plain function is not published either. What the underscore actually bought was a name
+    that does not collide with the task's, which a real name buys too — while costing two sibling
+    modules a `reportPrivateUsage` suppression apiece for importing something they legitimately
+    depend on."""
     if part not in _PARTS:
         raise ValueError(f"unknown version part {part!r} (expected one of {', '.join(_PARTS)})")
     project = _resolve_project(c, group)
@@ -308,7 +318,7 @@ def bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: 
     in and commits. Tags `vX.Y.Z[rcN]` unless `tag=False` — gitflow.py's release_start/hotfix_start
     pass tag=False since the final tag belongs on main at finish time, not on develop at bump
     time. Returns the new version string."""
-    return _bump(c, part, group=group, tag=tag, rc=rc)
+    return bump_version(c, part, group=group, tag=tag, rc=rc)
 
 
 def _dev_version(commit_length: int = 7) -> Version:

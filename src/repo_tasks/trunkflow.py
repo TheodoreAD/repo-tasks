@@ -22,11 +22,7 @@ from invoke import Context, task
 from .nextsteps import next_steps
 from .projects import current_branch, trunk_branch
 from .requirements import NETWORK, requires
-
-# `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
-# namespace, not out of sibling modules. Same import shape as gitflow.py's.
-from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
-from .version import current_version, next_version
+from .version import bump_version, current_version, next_version
 
 
 def _require_clean_tree(c: Context) -> None:
@@ -85,7 +81,7 @@ def cut(c: Context, bump: str = "minor", branch: str | None = None, group: str |
 
     version = next_version(current_version(c, group), bump, rc=False)
     print(f"[trunkflow.cut] {current_version(c, group)} -> {version}")
-    _ = version_bump(c, bump, group=group, tag=True, rc=False)
+    _ = bump_version(c, bump, group=group, tag=True, rc=False)
 
     if push:
         c.run(f"git push origin {branch}", echo=True)
