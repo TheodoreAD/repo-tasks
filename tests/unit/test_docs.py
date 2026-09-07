@@ -64,9 +64,22 @@ def test_build_stops_when_the_docs_group_is_not_installed(c, tmp_cwd, monkeypatc
     assert "dependency-groups.dev" not in out
 
 
-def test_serve_runs_zensical_serve(c):
+def test_serve_runs_zensical_serve(c, monkeypatch):
+    # Patched rather than relying on the machine: zensical is the consumer's own docs-group
+    # dependency, present on a workstation that has run `uv sync --group docs` and absent in CI.
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/zensical")
     docs.serve.body(c)
     c.run.assert_called_once_with("zensical serve", echo=True)
+
+
+def test_serve_stops_when_the_docs_group_is_not_installed(c, monkeypatch, capsys):
+    """`serve` names zensical in its own docstring, so a missing one is worth the same message
+    `build` gives rather than the shell's bare exit 127."""
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    with pytest.raises(Exit):
+        docs.serve.body(c)
+    c.run.assert_not_called()
+    assert "uv sync --group docs" in capsys.readouterr().out
 
 
 def test_relative_links_finds_inline_targets():

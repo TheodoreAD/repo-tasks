@@ -302,5 +302,12 @@ def build(c: Context):
 
 @task
 def serve(c: Context):
-    """Serve the docs site locally with live reload (zensical serve)."""
+    """Serve the docs site locally with live reload (zensical serve).
+
+    Preflighted exactly like `build`, and for the same reason: without it a consumer whose `docs`
+    group is not synced gets the shell's bare exit 127 from a task that named zensical in its own
+    docstring. No `mkdocs.yml` check, though — unlike `build`, this is never run unconditionally by
+    a gate, so someone typing it in a repo with no docs site wants zensical's own error about the
+    missing config rather than a no-op."""
+    _require_zensical()
     c.run("zensical serve", echo=True)
