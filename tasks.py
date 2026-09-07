@@ -3,9 +3,8 @@ every consumer repo uses (see README.md)."""
 
 import difflib
 from pathlib import Path
-from typing import cast
 
-from invoke import Collection, Context, Exit, task
+from invoke import Context, Exit, task
 
 from repo_tasks import ns
 from repo_tasks.configs import _CONFIG_FILES, restore_derived_lines  # pyright: ignore[reportPrivateUsage] — dev task
@@ -78,6 +77,7 @@ def promote(c: Context, file: str | None = None, apply: bool = False):
 # other direction of `configs.pull` and reads as one subject with two verbs. It stays out of the
 # package itself (see configs.py) — this is repo-tasks' own tasks.py, so the task exists only here.
 #
-# One pyright accommodation: invoke types Collection.collections loosely, hence the cast. (`promote`
-# itself is a properly typed Task thanks to invoke-stubs — see the quality dependency group.)
-cast(Collection, ns.collections["configs"]).add_task(promote, name="promote")
+# No cast: invoke-stubs types `Collection.collections` as `Lexicon[Collection]`, so the lookup comes
+# back typed. (`promote` itself is a properly typed Task thanks to the same stubs — see the quality
+# dependency group.)
+ns.collections["configs"].add_task(promote, name="promote")

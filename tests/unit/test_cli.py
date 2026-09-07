@@ -8,10 +8,6 @@ script has to provide at least one executable of its own for `uv tool install
 with no tasks.py for `inv` to find.
 """
 
-from typing import cast
-
-from invoke import Collection
-
 from repo_tasks import cli
 
 
@@ -37,7 +33,6 @@ def test_configs_is_nested_so_ensure_deps_is_reachable():
     # tasks.py for `inv` to discover, and `inv -c repo_tasks.configs` does not work. If this
     # collection stops being nested here, that path has no entry point at all.
     assert "configs" in cli._namespace.collections
-    # Cast for the same reason tasks.py casts here: invoke types Collection.collections loosely.
-    nested = cast(Collection, cli._namespace.collections["configs"])
+    nested = cli._namespace.collections["configs"]
     # `ensure-deps`, not `ensure_deps`: invoke publishes the dashed CLI name here.
     assert {"ensure-deps", "pull", "diff"} <= set(nested.task_names)

@@ -1,8 +1,6 @@
 """Tests for repo_tasks's root `ns` — the ready-made Collection every consumer repo's tasks.py
 imports directly, with each shipped module nested under its own name."""
 
-from typing import cast
-
 import pytest
 from invoke import Collection
 
@@ -26,12 +24,12 @@ from repo_tasks import venv as venv_module
 
 
 def test_ns_nests_quality_under_its_own_name():
-    quality_collection = cast(Collection, ns.collections["quality"])
+    quality_collection = ns.collections["quality"]
     assert quality_collection.task_names
 
 
 def test_ns_quality_collection_contains_precommit():
-    quality_collection = cast(Collection, ns.collections["quality"])
+    quality_collection = ns.collections["quality"]
     assert "precommit" in quality_collection.task_names
 
 
@@ -64,12 +62,12 @@ def test_ns_installs_the_reporting_runner_when_report_mode_is_on(monkeypatch: py
 def test_ns_nests_dev_env_under_its_own_name():
     # invoke dashifies the collection name for the CLI (`inv dev-env.setup`), same as it does for
     # underscored task names (`wire_claude_hook` -> `wire-claude-hook`) — the dict key reflects that.
-    dev_env_collection = cast(Collection, ns.collections["dev-env"])
+    dev_env_collection = ns.collections["dev-env"]
     assert "setup" in dev_env_collection.task_names
 
 
 def test_ns_nests_docs_under_its_own_name():
-    docs_collection = cast(Collection, ns.collections["docs"])
+    docs_collection = ns.collections["docs"]
     assert {"clean", "build", "serve"} <= set(docs_collection.task_names)
 
 
@@ -82,17 +80,17 @@ def test_docs_module_is_individually_importable():
 
 
 def test_ns_nests_venv_under_its_own_name():
-    venv_collection = cast(Collection, ns.collections["venv"])
+    venv_collection = ns.collections["venv"]
     assert {"sync", "create", "delete", "install-wheel"} <= set(venv_collection.task_names)
 
 
 def test_ns_nests_ci_under_its_own_name():
-    ci_collection = cast(Collection, ns.collections["ci"])
+    ci_collection = ns.collections["ci"]
     assert "status" in set(ci_collection.task_names)
 
 
 def test_ns_nests_deps_under_its_own_name():
-    deps_collection = cast(Collection, ns.collections["deps"])
+    deps_collection = ns.collections["deps"]
     assert {"lock", "check", "audit", "list", "tree", "export"} <= set(deps_collection.task_names)
 
 
@@ -105,12 +103,12 @@ def test_deps_module_is_individually_importable():
 
 
 def test_ns_nests_direnv_under_its_own_name():
-    direnv_collection = cast(Collection, ns.collections["direnv"])
+    direnv_collection = ns.collections["direnv"]
     assert "allow" in direnv_collection.task_names
 
 
 def test_ns_nests_agents_under_its_own_name():
-    agents_collection = cast(Collection, ns.collections["agents"])
+    agents_collection = ns.collections["agents"]
     assert "wire-claude-hook" in agents_collection.task_names
 
 
@@ -123,7 +121,7 @@ def test_agents_module_is_individually_importable():
 
 
 def test_ns_nests_dist_under_its_own_name():
-    dist_collection = cast(Collection, ns.collections["dist"])
+    dist_collection = ns.collections["dist"]
     assert {"clean", "build", "publish", "list-versions"} <= set(dist_collection.task_names)
 
 
@@ -132,7 +130,7 @@ def test_dist_module_is_individually_importable():
 
 
 def test_ns_nests_docker_under_its_own_name():
-    docker_collection = cast(Collection, ns.collections["docker"])
+    docker_collection = ns.collections["docker"]
     assert {"build", "push", "release"} <= set(docker_collection.task_names)
 
 
@@ -141,7 +139,7 @@ def test_docker_module_is_individually_importable():
 
 
 def test_ns_nests_helm_under_its_own_name():
-    helm_collection = cast(Collection, ns.collections["helm"])
+    helm_collection = ns.collections["helm"]
     assert {"lint", "package", "push"} <= set(helm_collection.task_names)
 
 
@@ -150,7 +148,7 @@ def test_helm_module_is_individually_importable():
 
 
 def test_ns_nests_configs_under_its_own_name():
-    configs_collection = cast(Collection, ns.collections["configs"])
+    configs_collection = ns.collections["configs"]
     assert {"pull", "diff"} <= set(configs_collection.task_names)
 
 
@@ -172,7 +170,7 @@ def test_configure_module_is_individually_importable():
 def test_ns_nests_selfinstall_under_repo_tasks_name():
     # invoke dashifies the collection name for the CLI (`inv repo-tasks.update`) — nested
     # deliberately so these names can never collide with a consuming project's own local tasks.
-    repo_tasks_collection = cast(Collection, ns.collections["repo-tasks"])
+    repo_tasks_collection = ns.collections["repo-tasks"]
     assert {"update", "status", "version", "stamp"} <= set(repo_tasks_collection.task_names)
 
 

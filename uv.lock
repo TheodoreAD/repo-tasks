@@ -534,8 +534,8 @@ wheels = [
 
 [[package]]
 name = "invoke-stubs"
-version = "0.2.0"
-source = { git = "https://github.com/TheodoreAD/invoke-stubs#13bcc9ee29616a32d4b41136efe8a5a99e1d761a" }
+version = "0.3.0"
+source = { git = "https://github.com/TheodoreAD/invoke-stubs#f70ff01e14ef2a586b88c6da1f49d392a7a17685" }
 
 [[package]]
 name = "legacy-cgi"
