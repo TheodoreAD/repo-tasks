@@ -83,19 +83,23 @@ was free.]
 `DataProxy.__setitem__` typed `value: str` (so `config["timeout"] = 30` was rejected),
 `Promise.__exit__` typed `exc_value: BaseException` (so it did not satisfy
 `AbstractContextManager`), and `Task.__call__` returning the wrapped callable rather than what
-calling it returns. That repo's `plans/` carries the evidence, and the still-open question of
-whether any of it is offered upstream.
+calling it returns. 0.3.0, taken the same day, adds a fourth: `Lexicon` is generic, so
+`Collection.collections` is `Lexicon[Collection]` and `.tasks` is `Lexicon[Task[Any]]`. That repo's
+`contributing/stub-decisions.md` carries why it is generic rather than a plain `dict[str, …]`.
 
-[PITFALL: **a fuller stub makes some `Any` louder, not quieter** — which is what taking 0.2.0 cost
-here. `Collection.collections` is a `Lexicon`, and the stub declares `Lexicon(dict[str, Any])`, so
-`ns.collections["quality"]` is now `Any`; under 0.1.0 that attribute fell through to invoke's own
-untyped vendored `Lexicon` and the lookup was `Unknown | None` (probed 2026-09-07,
-`reportUnknownVariableType`). The tests tier sets every `reportUnknown*` to `none` and keeps
-`reportAny` an error, so the honest type is the one that fails: 14 lookups in
-`tests/unit/test_init.py` went red on a bump that changed nothing at runtime. They carry
-`cast(Collection, ...)` now, the shape `tests/unit/test_cli.py` already used. The `is not None`
-assert each one used to carry went with it — it was narrowing that `| None`, not defensive noise,
-and `reportUnnecessaryComparison` is an error once the type is known.]
+[PITFALL: **a fuller stub can make an `Any` louder rather than quieter, and that is the version to
+watch for.** Both bumps landed here in one day and each moved the same lookup. Under 0.1.0
+`ns.collections["quality"]` fell through to invoke's own untyped vendored `Lexicon` and was
+`Unknown | None` (probed 2026-09-07, `reportUnknownVariableType`); 0.2.0 declared
+`Lexicon(dict[str, Any])`, which is honest and therefore _fails_ — the tests tier sets every
+`reportUnknown*` to `none` and keeps `reportAny` an error, so 14 lookups in
+`tests/unit/test_init.py` went red on a bump that changed nothing at runtime, and took a
+`cast(Collection, ...)` each; 0.3.0's generic `Lexicon` typed them at the source and every cast
+became a `reportUnnecessaryCast` error, 16 of them counting `tasks.py` and `test_cli.py`. Two things
+are worth keeping from that: **the gate names both directions** — `reportAny` when a lookup goes
+loose, `reportUnnecessaryCast` when it stops needing help — so neither state can be reached
+silently. And the `is not None` assert those tests once carried was narrowing the old `| None`, not
+defensive noise, which is why it did not come back when the casts went.]
 
 [DECISION: `invoke-stubs` is its own repo, git-sourced in the `repo-tasks-quality` group — the same
 shape consumers already use for `repo-tasks` itself — rather than a subdirectory here or a PyPI
