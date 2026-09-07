@@ -37,11 +37,11 @@ from .version import Version, current_version, next_version
 from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
 
 
-def _current_branch(c: Context):
+def _current_branch(c: Context) -> str:
     return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
 
 
-def _open_release_branch(c: Context):
+def _open_release_branch(c: Context) -> str | None:
     names = c.run("git for-each-ref --format='%(refname:short)' refs/heads/release/*", hide=True).stdout.split()
     if len(names) > 1:
         raise ValueError(
@@ -50,19 +50,19 @@ def _open_release_branch(c: Context):
     return names[0] if names else None
 
 
-def _next_steps(*lines: str):
+def _next_steps(*lines: str) -> None:
     print("\nNext steps:")
     for line in lines:
         print(f"  - {line}")
 
 
-def _open_pr(c: Context, branch: str, base: str, title: str, body: str):
+def _open_pr(c: Context, branch: str, base: str, title: str, body: str) -> str:
     c.run(f"git push -u origin {branch}", echo=True)
     result = c.run(f'gh pr create --base {base} --head {branch} --title "{title}" --body "{body}"', echo=True)
     return result.stdout.strip()
 
 
-def _require_merged_pr(c: Context, branch: str, base: str):
+def _require_merged_pr(c: Context, branch: str, base: str) -> None:
     """Refuse to finalize until the PR from `branch` into `base` has actually merged. Without this
     the finalize sequence fails open: `git merge --ff-only origin/main` succeeds trivially when
     local and remote main are already equal, so the tag lands on the *old* tip and gets pushed —
@@ -79,7 +79,7 @@ def _require_merged_pr(c: Context, branch: str, base: str):
         )
 
 
-def _require_tag_absent(c: Context, tag: str):
+def _require_tag_absent(c: Context, tag: str) -> None:
     """A release/hotfix about to be named after a version whose tag already exists means the base
     branch never received that version — almost always a `sync/<tag>` PR closed without merging,
     so develop still carries the pre-release version and the arithmetic lands on a number main
@@ -123,7 +123,7 @@ def feature_finish(c: Context, name: str, local: bool = False):
     )
 
 
-def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: bool):
+def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: bool) -> str:
     c.run(f"git checkout {base}", echo=True)
     # The branch is named after the *final* version it will ship, whether or not the bump lands
     # on rc1 first — the rc cycle happens on the branch, the name is what main gets.
@@ -170,7 +170,7 @@ def hotfix_start(c: Context, bump: str, group: str | None = None, rc: bool = Fal
     _next_steps(*steps)
 
 
-def _release_branch(c: Context):
+def _release_branch(c: Context) -> str:
     """The current release/* or hotfix/* branch, or a raise naming what was expected — the
     candidate cycle runs on either, since a hotfix can opt into it."""
     branch = _current_branch(c)
@@ -200,7 +200,7 @@ def release_candidate(c: Context, group: str | None = None):
     )
 
 
-def _drop_rc(c: Context, group: str | None):
+def _drop_rc(c: Context, group: str | None) -> None:
     """Bump a release candidate to its final version before the branch merges into the trunk — the
     version main receives is the one the branch was named after. A branch that never had an rc
     (a hotfix by default) has nothing to drop."""
@@ -208,7 +208,7 @@ def _drop_rc(c: Context, group: str | None):
         version_bump(c, "final", group=group, tag=False)
 
 
-def _local_finish(c: Context, kind: str, push: bool, group: str | None):
+def _local_finish(c: Context, kind: str, push: bool, group: str | None) -> None:
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -239,7 +239,7 @@ def _local_finish(c: Context, kind: str, push: bool, group: str | None):
         c.run(f"git push origin {tag}", echo=True)
 
 
-def _pr_finish(c: Context, kind: str, group: str | None):
+def _pr_finish(c: Context, kind: str, group: str | None) -> None:
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -290,7 +290,7 @@ def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: st
     _pr_finish(c, "hotfix", group)
 
 
-def _finalize(c: Context, kind: str):
+def _finalize(c: Context, kind: str) -> None:
     branch = _current_branch(c)
     prefix = f"{kind}/"
     if not branch.startswith(prefix):
@@ -359,7 +359,7 @@ def support_start(c: Context, version: str, base: str):
     )
 
 
-def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
+def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None) -> str:
     target = f"support/{support}"
     c.run(f"git checkout {target}", echo=True)
     version = next_version(current_version(c, group=group), bump, rc=False)
@@ -383,7 +383,7 @@ def support_hotfix_start(c: Context, support: str, bump: str, group: str | None 
     _next_steps(f"When ready to ship: inv gitflow.support-hotfix-finish --support={support} (from the {branch} branch)")
 
 
-def _support_hotfix_branch_and_tag(c: Context, support: str):
+def _support_hotfix_branch_and_tag(c: Context, support: str) -> tuple[str, str]:
     branch = _current_branch(c)
     prefix = f"support-hotfix/{support}/"
     if not branch.startswith(prefix):

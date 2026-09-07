@@ -19,4 +19,4 @@ def setup(c: Context):
 # `setup`'s pre-chain, and the auto-scan republished each of them under a second name
 # (`dev-env.create`, `dev-env.allow`, `dev-env.claude-hook`) alongside their real ones in
 # venv/direnv/agents. This module deliberately owns exactly one task.
-ns = Collection(setup)
+ns: Collection = Collection(setup)

@@ -110,7 +110,7 @@ def semver(text: str) -> str:
     return Version.parse(text).semver()
 
 
-def _resolve_project(c: Context, group: str | None):
+def _resolve_project(c: Context, group: str | None) -> PythonProject:
     """The python project whose `[project].version` is the group's version. Absence is an error
     here, not a no-op like `dist.py`/`docker.py`/`helm.py`: nothing else can supply a version, so a
     bump has nothing to write and a `current_version` query has nothing to answer — say so, rather
@@ -125,12 +125,12 @@ def _resolve_project(c: Context, group: str | None):
     return python_projects[0]
 
 
-def current_version(c: Context, group: str | None = None):
+def current_version(c: Context, group: str | None = None) -> str:
     """The current version of one group's project (PEP 440 form), resolved via projects.py."""
     return _resolve_project(c, group).version
 
 
-def next_version(current: str, part: str, rc: bool = True):
+def next_version(current: str, part: str, rc: bool = True) -> str:
     """The version `bump` would produce for `part`, computed without writing or committing
     anything. Hand-rolled rather than shelling out to `bump-my-version show --increment`, and safe
     only because tests/integration pins every transition here against that very command on the
@@ -273,7 +273,7 @@ def _lock_path() -> Path | None:
     return Path("uv.lock") if Path("uv.lock").exists() else None
 
 
-def _bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True):
+def _bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True) -> str:
     if part not in _PARTS:
         raise ValueError(f"unknown version part {part!r} (expected one of {', '.join(_PARTS)})")
     project = _resolve_project(c, group)
@@ -304,7 +304,7 @@ def _bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc:
         "rc": "For major/minor/patch: bump to rc1 (default) or straight to the final version (--no-rc)",
     }
 )
-def bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True):
+def bump(c: Context, part: str, group: str | None = None, tag: bool = True, rc: bool = True) -> str:
     """Bump one version group: writes the new version into every file that group's projects live
     in and commits. Tags `vX.Y.Z[rcN]` unless `tag=False` — gitflow.py's release_start/hotfix_start
     pass tag=False since the final tag belongs on main at finish time, not on develop at bump
@@ -326,7 +326,7 @@ def _dev_version(commit_length: int = 7) -> Version:
 
 
 @task(help={"group": "Version group to rewrite (default: the repo's own root project)"})
-def set_dev(c: Context, group: str | None = None):
+def set_dev(c: Context, group: str | None = None) -> str:
     """Write a dev-build version into the working tree — `pyproject.toml`, `uv.lock`, and every
     chart in the group — without committing: `1.0.1.dev3+g1a2b3c` from a tree three commits past
     `v1.0.0`, `1.0.1-dev.3.g1a2b3c` in the charts. For `dist.build --dev`/`docker.build --dev`/

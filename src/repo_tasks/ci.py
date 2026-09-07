@@ -104,7 +104,7 @@ def _annotations(c: Context, job_id: int) -> list[Annotation]:
     return cast(list[Annotation], json.loads(text))
 
 
-def _report_annotations(c: Context, run: Run):
+def _report_annotations(c: Context, run: Run) -> None:
     """Print the loud annotations on a run's jobs.
 
     The blind spot this closes: a deprecation notice rides on a run that passes, so every signal

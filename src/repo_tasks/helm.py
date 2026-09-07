@@ -10,7 +10,7 @@ from pathlib import Path
 from invoke import Collection, Context, task
 
 from .interactive import run_interactive
-from .projects import discover_helm_charts
+from .projects import HelmChart, discover_helm_charts
 from .requirements import NETWORK, requires
 from .version import Version, current_version, set_dev
 
@@ -25,7 +25,7 @@ def _registry_host(registry: str) -> str:
     return registry.removeprefix("oci://").split("/", 1)[0]
 
 
-def _resolve_chart(c: Context, project: str | None):
+def _resolve_chart(c: Context, project: str | None) -> HelmChart | None:
     """The chart to act on, or None when the repo has no charts at all — tasks no-op cleanly on
     None (a chartless repo is a normal state), but an explicit --project naming nothing is an
     error, never a guess."""
@@ -142,4 +142,4 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as helm.set-dev (contributing/task-module-conventions.md).
-ns = Collection(lint, package, push, login)
+ns: Collection = Collection(lint, package, push, login)

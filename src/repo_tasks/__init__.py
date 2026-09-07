@@ -35,7 +35,7 @@ from . import venv as venv_module
 # to the constructor, not `ns.add_task()` — invoke's `@task` decorator has no type stub, so
 # pyright falls back to the plain undecorated function signature for anything decorated with it;
 # the constructor's `*args: Any` tolerates that, `add_task`'s `task: Task` parameter doesn't.
-ns = Collection(configure.configure)
+ns: Collection = Collection(configure.configure)
 ns.add_collection(Collection.from_module(quality), name="quality")
 ns.add_collection(Collection.from_module(testing), name="test")
 ns.add_collection(Collection.from_module(version), name="version")

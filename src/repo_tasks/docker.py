@@ -6,7 +6,7 @@ consumer repo even though image names/registries legitimately differ per repo.""
 from invoke import Collection, Context, task
 
 from .interactive import run_interactive
-from .projects import discover_docker_images
+from .projects import DockerImage, discover_docker_images
 from .requirements import DOCKER, NETWORK, requires
 from .version import Version, current_version, set_dev
 
@@ -24,7 +24,7 @@ def _registry_host(image: str) -> str:
     return "docker.io"
 
 
-def _resolve_image(c: Context, project: str | None):
+def _resolve_image(c: Context, project: str | None) -> DockerImage | None:
     """The image to act on, or None when the repo has no images at all — tasks no-op cleanly on
     None (an imageless repo is a normal state, so a composite can wire these unconditionally), but
     an explicit --project naming nothing is an error, never a guess. Same shape as helm.py."""
@@ -160,4 +160,4 @@ def login(c: Context, project: str | None = None):
     run_interactive(f"docker login {_registry_host(image.image)}")
 
 
-ns = Collection(check, build, push, release, login)
+ns: Collection = Collection(check, build, push, release, login)

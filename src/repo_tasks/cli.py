@@ -26,7 +26,7 @@ from . import configs, selfinstall
 _namespace = Collection.from_module(selfinstall)
 _namespace.add_collection(Collection.from_module(configs), name="configs")
 
-program = Program(
+program: Program = Program(
     name="repo-tasks",
     binary="repo-tasks",
     version=_pkg_version("repo-tasks"),

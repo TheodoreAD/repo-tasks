@@ -14,7 +14,7 @@ from typing import cast
 
 from invoke import Collection, Context, task
 
-from .projects import discover_python_projects
+from .projects import PythonProject, discover_python_projects
 from .requirements import NETWORK, requires
 from .version import Version, set_dev
 
@@ -94,7 +94,7 @@ def _html_versions(payload: bytes, normalized_name: str) -> list[str]:
 _NO_PROJECTS = "no python project (no pyproject.toml [project] table and no workspace members) — nothing to do"
 
 
-def _resolve_project(c: Context, project: str | None):
+def _resolve_project(c: Context, project: str | None) -> PythonProject | None:
     """The python project to act on: the named one, or the repo's own (root-first ordering in
     projects.py) when no --project narrows it down — or None when the repo has no python project
     at all, which tasks no-op cleanly on. An explicit --project naming nothing is an error, never
@@ -216,4 +216,4 @@ def list_versions(c: Context, project: str | None = None, index: str | None = No
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as dist.set-dev (contributing/task-module-conventions.md).
-ns = Collection(clean, build, publish, list_versions)
+ns: Collection = Collection(clean, build, publish, list_versions)

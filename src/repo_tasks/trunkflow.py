@@ -32,14 +32,14 @@ def _current_branch(c: Context) -> str:
     return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
 
 
-def _require_clean_tree(c: Context):
+def _require_clean_tree(c: Context) -> None:
     """A bump commits every file the version appears in, so an unrelated staged or modified file
     would ride along in the release commit under a message describing only the bump."""
     if c.run("git status --porcelain", hide=True).stdout.strip():
         raise ValueError("working tree is not clean — commit or stash before cutting a release")
 
 
-def _require_in_sync(c: Context, branch: str):
+def _require_in_sync(c: Context, branch: str) -> None:
     """Refuse to tag a trunk that is behind its remote.
 
     The tag would name a commit that is not what the remote calls the release, and unlike a

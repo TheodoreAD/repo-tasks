@@ -29,15 +29,15 @@ from .runner import verdict
 from .testing import unit, untested_modules
 
 
-def _sh_files(c: Context):
+def _sh_files(c: Context) -> list[str]:
     return tracked_files(c, "*.sh")
 
 
-def _workflow_files(c: Context):
+def _workflow_files(c: Context) -> list[str]:
     return tracked_files(c, ".github/workflows/*.yml", ".github/workflows/*.yaml")
 
 
-def _dockerfiles(c: Context):
+def _dockerfiles(c: Context) -> list[str]:
     """Every Dockerfile in the repo, at any depth. Both spellings the family actually uses: a bare
     `Dockerfile` (the zero-config root image `projects.discover_docker_images` finds) and the
     `<name>.Dockerfile` suffix a repo with several images, or a test fixture, reaches for.
@@ -283,7 +283,7 @@ def precommit(c: Context):
 # Explicit namespace, not Collection.from_module's auto-scan: `unit` is imported above for
 # `check`'s pre-chain, and the auto-scan adds every Task object it finds in the module — which
 # published testing.py's `unit` a second time as `inv quality.unit`. One task, one name.
-ns = Collection(
+ns: Collection = Collection(
     lint_check,
     lint_apply,
     format_check,

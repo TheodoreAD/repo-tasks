@@ -30,7 +30,7 @@ def _latest_tag(c: Context) -> str:
     return tag
 
 
-def _require_tag_on_remote(c: Context, tag: str):
+def _require_tag_on_remote(c: Context, tag: str) -> None:
     """A Release must name a tag the remote already has.
 
     `gh release create` will happily *create* the tag when it is missing, resolving it against
@@ -44,7 +44,7 @@ def _require_tag_on_remote(c: Context, tag: str):
         raise ValueError(f"tag {tag} exists locally but not on origin — `git push origin {tag}` first")
 
 
-def _require_no_release(c: Context, tag: str):
+def _require_no_release(c: Context, tag: str) -> None:
     """Refuse to publish over an existing Release rather than editing one nobody asked to change."""
     if c.run(f"gh release view {tag}", hide=True, warn=True).ok:
         raise ValueError(
@@ -53,7 +53,7 @@ def _require_no_release(c: Context, tag: str):
         )
 
 
-def _require_tag_on_branch(c: Context, tag: str, branch: str):
+def _require_tag_on_branch(c: Context, tag: str, branch: str) -> None:
     """The tag must point at a commit the branch actually contains.
 
     Without this, a tag left on an abandoned branch — or created before a reset — is pushable as
