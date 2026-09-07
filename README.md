@@ -280,8 +280,12 @@ archaeology only — never run it as a human on your own machine.** Running it w
 reinstall the _global_ tool to whatever version _this_ repo happens to be pinned to, yanking it out
 from under any other repo you're working on. A human always runs `inv repo-tasks.update` instead; CI
 runs the committed, version-pinned script (before `inv` exists), then bare `inv <task>` after.
-`inv repo-tasks.status` compares the two — the globally-installed version against what this repo's
-stamped script currently expects — as a quick drift check.
+`inv repo-tasks.status` is the quick drift check. It prints **two** versions, because there are two:
+the _active_ one (whatever `inv` process is running, which in a repo carrying its own `repo-tasks`
+is that copy rather than the global tool) and the _global_ `uv tool` install, read from uv. It then
+compares the active one against what this repo's stamped script expects. Both numbers are named
+because printing one under the other's name is exactly how a successful upgrade once read as a
+failed one.
 
 ## Developing
 
