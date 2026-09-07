@@ -246,11 +246,17 @@ def _unconstrained_quality_deps() -> list[str]:
     return drifted
 
 
-# Every binary a gate step shells out to, mapped to the `repo-tasks-quality` entry providing it.
-# Spelled out rather than derived: four of the seven distributions are named differently from the
+# Every binary this package shells out to that the manifest supplies, mapped to the
+# `repo-tasks-quality` entry providing it. Mostly gate steps; `act` is the exception and belongs
+# here for the same reason as the rest — the manifest is what installs it, so the manifest is what
+# the message has to name. A tool no dependency group can supply (`gh`, `zensical`, `docker`,
+# `helm`) is deliberately absent and gets its own preflight where it is used, since this one's
+# remediation would send its reader to sync a group that will never contain it.
+# Spelled out rather than derived: five of the ten distributions are named differently from the
 # tool they install (`shfmt-py` -> `shfmt`), and the whole point of the message is to name the
 # entry a consumer has to add. test_configs.py asserts every value is really in the manifest.
 _GATE_TOOL_DISTRIBUTIONS = {
+    "act": "act-bin",
     "actionlint": "actionlint-py",
     "basedpyright": "basedpyright",
     "dprint": "dprint-py",

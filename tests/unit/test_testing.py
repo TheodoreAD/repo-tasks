@@ -74,8 +74,15 @@ def test_integration_targets_noop_without_a_tier(c, task_name, tmp_cwd, capsys):
 
 
 @pytest.fixture
-def workflows_dir(tmp_cwd: Path) -> Path:
+def workflows_dir(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A repo with a workflows directory *and* act on PATH.
+
+    The `which` patch is not decoration: this tier must not depend on what happens to be installed
+    on the machine running it, and act is a real binary the manifest ships rather than something
+    every CI runner has. Without it these tests would pass on the dev workstation and fail in CI —
+    the exact divergence the preflight itself exists to report."""
     (tmp_cwd / ".github" / "workflows").mkdir(parents=True)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
     return tmp_cwd
 
 
@@ -93,6 +100,26 @@ def test_workflows_noops_without_a_workflows_dir(c, tmp_cwd, capsys):
     testing.workflows.body(c)
     assert "nothing to do" in capsys.readouterr().out
     c.run.assert_not_called()
+
+
+def test_workflows_preflights_act_naming_the_manifest_entry(c, tmp_cwd, monkeypatch, capsys):
+    """Without this, a repo whose dev group predates `act-bin` gets the shell's bare exit 127 —
+    the same failure `require_tool` was written for after `actionlint` landed and every consumer's
+    CI failed for a day with nothing linking the message back to the drift."""
+    (tmp_cwd / ".github" / "workflows").mkdir(parents=True)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(Exit) as exc_info:
+        testing.workflows.body(c)
+    assert exc_info.value.code == 1
+    assert "act-bin" in capsys.readouterr().out  # the entry to add, which the binary name does not give you
+    c.run.assert_not_called()
+
+
+def test_workflows_does_not_preflight_act_in_a_repo_with_no_workflows(c, tmp_cwd, monkeypatch, capsys):
+    # The no-op comes first: a repo with nothing to run must not be told to install anything.
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    testing.workflows.body(c)
+    assert "nothing to do" in capsys.readouterr().out
 
 
 def _write_module_and_test(root: Path, module: str, test: str | None) -> None:

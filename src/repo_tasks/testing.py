@@ -205,6 +205,10 @@ def workflows(c: Context, job: str | None = None, event: str = "push", dry_run: 
     if not _WORKFLOWS_DIR.exists():
         print(f"[test.workflows] {_NO_WORKFLOWS}")
         return
+    # Inside the branch, after the no-op check, exactly as quality.py's file-gated steps preflight:
+    # a repo with no workflows must not be told to install act. `act-bin` is in the manifest, so
+    # this is the same preflight and the same fix as every other tool that comes from there.
+    require_tool("act")
     cmd = f"act {event}"
     if job:
         cmd += f" -j {job}"
