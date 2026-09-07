@@ -30,6 +30,7 @@ import shlex
 
 from invoke import Context, task
 
+from .nextsteps import next_steps
 from .projects import develop_branch, trunk_branch
 from .requirements import GH, NETWORK, requires
 from .version import Version, current_version, next_version
@@ -50,12 +51,6 @@ def _open_release_branch(c: Context) -> str | None:
             f"multiple release/* branches exist ({names!r}) — finish or delete the extra one before retrying"
         )
     return names[0] if names else None
-
-
-def _next_steps(*lines: str) -> None:
-    print("\nNext steps:")
-    for line in lines:
-        print(f"  - {line}")
 
 
 def _open_pr(c: Context, branch: str, base: str, title: str, body: str) -> str:
@@ -116,7 +111,7 @@ def feature_start(c: Context, name: str):
     # a space in it made `git checkout -b feature/add login develop` read `login` as the start
     # point, which fails with a message about a ref rather than about the name.
     c.run(f"git checkout -b {shlex.quote(f'feature/{name}')} {develop_branch()}", echo=True)
-    _next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
+    next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
 
 
 @requires(GH, NETWORK)
@@ -135,7 +130,7 @@ def feature_finish(c: Context, name: str, local: bool = False):
         return
 
     url = _open_pr(c, branch, develop, f"Feature: {name}", f"Merging {branch} into {develop}.")
-    _next_steps(
+    next_steps(
         f"PR opened: {url}",
         "Once it's approved and merged on GitHub, there's nothing else to run — this feature is done.",
     )
@@ -164,7 +159,7 @@ def release_start(c: Context, bump: str, group: str | None = None):
     first release candidate (`X.Y.0rc1`, no tag yet). `release-candidate` tags candidates from
     there; `release-finish` drops the rc when the release ships."""
     branch = _start(c, "release", develop_branch(), bump, group, rc=True)
-    _next_steps(
+    next_steps(
         f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)",
         f"When ready to ship: inv gitflow.release-finish (from the {branch} branch)",
     )
@@ -185,7 +180,7 @@ def hotfix_start(c: Context, bump: str, group: str | None = None, rc: bool = Fal
     steps = [f"When ready to ship: inv gitflow.hotfix-finish (from the {branch} branch)"]
     if rc:
         steps.insert(0, f"To build a candidate for staging: inv gitflow.release-candidate (from the {branch} branch)")
-    _next_steps(*steps)
+    next_steps(*steps)
 
 
 def _require_branch(c: Context, prefix: str, hint: str) -> str:
@@ -230,7 +225,7 @@ def release_candidate(c: Context, group: str | None = None):
     _require_tag_absent(c, tag)
     version_bump(c, "rc", group=group, tag=True)
     c.run(f"git push origin {branch} {tag}", echo=True)
-    _next_steps(
+    next_steps(
         f"{tag} pushed — the tag-triggered workflows build it; deploy that to staging.",
         f"Another round: inv gitflow.release-candidate; ready to ship: inv gitflow.{branch.split('/', 1)[0]}-finish",
     )
@@ -277,7 +272,7 @@ def _pr_finish(c: Context, kind: str, group: str | None) -> None:
     _drop_rc(c, group)
     trunk = trunk_branch()
     url = _open_pr(c, branch, trunk, f"{kind.capitalize()} {version}", f"Merging {branch} into {trunk}.")
-    _next_steps(
+    next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, run: inv gitflow.{kind}-finalize (from the {branch} branch)",
     )
@@ -338,7 +333,7 @@ def _finalize(c: Context, kind: str) -> None:
     sync_branch = f"sync/{tag}"
     c.run(f"git checkout -b {sync_branch}", echo=True)
     url = _open_pr(c, sync_branch, target, f"Sync {tag} into {target}", f"Merging {tag} ({trunk}) into {target}.")
-    _next_steps(
+    next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, the {kind} is fully finished — nothing else to run.",
     )
@@ -373,7 +368,7 @@ def support_start(c: Context, version: str, base: str):
     reconverges with develop/main. Branch creation itself is always local, same as
     release_start/hotfix_start — nothing to protect yet."""
     c.run(f"git checkout -b support/{version} {base}", echo=True)
-    _next_steps(
+    next_steps(
         f"support/{version} created — protect it exactly like main: it ships to prod just the same.",
         f"To patch it: inv gitflow.support-hotfix-start --support={version} --bump=patch",
         "This branch never merges back into develop/main — that would pull old-line code forward into new development.",
@@ -401,7 +396,7 @@ def support_hotfix_start(c: Context, support: str, bump: str, group: str | None 
     touches develop or the release-branch redirect rule: those exist to keep an active mainline
     release in sync, which has nothing to do with an already-diverged support line."""
     branch = _support_hotfix_start(c, support, bump, group=group)
-    _next_steps(f"When ready to ship: inv gitflow.support-hotfix-finish --support={support} (from the {branch} branch)")
+    next_steps(f"When ready to ship: inv gitflow.support-hotfix-finish --support={support} (from the {branch} branch)")
 
 
 def _support_hotfix_branch_and_tag(c: Context, support: str) -> tuple[str, str]:
@@ -430,7 +425,7 @@ def support_hotfix_finish(c: Context, support: str, push: bool = False, local: b
         return
 
     url = _open_pr(c, branch, target, f"Support patch {tag}", f"Merging {branch} into {target}.")
-    _next_steps(
+    next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, run: inv gitflow.support-hotfix-finalize --support={support} "
         f"(from the {branch} branch)",
@@ -453,4 +448,4 @@ def support_hotfix_finalize(c: Context, support: str):
     c.run(f"git merge --ff-only origin/{target}", echo=True)
     c.run(f"git tag {tag}", echo=True)
     c.run(f"git push origin {tag}", echo=True)
-    _next_steps(f"{tag} tagged on {target} — this support patch is fully finished, nothing else to run.")
+    next_steps(f"{tag} tagged on {target} — this support patch is fully finished, nothing else to run.")

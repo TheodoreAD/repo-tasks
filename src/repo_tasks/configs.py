@@ -33,7 +33,7 @@ from typing import cast
 
 from invoke import Context, Exit, task
 
-from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
+from .nextsteps import next_steps
 from .projects import python_floor
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", "zizmor.yml", ".editorconfig"]
@@ -326,7 +326,7 @@ def _warn_if_undeclared(tool: str) -> None:
         f"dependency-groups.dev does not declare {distribution}. This gate passes here and will "
         "fail in CI, which has only the project's own environment."
     )
-    _next_steps(*_DEV_GROUP_FIX)
+    next_steps(*_DEV_GROUP_FIX)
 
 
 def require_tool(tool: str) -> None:
@@ -346,7 +346,7 @@ def require_tool(tool: str) -> None:
         "environment. repo-tasks ships it in the repo-tasks-quality manifest, so either this "
         "project's dependency-groups.dev is behind that manifest or .venv is out of sync with the lock."
     )
-    _next_steps(*_DEV_GROUP_FIX)
+    next_steps(*_DEV_GROUP_FIX)
     raise Exit(code=1)
 
 
@@ -434,7 +434,7 @@ def diff(c: Context, source: str | None = None):
         steps.append("edit the entries named above by hand — ensure-deps is additive and will not rewrite them")
     if missing or unconstrained:
         steps.extend(_DEV_GROUP_FIX)
-    _next_steps(*steps)
+    next_steps(*steps)
     raise Exit(code=1)
 
 

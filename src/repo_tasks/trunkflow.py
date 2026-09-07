@@ -19,6 +19,7 @@ gitflow.
 
 from invoke import Context, task
 
+from .nextsteps import next_steps
 from .projects import trunk_branch
 from .requirements import NETWORK, requires
 
@@ -93,10 +94,11 @@ def cut(c: Context, bump: str = "minor", branch: str | None = None, group: str |
     if push:
         c.run(f"git push origin {branch}", echo=True)
         c.run(f"git push origin v{version}", echo=True)
-        print("\nNext steps:")
-        print(f"  - inv release.create --tag v{version}   # publish as a GitHub Release, if wanted")
+        next_steps(f"inv release.create --tag v{version}   # publish as a GitHub Release, if wanted")
         return
 
-    print("\nNothing pushed. Next steps:")
-    print(f"  - inv release.push-tag --tag v{version}   # publish the tag: this is the release gate")
-    print(f"  - inv release.create --tag v{version}     # then a GitHub Release, if wanted")
+    next_steps(
+        f"inv release.push-tag --tag v{version}   # publish the tag: this is the release gate",
+        f"inv release.create --tag v{version}     # then a GitHub Release, if wanted",
+        preamble="Nothing pushed.",
+    )

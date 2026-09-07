@@ -16,6 +16,7 @@ import shlex
 
 from invoke import Context, task
 
+from .nextsteps import next_steps
 from .projects import trunk_branch
 from .requirements import GH, NETWORK, requires
 
@@ -100,8 +101,7 @@ def push_tag(c: Context, tag: str | None = None, branch: str | None = None):
 
     c.run(f"git push origin {branch}", echo=True)
     c.run(f"git push origin {tag}", echo=True)
-    print("\nNext steps:")
-    print(f"  - inv release.create --tag {tag}   # publish it as a GitHub Release, if wanted")
+    next_steps(f"inv release.create --tag {tag}   # publish it as a GitHub Release, if wanted")
 
 
 @requires(GH, NETWORK)

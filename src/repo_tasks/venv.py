@@ -9,7 +9,7 @@ from pathlib import Path
 
 from invoke import Context, Exit, task
 
-from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
+from .nextsteps import next_steps
 from .projects import python_floor
 from .requirements import NETWORK, requires
 
@@ -132,7 +132,7 @@ def check(c: Context):
         return
     if actual is None:
         print(f"[venv.check] no .venv (this project declares Python {declared})")
-        _next_steps("inv venv.create")
+        next_steps("inv venv.create")
         raise Exit(code=1)
     steps: list[str] = []
     if actual == declared:
@@ -152,7 +152,7 @@ def check(c: Context):
 
     if not steps:
         return
-    _next_steps(*steps)
+    next_steps(*steps)
     raise Exit(code=1)
 
 

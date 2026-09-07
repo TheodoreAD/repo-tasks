@@ -5,8 +5,7 @@ import re
 
 from invoke import Context, Exit, task
 
-# Underscored to stay out of gitflow's CLI namespace, not out of sibling modules.
-from .gitflow import _next_steps  # pyright: ignore[reportPrivateUsage]
+from .nextsteps import next_steps
 from .requirements import NETWORK, requires
 
 # The one `uv lock` failure a plain re-run never fixes: a workspace member that *moved*. uv.lock
@@ -41,7 +40,7 @@ def lock(c: Context, upgrade: bool = False, package: str | None = None):
             f"\n[deps.lock] workspace member {match.group('name')!r} looks moved — uv.lock still records its old "
             "path, and a plain `uv lock` never re-resolves that."
         )
-        _next_steps(f"inv deps.lock --package {match.group('name')}")
+        next_steps(f"inv deps.lock --package {match.group('name')}")
     raise Exit(code=result.exited)
 
 
