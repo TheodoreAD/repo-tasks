@@ -55,7 +55,7 @@ the loader.
 
 ## `invoke-stubs`, and why it is a separate distribution
 
-Two gaps in invoke's own typing, verified against 3.0.3 and `main`:
+Two gaps in invoke's own typing, verified against 3.0.3 and `main`, are what it was written for:
 
 - `def task(*args: Any, **kwargs: Any) -> Callable` — a bare `Callable` means
   `Callable[..., Unknown]`, so `@task` erases the decorated function's type. That was every
@@ -66,16 +66,36 @@ Two gaps in invoke's own typing, verified against 3.0.3 and `main`:
   `reportPrivateImportUsage`.
 
 [DECISION: the fix ships as [`invoke-stubs`](https://github.com/TheodoreAD/invoke-stubs), a PEP 561
-_partial_ stub distribution (`py.typed` containing `partial`), not via `stubPath`. It overrides only
-`invoke.tasks` — a generic `Task[T]` and `task()` as two `ParamSpec` overloads — plus an
-`__init__.pyi` re-exporting invoke's public names in the `import X as X` form; every other invoke
-module falls through to its inline types (pyright resolves `stubPath` → `-stubs` packages → inline
+_partial_ stub distribution (`py.typed` containing `partial`), not via `stubPath`. In 0.1.0 it
+overrode only `invoke.tasks` — a generic `Task[T]` and `task()` as two `ParamSpec` overloads — plus
+an `__init__.pyi` re-exporting invoke's public names in the `import X as X` form; every other invoke
+module fell through to its inline types (pyright resolves `stubPath` → `-stubs` packages → inline
 `py.typed`, and a partial `-stubs` package falls through per module). This is the one mechanism that
 gives consumers back the idiomatic import _and_ clears the re-export warning. `stubPath` was fine
 for the pilot but forces every consumer onto `from invoke.tasks import task`. Measured:
 `reportUntypedFunctionDecorator` 27 → 0, `reportPrivateImportUsage` 50 → 0, and 168 now-unnecessary
 ignore comments deleted. typeshed's `types-invoke` was retired when invoke went inline, so the name
 was free.]
+
+0.2.0, taken here 2026-09-07, is no longer that narrow. It declares every module
+`invoke/__init__.py` re-exports from plus `util` — 16, which is everything invoke ships bar `env`,
+`main` and `__main__` — and fixes three annotations invoke has _wrong_ rather than missing:
+`DataProxy.__setitem__` typed `value: str` (so `config["timeout"] = 30` was rejected),
+`Promise.__exit__` typed `exc_value: BaseException` (so it did not satisfy
+`AbstractContextManager`), and `Task.__call__` returning the wrapped callable rather than what
+calling it returns. That repo's `plans/` carries the evidence, and the still-open question of
+whether any of it is offered upstream.
+
+[PITFALL: **a fuller stub makes some `Any` louder, not quieter** — which is what taking 0.2.0 cost
+here. `Collection.collections` is a `Lexicon`, and the stub declares `Lexicon(dict[str, Any])`, so
+`ns.collections["quality"]` is now `Any`; under 0.1.0 that attribute fell through to invoke's own
+untyped vendored `Lexicon` and the lookup was `Unknown | None` (probed 2026-09-07,
+`reportUnknownVariableType`). The tests tier sets every `reportUnknown*` to `none` and keeps
+`reportAny` an error, so the honest type is the one that fails: 14 lookups in
+`tests/unit/test_init.py` went red on a bump that changed nothing at runtime. They carry
+`cast(Collection, ...)` now, the shape `tests/unit/test_cli.py` already used. The `is not None`
+assert each one used to carry went with it — it was narrowing that `| None`, not defensive noise,
+and `reportUnnecessaryComparison` is an error once the type is known.]
 
 [DECISION: `invoke-stubs` is its own repo, git-sourced in the `repo-tasks-quality` group — the same
 shape consumers already use for `repo-tasks` itself — rather than a subdirectory here or a PyPI

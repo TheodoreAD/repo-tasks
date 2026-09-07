@@ -379,7 +379,7 @@ public surface that `py.typed` and `invoke-stubs` make a public contract. Its ou
 and a consumer package's own completeness is not this gate's business. The half that _is_ enforced
 is `tests/unit/test_types.py`, whose `assert_type` assertions pin what a consumer actually sees —
 that `@task` preserves the decorated function's signature, and that `from invoke import task`
-resolves as a public re-export. Those are the two gaps `invoke-stubs` exists to close
+resolves as a public re-export. Those are the two gaps `invoke-stubs` was written to close
 ([`type-checking.md`](type-checking.md)); without them a stub regression surfaces only as noise in
 every consumer.
 
