@@ -269,7 +269,11 @@ def discover_helm_charts(c: Context) -> list[HelmChart]:
     an empty list otherwise. No zero-config fallback, unlike `discover_docker_images`: a chart
     has no single canonical root location the way a `Dockerfile` does, and a pushable chart needs
     a registry only explicit config can supply. `registry` is optional in the entry (lint/package
-    don't need one); `helm.push` is the task that insists on it."""
+    don't need one); `helm.push` is the task that insists on it.
+
+    `c` is unused, for the same reason `discover_python_projects` says it is: all three discover
+    functions take one so a caller never has to remember which of them reads a file and which asks
+    git. Only `discover_docker_images` passes it anywhere today, and only to the one above."""
     data = _load_repo_tasks_toml()
     entries = cast(list[dict[str, str]], data.get("helm", []))
     return [
