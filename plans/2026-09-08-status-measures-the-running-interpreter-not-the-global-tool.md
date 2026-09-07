@@ -5,8 +5,10 @@ updated: 2026-09-08
 
 # `repo-tasks.status` measures the running interpreter, not the global tool
 
-_The docstring that promised otherwise is fixed; what remains is whether the measurement itself
-should change. The filename still describes the behaviour, which is unchanged._
+_Both halves are now fixed: the docstring that promised otherwise, and the measurement — `status`
+reads uv as well and prints both numbers. The filename records the behaviour that prompted the plan,
+and is kept rather than renamed because `selfinstall.py` cites it by path. What is left is one
+deferred network reading and an open question about `stamp`._
 
 ## Context
 
@@ -78,12 +80,19 @@ the global tool. Done separately and immediately because a docstring making a fa
 whichever way the question below goes, and this one had just misled a reader — leaving it in place
 as evidence for a plan would have cost the next person the same minutes it cost the first.]
 
-[NEEDS CLARIFICATION: should the **measurement** change? Reading the global tool properly means
-asking uv (`uv tool list`, or running the installed `repo-tasks` executable and reading its own
-answer) rather than asking this process — a real change, and one that gives a task needing nothing
-today a dependency on `uv` being on PATH. The docstring fix has made the task honest without making
-it useful: nobody is now answering the drift question `status` was named for, and the argument for
-leaving it that way is that the question may belong to a different task entirely.]
+[DECISION: **`status` reads both and prints both, by default, with no flag.** The user's call
+2026-09-08, on the grounds that this output is largely read by agents. A flag was considered and
+rejected for the reason the run-reporting redesign already established here: the population that
+would benefit is the one that never reaches for a flag, and a flag would leave the _incomplete_
+answer in the default position — the same inversion that redesign existed to undo.
+
+**The objection this plan originally recorded against reading uv was wrong and is withdrawn.** It
+said the change "gives a task needing nothing today a dependency on `uv` being on PATH".
+`selfinstall.py` line 23 is `_INSTALL_CMD = "uv tool install …"`; the sibling `update` task already
+shells out to uv, `stamp` writes that command into the bootstrap script, and the module's docstring
+opens by calling itself a manager of "this package's own daily-driver install as a global
+`uv tool`". There was no new dependency class to add. Worth recording as a correction rather than
+quietly fixing, because the objection was the main thing arguing for won't-fix.]
 
 [NEEDS CLARIFICATION: does `stamp` want the same answer as `status`? It might not. `stamp` records
 what a consumer's bootstrap should install, and an argument exists that the active environment is
@@ -91,25 +100,30 @@ the right source for that — it is what the person running `configure` is actua
 fix there is a docstring and a printed line saying which version it pinned and where that number
 came from, not a change of source.]
 
-[NEEDS CLARIFICATION: is there a third reading nobody is computing — the latest released tag? Now
-that `releases/latest` resolves (it returns `v0.3.0` as of 2026-09-08), "are you behind the latest
-release" is answerable, and it is plausibly what someone running `status` wants over either of the
-two versions currently in play.]
+[DEFERRED: the third reading — the latest released tag. Now that `releases/latest` resolves it is
+answerable, and for an agent asking "am I current?" it is arguably the actionable number, since
+neither of the two now printed says anything about what exists upstream. Kept out of the default
+deliberately: it needs the network, and routine tasks in this package do not take it — the same line
+that keeps `ci.check-actions` out of the gate. **This is where a flag genuinely belongs**, and it is
+the one place a flag was not the wrong shape. Not built, because nobody has asked for the number.]
 
-## Recommended direction
+## Verification (2026-09-08)
 
-Rough, and the measurement question comes first because the other two follow from it.
+`status` now prints `active: <v> (this process); global uv tool: <v> (same|differs)` and then its
+existing stamp comparison, with `installed` renamed to `active` throughout so no line names a source
+it does not read. `_global_version` shells out to `uv tool list` and returns `None` for both "uv
+absent" and "not installed as a tool" — neither is an error, since a consumer taking this package as
+a project dependency legitimately has no global install.
 
-The remaining step, if one is wanted, is to make `status` print **both** numbers with their sources
-named — the active install and what the global tool reports — since the whole failure here was one
-number appearing under the other's name. That needs no new dependency when the global reading is
-unavailable, and would have made the original symptom self-explaining rather than alarming.
+Four unit tests: the two readings differing, agreeing, no tool install, and uv exiting non-zero. The
+last asserts the active reading still lands, since it is the half that needs no uv.
 
-**It is now legitimate to close this as won't-fix**, which was not true before the docstring landed.
-The task is honest today, and the drift question it does not answer has no recorded instance of
-anyone needing it — this plan's own evidence is a session confused by the wording, not by the
-absence of the reading.
+[PITFALL: **the parser was written against fabricated output and then checked against real output,
+and only the second one is evidence.** `uv tool list` prints `repo-tasks v0.3.0` followed by its
+executables as `- inv`, `- invoke`, `- repo-tasks` — so the tool's own name appears twice, once as a
+heading and once as an indented executable, and a looser match would read the second. The live run
+returns `0.3.0` correctly. The "differs" branch is covered only by unit test, because forcing a real
+mismatch means downgrading the machine's global install for the sake of a check.]
 
-Whatever is decided, the fix belongs with a test that runs the two readings apart. A unit test with
-a mocked context cannot see this: the defect is which interpreter answers, and a mock supplies the
-answer.
+What is left is only the deferred network reading above. The two questions this plan opened about
+measurement are answered, and `stamp`'s remains.
