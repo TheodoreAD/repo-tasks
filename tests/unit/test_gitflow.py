@@ -22,7 +22,13 @@ def _rev_parse(branch):
 
 
 def _gh_pr_command(base, head, title, body):
-    return f'gh pr create --base {base} --head {head} --title "{title}" --body "{body}"'
+    """The exact command `_open_pr` builds.
+
+    Single quotes, spelled out here rather than produced by calling `shlex.quote` — a helper that
+    quoted the same way the code does would pass whatever the code did, including going back to the
+    double quotes that let a title's backticks run.
+    """
+    return f"gh pr create --base {base} --head {head} --title '{title}' --body '{body}'"
 
 
 def _gh_pr(base, head, title, body):
@@ -57,6 +63,14 @@ def _tag_list(tag, exists=False):
 def test_feature_start(c):
     gitflow.feature_start.body(c, name="foo")
     assert c.run.call_args_list[0] == (("git checkout -b feature/foo develop",), {"echo": True})
+
+
+def test_feature_start_quotes_a_name_that_is_not_one_shell_word(c):
+    """`--name` is the one free-text argument here. Unquoted, a space made git read the rest of the
+    name as the start point — `git checkout -b feature/add login develop` creates `feature/add`
+    from `login`, and fails about a ref rather than about the name."""
+    gitflow.feature_start.body(c, name="add login")
+    assert c.run.call_args_list[0] == (("git checkout -b 'feature/add login' develop",), {"echo": True})
 
 
 def test_feature_finish_pr_mode_opens_a_pr_against_develop(capsys):

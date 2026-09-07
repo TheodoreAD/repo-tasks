@@ -12,6 +12,8 @@ and stop, because not every version merits a Release and one that does may not w
 tag can sit unpublished indefinitely and be released later by naming it.
 """
 
+import shlex
+
 from invoke import Context, task
 
 from .projects import trunk_branch
@@ -123,6 +125,10 @@ def create(c: Context, tag: str | None = None, notes: str | None = None, draft: 
 
     # `--generate-notes` rather than a hand-written default: it lists the merged PRs and commits
     # since the previous Release, which is the summary a reader wants and nobody wants to retype.
-    body = f'--notes "{notes}"' if notes is not None else "--generate-notes"
+    #
+    # Release notes are prose, so they are quoted rather than interpolated into a double-quoted
+    # shell string: backticks and `$(...)` are live inside one, and a release note is exactly the
+    # kind of text that quotes a command. Same reasoning as gitflow._open_pr's title and body.
+    body = f"--notes {shlex.quote(notes)}" if notes is not None else "--generate-notes"
     flags = f"{body}{' --draft' if draft else ''}"
     c.run(f"gh release create {tag} --title {tag} {flags}", echo=True)

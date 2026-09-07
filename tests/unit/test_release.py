@@ -28,8 +28,9 @@ def _ctx(*, describe=TAG, local=0, remote=0, view=1):
             REMOTE: Result(exited=remote),
             VIEW: Result(exited=view),
             f"gh release create {TAG} --title {TAG} --generate-notes": Result(exited=0),
-            f'gh release create {TAG} --title {TAG} --notes "hand written"': Result(exited=0),
+            f"gh release create {TAG} --title {TAG} --notes 'hand written'": Result(exited=0),
             f"gh release create {TAG} --title {TAG} --generate-notes --draft": Result(exited=0),
+            f"gh release create {TAG} --title {TAG} --notes 'fixes the `hostname` lookup'": Result(exited=0),
         }
     )
 
@@ -49,7 +50,17 @@ def test_create_takes_an_explicit_tag_without_asking_git_for_one():
 def test_create_uses_explicit_notes_when_given():
     c = _ctx()
     release.create.body(c, tag=TAG, notes="hand written")
-    assert c.run.call_args_list[-1][0][0] == f'gh release create {TAG} --title {TAG} --notes "hand written"'  # pyright: ignore[reportAttributeAccessIssue]
+    assert c.run.call_args_list[-1][0][0] == f"gh release create {TAG} --title {TAG} --notes 'hand written'"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_create_quotes_notes_the_shell_would_otherwise_execute():
+    """Release notes are prose, and a double-quoted shell argument runs what backticks enclose —
+    the same hazard a commit message has. Quoted, the text reaches gh as typed."""
+    notes = "fixes the `hostname` lookup"
+    c = _ctx()
+    release.create.body(c, tag=TAG, notes=notes)
+    sent = c.run.call_args_list[-1][0][0]  # pyright: ignore[reportAttributeAccessIssue]
+    assert sent == f"gh release create {TAG} --title {TAG} --notes '{notes}'"
 
 
 def test_create_passes_draft_through():

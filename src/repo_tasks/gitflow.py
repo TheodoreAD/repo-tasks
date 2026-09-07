@@ -26,6 +26,8 @@ reason — a reader on `master` should not have to translate.
 Every command that stops short of "the whole flow is done" — a PR was opened, a guard clause
 tripped — prints exactly what to run next, so nobody has to read this file to find out."""
 
+import shlex
+
 from invoke import Context, task
 
 from .projects import develop_branch, trunk_branch
@@ -57,8 +59,20 @@ def _next_steps(*lines: str) -> None:
 
 
 def _open_pr(c: Context, branch: str, base: str, title: str, body: str) -> str:
-    c.run(f"git push -u origin {branch}", echo=True)
-    result = c.run(f'gh pr create --base {base} --head {branch} --title "{title}" --body "{body}"', echo=True)
+    """Open the PR, quoting the two arguments that carry prose.
+
+    `shlex.quote` rather than the `"{title}"` this used to interpolate into: every other argument
+    this module builds is a branch name or a version it computed itself, but a title and a body are
+    text, and a double-quoted shell string runs what backticks and `$(...)` enclose. A feature named
+    after a ticket is enough to reach it — `--name 'fix $(hostname)'` substituted before git ever
+    saw it. Nothing here is a privilege boundary (the caller could type the command themselves), so
+    this is about a command that does what it says rather than about defence."""
+    quoted = shlex.quote(branch)
+    c.run(f"git push -u origin {quoted}", echo=True)
+    result = c.run(
+        f"gh pr create --base {base} --head {quoted} --title {shlex.quote(title)} --body {shlex.quote(body)}",
+        echo=True,
+    )
     return result.stdout.strip()
 
 
@@ -98,7 +112,10 @@ def _require_tag_absent(c: Context, tag: str) -> None:
 def feature_start(c: Context, name: str):
     """Branch feature/<name> off the development branch (`develop` unless `repo-tasks.toml`'s
     `[branches] develop` says otherwise)."""
-    c.run(f"git checkout -b feature/{name} {develop_branch()}", echo=True)
+    # Quoted because `name` is the one argument in this module that is free text from the caller:
+    # a space in it made `git checkout -b feature/add login develop` read `login` as the start
+    # point, which fails with a message about a ref rather than about the name.
+    c.run(f"git checkout -b {shlex.quote(f'feature/{name}')} {develop_branch()}", echo=True)
     _next_steps(f"When ready: inv gitflow.feature-finish --name={name}")
 
 
@@ -109,11 +126,12 @@ def feature_finish(c: Context, name: str, local: bool = False):
     directly — a protected develop branch rejects a direct push. --local keeps the old
     direct-merge-and-delete behavior, for a single-person repo or fast local testing."""
     branch = f"feature/{name}"
+    quoted = shlex.quote(branch)  # same reason as feature_start: `name` is free text
     develop = develop_branch()
     if local:
         c.run(f"git checkout {develop}", echo=True)
-        c.run(f"git merge --no-ff {branch}", echo=True)
-        c.run(f"git branch -d {branch}", echo=True)
+        c.run(f"git merge --no-ff {quoted}", echo=True)
+        c.run(f"git branch -d {quoted}", echo=True)
         return
 
     url = _open_pr(c, branch, develop, f"Feature: {name}", f"Merging {branch} into {develop}.")
