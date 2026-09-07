@@ -264,3 +264,32 @@ def test_a_config_that_says_nothing_usable_falls_back(tmp_cwd, body):
     section none of them requires."""
     (tmp_cwd / "repo-tasks.toml").write_text(body)
     assert projects.trunk_branch() == "main"
+
+
+def test_discover_python_projects_names_the_file_when_a_version_is_dynamic(c, tmp_cwd):
+    """`dynamic = ["version"]` is the realistic way to reach this: hatch-vcs and setuptools-scm
+    derive the version from git, and this package's model is a static field it rewrites. It raised
+    before this — with a bare `KeyError: 'version'` naming neither the file nor the reason."""
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\ndynamic = ["version"]\n')
+    with pytest.raises(ValueError, match=r"pyproject.toml: \[project\] declares no version") as exc_info:
+        projects.discover_python_projects(c)
+    assert "dynamic" in str(exc_info.value)
+
+
+def test_discover_python_projects_names_the_member_whose_table_is_incomplete(c, tmp_cwd):
+    # The half a KeyError could not answer: which of a workspace's pyproject.toml files it was.
+    _write_workspace_root(tmp_cwd, '["members/*"]')
+    member = tmp_cwd / "members" / "svc"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text('[project]\nname = "svc"\n')
+    with pytest.raises(ValueError, match=r"members/svc/pyproject.toml"):
+        projects.discover_python_projects(c)
+
+
+@pytest.mark.parametrize("table", ["docker", "helm"])
+def test_discovery_names_the_manifest_entry_missing_a_required_key(c, tmp_cwd, table):
+    # repo-tasks.toml is hand-authored, so a missing key is an ordinary typo rather than a bug.
+    (tmp_cwd / "repo-tasks.toml").write_text(f'[[{table}]]\nname = "svc"\n')
+    discover = projects.discover_docker_images if table == "docker" else projects.discover_helm_charts
+    with pytest.raises(ValueError, match=rf"repo-tasks.toml: a \[\[{table}\]\] entry declares no path"):
+        discover(c)

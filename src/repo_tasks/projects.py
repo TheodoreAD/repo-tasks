@@ -128,10 +128,28 @@ def python_floor(root: Path = _CWD) -> str | None:
 
 def _project_at(path: Path, data: dict[str, object]) -> PythonProject | None:
     """One `[project]` table as a PythonProject, or None for a table-less pyproject.toml — a
-    workspace root that only groups members (uv's "virtual" root) legitimately has none."""
+    workspace root that only groups members (uv's "virtual" root) legitimately has none.
+
+    A table that is present but missing `name` or `version` raises, naming the file and the key. It
+    raised before too — with a bare `KeyError: 'version'` out of a dict subscript, which says
+    nothing about which of a workspace's pyproject.toml files it came from. The realistic cause is
+    `dynamic = ["version"]` (hatch-vcs, setuptools-scm): this package's whole version model is a
+    static field that `version.bump` rewrites in place, so a project deriving its version from git
+    is not something discovery can answer for, and saying so beats a KeyError."""
     project = cast(dict[str, str] | None, data.get("project"))
     if project is None:
         return None
+    missing = [key for key in ("name", "version") if key not in project]
+    if missing:
+        raise ValueError(
+            f"{path / 'pyproject.toml'}: [project] declares no {' or '.join(missing)}"
+            + (
+                ' — a version derived at build time (dynamic = ["version"]) is not supported: '
+                "repo-tasks reads and rewrites a static field"
+                if "version" in missing
+                else ""
+            )
+        )
     return PythonProject(name=project["name"], path=path, version=project["version"])
 
 
@@ -191,6 +209,16 @@ def _load_repo_tasks_toml() -> dict[str, object]:
     return _load_toml(_REPO_TASKS_TOML)
 
 
+def _field(entry: dict[str, str], key: str, table: str) -> str:
+    """One required key of a `repo-tasks.toml` entry, or a message naming the file, the table and
+    the key. `repo-tasks.toml` is hand-authored, so a missing key is an ordinary typo — and a bare
+    `KeyError: 'dockerfile'` names neither the file it came from nor which of several entries."""
+    value = entry.get(key)
+    if value is None:
+        raise ValueError(f"{_REPO_TASKS_TOML}: a [[{table}]] entry declares no {key} ({entry!r})")
+    return value
+
+
 def discover_docker_images(c: Context) -> list[DockerImage]:
     """Resolve every docker image this repo builds.
 
@@ -207,11 +235,11 @@ def discover_docker_images(c: Context) -> list[DockerImage]:
     if entries:
         return [
             DockerImage(
-                name=entry["name"],
-                path=Path(entry["path"]),
-                dockerfile=Path(entry["dockerfile"]),
-                image=entry["image"],
-                group=entry.get("group", entry["name"]),
+                name=_field(entry, "name", "docker"),
+                path=Path(_field(entry, "path", "docker")),
+                dockerfile=Path(_field(entry, "dockerfile", "docker")),
+                image=_field(entry, "image", "docker"),
+                group=entry.get("group", _field(entry, "name", "docker")),
             )
             for entry in entries
         ]
@@ -234,10 +262,10 @@ def discover_helm_charts(c: Context) -> list[HelmChart]:
     entries = cast(list[dict[str, str]], data.get("helm", []))
     return [
         HelmChart(
-            name=entry["name"],
-            path=Path(entry["path"]),
+            name=_field(entry, "name", "helm"),
+            path=Path(_field(entry, "path", "helm")),
             registry=entry.get("registry"),
-            group=entry.get("group", entry["name"]),
+            group=entry.get("group", _field(entry, "name", "helm")),
         )
         for entry in entries
     ]
