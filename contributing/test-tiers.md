@@ -217,6 +217,32 @@ review: a value read from this repo's own `pyproject.toml` is pinned by a fixtur
 literally, and `pinned_version` grows to cover the next such value when a test first reaches for it,
 not in advance.]
 
+[DECISION: **an assertion names the part of the command it is about, never the whole string.**
+Decided 2026-09-08, retiring `plans/2026-09-05-trunkflow-cut-test-matches-rc-in-a-temp-path.md`.
+`test_cut_bumps_and_tags_straight_to_a_final_version` meant "this bump landed on a final version,
+not a candidate" and spelled it `assert "rc" not in bump` — against the whole command, which also
+carries a `NamedTemporaryFile` path. Two adjacent letters out of `tempfile`'s random alphabet were
+enough to fail it. The fix is `assert bump.endswith("--new-version 0.2.0")`, which asserts strictly
+more (it names the version rather than only ruling out a candidate) and puts the generated path
+outside the assertion's reach. Not fixed by pinning the temp filename: the randomness is
+`tempfile`'s job and is correct, and narrowing the assertion fixes the class rather than the
+instance.
+
+The reusable form is about the needle, not the file it was found in: **a short literal searched for
+in a string that embeds a generated path is the shape to refuse at review.** Swept 2026-09-08 — `rc`
+was the only one in the suite; every other substring-absence assertion either reads a haystack with
+no generated path in it or searches for something long enough that a random name cannot produce it
+(`--new-version`, `--cov-fail-under`, `dependency-groups.dev`).]
+
+[PITFALL: **estimate a flake's rate and you will overstate it, because you only notice the
+clusters.** That plan recorded "roughly one run in twenty" from having hit it twice in one session.
+Measured over 200,000 generated names it is **1 in 198**, which the arithmetic agrees with — seven
+adjacent pairs in an eight-character name over a 37-character alphabet is 7/37². The correction
+matters in the direction that is easy to get backwards: the rarer rate makes the bug _worse_, not
+more tolerable, because at one in twenty somebody eventually sees the pattern, and at one in two
+hundred every occurrence is attributed to whatever else changed that day. Measure the rate before
+pricing a flake — it is usually one cheap loop over the generator involved.]
+
 That blind spot is exactly why the two coverage questions land on opposite sides of the gate.
 `inv test.untested-modules` — does every module under `src/` have a `tests/unit/test_<module>.py`? —
 is in `quality.check`: the question has a true answer regardless of how the tier is written. A

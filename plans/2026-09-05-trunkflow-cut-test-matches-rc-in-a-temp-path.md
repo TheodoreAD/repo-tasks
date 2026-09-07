@@ -88,4 +88,20 @@ contract are already covered: `test_bump_maps_parts_onto_bumpversion_components`
 `test_bump_states_the_final_version_outright_when_rc_is_off` asserts it is present on the final one.
 Dropping the flag would fail those first.
 
-Gate green, 635 tests.
+Gate green, 635 tests. Pushed in `16df75c`; CI green on that push.
+
+## Migrated to
+
+[`../contributing/test-tiers.md`](../contributing/test-tiers.md), "Unit tier: mocked `c.run`" —
+which already held the sibling finding about unit tests asserting mutable repo state, so the two sit
+together as one concern rather than as two anecdotes. Both are the same defect seen twice: an
+assertion that reached past its own subject.
+
+- The decision, plus the sweep result that no sibling exists and the reusable shape (a short literal
+  searched for in a string embedding a generated path).
+- The rate correction, as a pitfall about estimating flake rates from the clusters you happen to
+  notice.
+
+Deliberately not migrated: the failure transcript and the before/after assertion, which are in
+`571387f` and in the test file itself; and the note that `trunkflow.py` and `release.py` both build
+commands around a temp config file, which was a pointer for the sweep that has now been done.
