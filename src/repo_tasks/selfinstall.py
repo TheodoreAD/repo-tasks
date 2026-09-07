@@ -83,8 +83,16 @@ def update(c: Context):
 
 @task
 def status(c: Context):
-    """Compare the globally-installed repo-tasks version against what this repo was last
-    `configure`d against — drift detection, read-only."""
+    """Compare the *active* repo-tasks version against what this repo was last `configure`d
+    against — drift detection, read-only.
+
+    Active means whatever `inv` process is executing this, which is the global daily-driver install
+    only in a repo that has none of its own. A repo carrying `repo-tasks` in its own environment —
+    this one, and any consumer taking it as a project dependency — reports that copy instead, so
+    the number can differ from the global tool's and did on 2026-09-08, straight after an upgrade.
+    See plans/2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md for whether
+    that should change; this docstring states what it does today.
+    """
     installed = _installed_version("repo-tasks")
     if not _STAMP_PATH.exists():
         print(
