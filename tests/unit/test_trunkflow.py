@@ -46,7 +46,11 @@ def test_cut_bumps_and_tags_straight_to_a_final_version():
     calls = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     bump = next(cmd for cmd in calls if cmd.startswith("bump-my-version"))
     assert bump.startswith("bump-my-version bump minor --config-file ")
-    assert "rc" not in bump
+    # The subject is the version this bump lands on, so assert the flag carrying it rather than
+    # searching the whole command: that string also holds a NamedTemporaryFile path, and `rc` is two
+    # adjacent letters out of tempfile's random alphabet — roughly one run in twenty produced a name
+    # like `tmpe8ifurcm.toml` and failed a test the version arithmetic had passed.
+    assert bump.endswith("--new-version 0.2.0")
 
 
 def test_cut_pushes_nothing_by_default():
