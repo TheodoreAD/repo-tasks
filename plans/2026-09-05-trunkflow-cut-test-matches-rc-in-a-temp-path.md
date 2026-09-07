@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-05
+status: landed
+updated: 2026-09-08
 ---
 
 # test_cut_bumps_and_tags_straight_to_a_final_version is flaky on a temp filename
@@ -34,6 +34,13 @@ twice in the string and only one occurrence is meant.
 Roughly a 1-in-20 failure — high enough to have hit twice in one session, low enough that it reads
 as a fluke rather than a bug, which is the worst rate for something a red CI run gets blamed on.
 
+[PITFALL: that rate was estimated from having hit it twice, and it is about ten times too high.
+Measured 2026-09-08 over 200,000 generated candidate names: **1 in 198**, which is also what the
+arithmetic says — seven adjacent pairs in an eight-character name over `tempfile`'s 37-character
+alphabet is 7/37², or 1 in 195. Two hits in one session was luck, not the rate. The correction makes
+the argument stronger rather than weaker: at 1 in 200 nobody ever sees it twice close enough
+together to suspect a pattern, so it is attributed to whatever else changed that day.]
+
 ## Recommended direction
 
 Assert against the part of the command the test is actually about, not the whole line. The
@@ -56,5 +63,29 @@ same defect. `trunkflow.py` and `release.py` both build commands around a temp c
 
 ## Open questions
 
-[NEEDS CLARIFICATION: whether the same shape exists in `test_release.py`. Not checked — this was
-found mid-way through unrelated work and written down rather than chased.]
+[DECISION: checked 2026-09-08, and there is no sibling — in `test_release.py` or anywhere else in
+the suite. Every other substring-absence assertion either reads a haystack with no generated path in
+it, or searches for something long enough that a random name cannot produce it: `--new-version`,
+`--cov-fail-under`, `dependency-groups.dev`. `rc` was the only needle short enough to collide, which
+is the property worth carrying forward rather than the file it happened to be in — a two-character
+needle against a string holding a generated path is the shape to refuse at review.]
+
+## Verification (2026-09-08)
+
+Fixed as recommended: the assertion now reads the flag rather than the line.
+
+```python
+assert bump.endswith("--new-version 0.2.0")
+```
+
+That asserts more than the old one did, not less — it pins which final version the bump lands on,
+where `"rc" not in bump` only pinned that it was not a candidate. The temp path is out of scope
+entirely, so the failure class is gone by construction rather than made rarer.
+
+The new assertion is load-bearing without any source change to prove it, because both sides of the
+contract are already covered: `test_bump_maps_parts_onto_bumpversion_components` asserts
+`--new-version` is **absent** on the rc path, and
+`test_bump_states_the_final_version_outright_when_rc_is_off` asserts it is present on the final one.
+Dropping the flag would fail those first.
+
+Gate green, 635 tests.
