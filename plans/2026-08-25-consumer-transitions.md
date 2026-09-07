@@ -269,7 +269,24 @@ so it survives the session that wrote it:
   `scaffoldapy` is excluded from this item and is the highest-leverage repo of the set — its
   template would hand the caller to every generated repo for free — and it is already filed there as
   `plans/2026-08-31-security-workflow-caller.md`. Note while doing it that a pinned caller currently
-  goes stale silently, per [`../contributing/quality-gate.md`](../contributing/quality-gate.md).]
+  goes stale silently, per [`../contributing/quality-gate.md`](../contributing/quality-gate.md).
+- **Report-mode wiring**, moved here 2026-09-08 from the retired run-reporting plan, which could not
+  be retired while it still carried the rollout. `power-user-linux-setup` is verified and done. The
+  `scaffoldapy`-generated repos and the `*-polite-mcp` family take `repo-tasks` as a pinned
+  dependency and none has been bumped. **This is the item where "the consumer looks fine" is not
+  evidence**: a consumer that hand-builds its own root `Collection` needs
+  `runner.configure(namespace)` in its `tasks.py`, and without it the exported variable does nothing
+  there while the output is byte-identical to a wired consumer with the variable unset. There is
+  nothing to read it off, so `rg -n 'runner.configure' tasks/` is the check — it is already in
+  [`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md), and the reasoning is in
+  [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Turning it on in a
+  consumer". Two questions sit downstream of this and belong to the repos that own them, not to the
+  sweep: whether `scaffoldapy`'s template should carry the call by default (filed there as
+  `plans/2026-09-06-report-mode-wiring-in-the-generated-tasks-py.md`, which also asks the larger
+  question of whether the generated `tasks.py` needs its own root `Collection` at all), and whether
+  report mode actually moves the piped-gate rate, which `power-user-linux-setup`'s
+  `plans/2026-09-05-pipefail-in-the-agent-shell.md` owns along with the baseline to compare
+  against.]
 
 ## The batched sweep's first half ran (2026-09-05): `power-user-linux-setup`
 

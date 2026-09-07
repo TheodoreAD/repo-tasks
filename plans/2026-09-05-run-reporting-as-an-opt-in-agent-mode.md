@@ -1,6 +1,6 @@
 ---
-status: in-progress
-updated: 2026-09-05
+status: landed
+updated: 2026-09-08
 depends_on: [scaffoldapy]
 ---
 
@@ -485,3 +485,45 @@ has:
 an unwired consumer with the variable set cannot be told apart from a wired one with the variable
 unset. That is why §9 ships a named call, and why `contributing/consumer-sweep.md` carries
 `rg -n 'runner.configure' tasks/` as the check — there is nothing in the output to read it off.
+
+## Migrated to
+
+Most of this plan had already landed as prose while it was being built —
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md)'s "What the gate prints" and
+"Turning it on in a consumer" carry the design, the measurement behind the flip, the `echo=True`
+trigger, the `hide=False` opt-out, the tail-line rule, the `warn=True` shape, the command-first
+format, the verdict rule, and the consumer-wiring finding, in every case better worded than here.
+What follows is only what had no home.
+
+**Rejected alternatives and one rule, added to `quality-gate.md` 2026-09-08.** These are what a plan
+uniquely holds: the option not taken and the reason it lost.
+
+- The `invoke.yaml` opt-in, rejected because honouring it would mean installing the runner
+  unconditionally — which costs the provable "reading five lines shows stock invoke is untouched".
+- The `INVOKE_`-prefixed variable name, rejected because invoke maps `INVOKE_<KEY>` onto its own
+  config keys, so the prefix claims an ownership this package does not have.
+- `Context.sudo` resolving through the same runner key, which is inert here and is not in a consumer
+  that shells out through sudo.
+- That a tolerated exit code is correctness and belongs at the call site, never in a display wrapper
+  — stated as a rule rather than as the `ok=frozenset({0, 5})` fix, because the pull toward the
+  wrapper is real: the wrapper is what sees the exit code.
+
+**Live work, moved so it outlives this file.**
+
+- The consumer rollout, and the two downstream questions owned by other repos, appended to
+  [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)'s sweep list — which
+  already owns "what a change here owes each consumer" and is where the sweep is actually read.
+- §7's per-step log files, the one part neither built nor handed to another repo, became
+  [`2026-09-08-per-step-log-files-as-a-second-reporting-axis.md`](2026-09-08-per-step-log-files-as-a-second-reporting-axis.md).
+- The no-restart-needed `zshenv` finding belongs to the repo owning that mechanism, not to this one,
+  and is filed there as `2026-09-08-a-zshenv-snippet-reaches-the-running-session.md`. Its value is
+  the mispredicted half: this plan's own author wrote that sessions keep the old environment until
+  restarted, and that is wrong in the direction that wastes a session.
+
+**Deliberately not migrated.** The `steps.py` inventory and the `Files touched` commit list, which
+`git log` holds and the code no longer resembles; the §4a nine-command measurement table, whose
+conclusion is already in `quality-gate.md` and whose rows would go stale as tools change their
+wording; the §9 scratch-`tasks.py` transcript, a verification log whose finding is stated above; the
+`agent-skills` supersession note in `## Context`, since the correction was filed against those plans
+at the time; and "evolve the pushed commits rather than revert-and-redo", a one-off call about work
+that is now history.

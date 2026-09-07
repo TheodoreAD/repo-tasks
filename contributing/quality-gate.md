@@ -193,6 +193,32 @@ makes `inv quality.check 2>&1 | tail -3` exit 1 on a red run; report mode is wha
 lines say why. Neither substitutes for the other. Verified together 2026-09-05 — the tailed red run
 showed `FAIL | ruff check . | exit=1 (output above)` and the Bash tool reported exit 1.]
 
+[DECISION: the switch is **an environment variable read at import, and nothing at all is configured
+when it is unset**. An `invoke.yaml` opt-in was the obvious alternative and was rejected on what it
+costs to state: the config file is not loaded at the point `__init__.py` imports, so honouring it
+would mean installing `ReportingLocal` unconditionally and deciding per run. "Without the variable,
+invoke behaves exactly as documented" then stops being provable by reading five lines and becomes an
+argument about a runtime branch — and that claim is the whole product here. Add the file-based
+opt-in only if a repo genuinely wants report mode permanently; nobody has asked.]
+
+[DECISION: the variable is `REPO_TASKS_RUN_REPORT`, and an `INVOKE_`-prefixed name was rejected
+precisely because it would read as native. Invoke maps `INVOKE_<KEY>` onto its own declared config
+keys, so that prefix claims an ownership this package does not have, and a reader would reasonably
+look for the variable in invoke's documentation.]
+
+[PITFALL: `Context.sudo` resolves through the same `config.runners.local` key, so it is reported
+too. Harmless in this package, which shells out through `sudo` nowhere — but a consumer that does
+will find its sudo calls collapsed to report lines, and that is worth knowing before it is
+discovered during a failure.]
+
+[DECISION: a tolerated exit code is **correctness and belongs at the call site**, never in whatever
+is doing the display. pytest's exit 5 is a pass for a repo with no tests, and the superseded
+fold-by-default design had absorbed that into its step wrapper as `ok=frozenset({0, 5})` — which
+made a correctness rule conditional on a display mode being on. It moved back to `testing.py`, where
+`warn=True` says it at the call site and it holds in both modes. Worth stating as a rule rather than
+as a fix, because the pull toward the wrapper is real: the wrapper is the thing that sees the exit
+code.]
+
 ## In the gate
 
 **`deps.check` (`uv lock --check`)** — a `pyproject.toml` edit without a re-lock used to pass
