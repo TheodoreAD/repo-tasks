@@ -181,7 +181,7 @@ def test_check_gates_on_dockerfile_check():
 def test_verify_types_reports_each_package_under_src(c, tmp_cwd):
     package = tmp_cwd / "src" / "mypkg"
     package.mkdir(parents=True)
-    (package / "__init__.py").write_text("")
+    (package / "__init__.py").write_text("", encoding="utf-8")
     quality.verify_types.body(c)
     # warn=True: --verifytypes exits non-zero at anything short of 100% completeness, and this is a
     # report rather than a gate, so its exit code is deliberately not propagated.

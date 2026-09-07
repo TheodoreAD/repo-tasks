@@ -226,12 +226,12 @@ def link_check(c: Context):
 
     def anchors_of(path: Path) -> frozenset[str]:
         if path not in anchor_cache:
-            anchor_cache[path] = _anchors(path.read_text())
+            anchor_cache[path] = _anchors(path.read_text(encoding="utf-8"))
         return anchor_cache[path]
 
     for name in tracked_files(c, "*.md"):
         source = Path(name)
-        text = source.read_text()
+        text = source.read_text(encoding="utf-8")
         broken.extend(
             f"{name}:{number}: {problem}"
             for number, target in _relative_links(text)

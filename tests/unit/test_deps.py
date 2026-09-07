@@ -72,7 +72,7 @@ def test_audit_command_matches_the_reusable_workflow():
     # Anchored to this file, not to cwd: the tier's `tmp_cwd` fixture means cwd is not dependable,
     # and this is the repo's own workflow rather than a scratch fixture.
     repo_root = Path(__file__).parents[2]
-    workflow = (repo_root / ".github/workflows/security-reusable.yml").read_text()
+    workflow = (repo_root / ".github/workflows/security-reusable.yml").read_text(encoding="utf-8")
 
     assert f"- run: {command}\n" in workflow, (
         f"deps.audit runs {command!r}, which security-reusable.yml does not. Update the workflow's "

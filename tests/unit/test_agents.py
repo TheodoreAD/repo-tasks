@@ -15,13 +15,13 @@ def test_wire_claude_hook_noop_without_envrc(c, tmp_path, capsys):
 
 
 def test_wire_claude_hook_writes_new_settings(c, tmp_path, isolated_home):
-    (tmp_path / ".envrc").write_text("use flake\n")
+    (tmp_path / ".envrc").write_text("use flake\n", encoding="utf-8")
     agents.wire_claude_hook.body(c, dir=str(tmp_path))
 
     settings_path = tmp_path / ".claude" / "settings.json"
     settings = cast(
         agents._ClaudeSettings,
-        json.loads(settings_path.read_text()),
+        json.loads(settings_path.read_text(encoding="utf-8")),
     )
     env_file = agents._claude_env_file_path(tmp_path.resolve())
     assert settings.get("env", {}).get("CLAUDE_ENV_FILE") == str(env_file)
@@ -32,28 +32,28 @@ def test_wire_claude_hook_writes_new_settings(c, tmp_path, isolated_home):
 
 
 def test_wire_claude_hook_merges_into_existing_settings(c, tmp_path):
-    (tmp_path / ".envrc").write_text("use flake\n")
+    (tmp_path / ".envrc").write_text("use flake\n", encoding="utf-8")
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     existing = {"hooks": {"PreToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "echo hi"}]}]}}
-    (claude_dir / "settings.json").write_text(json.dumps(existing))
+    (claude_dir / "settings.json").write_text(json.dumps(existing), encoding="utf-8")
 
     agents.wire_claude_hook.body(c, dir=str(tmp_path))
 
     settings = cast(
         agents._ClaudeSettings,
-        json.loads((claude_dir / "settings.json").read_text()),
+        json.loads((claude_dir / "settings.json").read_text(encoding="utf-8")),
     )
     matchers = {g["matcher"] for g in settings.get("hooks", {}).get("PreToolUse", [])}
     assert matchers == {"Write", "Bash"}
 
 
 def test_wire_claude_hook_already_configured_is_idempotent(c, tmp_path, capsys):
-    (tmp_path / ".envrc").write_text("use flake\n")
+    (tmp_path / ".envrc").write_text("use flake\n", encoding="utf-8")
     agents.wire_claude_hook.body(c, dir=str(tmp_path))
     settings_path = tmp_path / ".claude" / "settings.json"
-    before = settings_path.read_text()
+    before = settings_path.read_text(encoding="utf-8")
 
     agents.wire_claude_hook.body(c, dir=str(tmp_path))
-    assert settings_path.read_text() == before
+    assert settings_path.read_text(encoding="utf-8") == before
     assert "already configured" in capsys.readouterr().out

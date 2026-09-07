@@ -41,7 +41,7 @@ def test_stamp_writes_pinned_install_script_when_tag_exists(tmp_cwd, monkeypatch
     selfinstall.stamp.body(c)
     script = tmp_cwd / "bootstrap-repo-tasks.sh"
     assert script.exists()
-    text = script.read_text()
+    text = script.read_text(encoding="utf-8")
     assert f"repo-tasks @ git+{selfinstall._REPO_URL}@v1.2.3'" in text
     assert script.stat().st_mode & 0o111  # executable
 
@@ -51,7 +51,7 @@ def test_stamp_falls_back_to_unpinned_when_no_matching_tag(tmp_cwd, monkeypatch,
     # Only an older tag exists upstream -- v1.2.3 (this checkout's own version) isn't released yet.
     c = MockContext(run=_ls_remote("v1.0.0"))
     selfinstall.stamp.body(c)
-    text = (tmp_cwd / "bootstrap-repo-tasks.sh").read_text()
+    text = (tmp_cwd / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
     assert f"repo-tasks @ git+{selfinstall._REPO_URL}'" in text
     assert "@v1.2.3" not in text
     assert "isn't a real upstream tag yet" in capsys.readouterr().out

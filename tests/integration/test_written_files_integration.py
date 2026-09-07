@@ -41,7 +41,7 @@ def test_stamp_script_is_shfmt_clean(scratch: Path, monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.parametrize("empty_array", ["dev = []", "dev = [\n]"])
 def test_ensure_deps_output_is_dprint_clean(scratch: Path, empty_array: str):
-    (scratch / "pyproject.toml").write_text(f"{_PYPROJECT_HEAD}{empty_array}\n")
+    (scratch / "pyproject.toml").write_text(f"{_PYPROJECT_HEAD}{empty_array}\n", encoding="utf-8")
     configs.ensure_deps.body(MockContext(run=Result(exited=1)))
     result = subprocess.run(["dprint", "check", "pyproject.toml"], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -53,8 +53,10 @@ def _run_pytest_under_shipped_config(where: Path) -> subprocess.CompletedProcess
     # and these tests assert on the file a consumer without AnyIO actually gets. Copying the raw file
     # would pass only because this repo's own venv happens to carry AnyIO transitively — a hidden
     # dependency on the runner's environment, which is the whole hazard the derivation addresses.
-    derived = configs._derive_for_project("pytest.ini", (_CONFIGS_DIR / "pytest.ini").read_text(), where)
-    (where / "pytest.ini").write_text(derived)
+    derived = configs._derive_for_project(
+        "pytest.ini", (_CONFIGS_DIR / "pytest.ini").read_text(encoding="utf-8"), where
+    )
+    (where / "pytest.ini").write_text(derived, encoding="utf-8")
     (where / "tests").mkdir(parents=True, exist_ok=True)
     return subprocess.run([sys.executable, "-m", "pytest"], cwd=where, capture_output=True, text=True, check=False)
 
@@ -68,7 +70,7 @@ def test_a_flat_tests_directory_still_runs_under_the_shipped_pytest_ini(tmp_path
     `tests/` could not run pytest at all. Real subprocess rather than a unit assertion on the file's
     text, because the thing under test is pytest's own behaviour under this exact config."""
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_thing.py").write_text("def test_ok():\n    assert True\n")
+    (tmp_path / "tests" / "test_thing.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
     result = _run_pytest_under_shipped_config(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "1 passed" in result.stdout
@@ -79,7 +81,8 @@ def test_the_shipped_pytest_ini_still_promotes_other_warnings(tmp_path: Path):
     any other warning still fails, which is what `filterwarnings = error` is for."""
     (tmp_path / "tests" / "unit").mkdir(parents=True)
     (tmp_path / "tests" / "unit" / "test_warns.py").write_text(
-        "import warnings\n\n\ndef test_warns():\n    warnings.warn('deprecated', DeprecationWarning, stacklevel=1)\n"
+        "import warnings\n\n\ndef test_warns():\n    warnings.warn('deprecated', DeprecationWarning, stacklevel=1)\n",
+        encoding="utf-8",
     )
     result = _run_pytest_under_shipped_config(tmp_path)
     assert result.returncode != 0, result.stdout

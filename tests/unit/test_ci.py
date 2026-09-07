@@ -243,7 +243,7 @@ def test_check_actions_noops_cleanly_in_a_repo_with_no_workflows(capsys):
 
 def _workflow_repo(tmp_path, body: str) -> MockContext:
     workflow = tmp_path / "ci.yml"
-    workflow.write_text(body)
+    workflow.write_text(body, encoding="utf-8")
     return MockContext(
         run={
             f"git ls-files --cached --others --exclude-standard -- '{tmp_path}/*.yml' '{tmp_path}/*.yaml'": Result(
@@ -266,7 +266,7 @@ def test_check_actions_names_what_is_behind_and_counts_it(tmp_path, capsys):
 
 def test_check_actions_reports_an_action_that_publishes_no_releases(tmp_path, capsys):
     workflow = tmp_path / "ci.yml"
-    workflow.write_text("      - uses: some/action@v1\n")
+    workflow.write_text("      - uses: some/action@v1\n", encoding="utf-8")
     c = MockContext(
         run={
             f"git ls-files --cached --others --exclude-standard -- '{tmp_path}/*.yml' '{tmp_path}/*.yaml'": Result(

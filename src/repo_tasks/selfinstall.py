@@ -62,7 +62,7 @@ def _stamped_version() -> str | None:
     nothing to compare against)."""
     if not _STAMP_PATH.exists():
         return None
-    match = re.search(r"repo-tasks @ git\+[^@']+@v([^']+)'", _STAMP_PATH.read_text())
+    match = re.search(r"repo-tasks @ git\+[^@']+@v([^']+)'", _STAMP_PATH.read_text(encoding="utf-8"))
     return match.group(1) if match else None
 
 
@@ -128,6 +128,6 @@ def stamp(c: Context):
     if not pinned_ref:
         print(f"[repo-tasks.stamp] v{installed} isn't a real upstream tag yet — stamping an unpinned install")
     script = _STAMP_TEMPLATE.format(install_cmd=_INSTALL_CMD, repo_url=_REPO_URL, pinned_ref=pinned_ref)
-    _STAMP_PATH.write_text(script)
+    _STAMP_PATH.write_text(script, encoding="utf-8")
     _STAMP_PATH.chmod(_STAMP_PATH.stat().st_mode | 0o111)
     print(f"[repo-tasks.stamp] wrote {_STAMP_PATH}" + (f", pinned to v{installed}" if pinned_ref else ""))

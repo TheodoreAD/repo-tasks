@@ -68,7 +68,7 @@ def wire_claude_hook(c: Context, dir: str = "."):  # noqa: A002
         return
 
     settings: _ClaudeSettings = (
-        cast(_ClaudeSettings, json.loads(settings_path.read_text())) if settings_path.exists() else {}
+        cast(_ClaudeSettings, json.loads(settings_path.read_text(encoding="utf-8"))) if settings_path.exists() else {}
     )
     env_ok = settings.get("env", {}).get("CLAUDE_ENV_FILE") == str(env_file)
     bash_group = next((g for g in settings.get("hooks", {}).get("PreToolUse", []) if g.get("matcher") == "Bash"), None)
@@ -88,7 +88,7 @@ def wire_claude_hook(c: Context, dir: str = "."):  # noqa: A002
         bash_group["hooks"].append(hook_entry)
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.touch(exist_ok=True)
     print(f"[agents.wire-claude-hook] {settings_path}: direnv hook configured ({env_file})")

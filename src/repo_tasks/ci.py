@@ -278,7 +278,7 @@ def check_actions(c: Context, path: str = ".github/workflows"):
 
     uses: list[ActionUse] = []
     for name in files:
-        uses.extend(_uses_in(Path(name).read_text(), Path(name).name))
+        uses.extend(_uses_in(Path(name).read_text(encoding="utf-8"), Path(name).name))
     if not uses:
         print("[ci.check-actions] no third-party actions in use — nothing to do")
         return

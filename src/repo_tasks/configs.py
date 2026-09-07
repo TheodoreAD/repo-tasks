@@ -91,7 +91,7 @@ def _project_resolves_anyio(root: Path) -> bool:
     plans/2026-08-29-pytest-ini-anyio-mode.md."""
     lock = root / "uv.lock"
     # The closing quote is what keeps this off a package merely prefixed `anyio-`.
-    return lock.exists() and 'name = "anyio"' in lock.read_text()
+    return lock.exists() and 'name = "anyio"' in lock.read_text(encoding="utf-8")
 
 
 def _derive_for_project(name: str, text: str, root: Path) -> str:
@@ -143,9 +143,9 @@ def _own_pyproject_data() -> dict[str, object]:
     repo root) in that case."""
     packaged = resources.files("repo_tasks") / "pyproject.toml"
     if packaged.is_file():
-        return tomllib.loads(packaged.read_text())
+        return tomllib.loads(packaged.read_text(encoding="utf-8"))
     fallback = Path(str(resources.files("repo_tasks"))).parent.parent / "pyproject.toml"
-    return tomllib.loads(fallback.read_text())
+    return tomllib.loads(fallback.read_text(encoding="utf-8"))
 
 
 def _quality_deps() -> list[str]:
@@ -183,7 +183,7 @@ def _declared_dev_specs(path: Path) -> dict[str, frozenset[str]]:
     exists only because that task has to splice text back into the file: a regex over the array
     would see repo-tasks' own `dev = [{ include-group = "repo-tasks-quality" }, ...]` as declaring
     nothing and report the whole manifest as missing in the very repo that owns it."""
-    groups = cast(dict[str, list[object]], tomllib.loads(path.read_text()).get("dependency-groups", {}))
+    groups = cast(dict[str, list[object]], tomllib.loads(path.read_text(encoding="utf-8")).get("dependency-groups", {}))
     specs: dict[str, frozenset[str]] = {}
     seen: set[str] = set()
 
@@ -333,7 +333,9 @@ def pull(c: Context, source: str | None = None):
     for the two lines `_derive_for_project` resolves against what this project declares."""
     src_dir = _source_dir(source)
     for name in _CONFIG_FILES:
-        Path(name).write_text(_derive_for_project(name, (src_dir / name).read_text(), Path()))
+        Path(name).write_text(
+            _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path()), encoding="utf-8"
+        )
         print(f"[configs.pull] {name} pulled")
 
 
@@ -341,9 +343,9 @@ def _diff_config_files(source: str | None) -> bool:
     src_dir = _source_dir(source)
     changed = False
     for name in _CONFIG_FILES:
-        src_text = _derive_for_project(name, (src_dir / name).read_text(), Path())
+        src_text = _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path())
         dst_path = Path(name)
-        dst_text = dst_path.read_text() if dst_path.exists() else ""
+        dst_text = dst_path.read_text(encoding="utf-8") if dst_path.exists() else ""
         if src_text == dst_text:
             continue
         changed = True
@@ -439,7 +441,7 @@ def ensure_deps(c: Context):
     if not pyproject_path.exists():
         name = _derive_project_name(c)
         deps = "\n".join(f'  "{dep}",' for dep in canonical)
-        pyproject_path.write_text(_DUMMY_PYPROJECT_TEMPLATE.format(name=name, deps=deps))
+        pyproject_path.write_text(_DUMMY_PYPROJECT_TEMPLATE.format(name=name, deps=deps), encoding="utf-8")
         print(f"[configs.ensure-deps] created pyproject.toml (project name: {name!r})")
         for dep in canonical:
             print(f"[configs.ensure-deps] {_bare_name(dep)} added")
@@ -455,7 +457,7 @@ def ensure_deps(c: Context):
             # venv, hence the pyright suppression. Same shape scaffoldapy's own template/tasks.py
             # uses, for the same reason.
             tasks_content = 'from repo_tasks import ns  # pyright: ignore[reportMissingImports]\n\n__all__ = ["ns"]\n'
-            tasks_py.write_text(tasks_content)
+            tasks_py.write_text(tasks_content, encoding="utf-8")
             print("[configs.ensure-deps] created tasks.py")
         # A repo with no pyproject.toml also has none of the canonical tool configs
         # (ruff.toml/dprint.json/pyrightconfig.json/pytest.ini/.editorconfig) — `inv quality.check`
@@ -463,7 +465,7 @@ def ensure_deps(c: Context):
         pull(c, source=None)
         return
 
-    text = pyproject_path.read_text()
+    text = pyproject_path.read_text(encoding="utf-8")
     match = _DEV_ARRAY_RE.search(text)
     if not match:
         raise Exit(
@@ -489,7 +491,9 @@ def ensure_deps(c: Context):
         # opening bracket would leave the first entry on the bracket's line, which dprint rejects.
         # Rebuild the whole array in the one multi-line shape dprint accepts — this runs before
         # any venv exists, so there is no formatter available afterwards to clean it up.
-        pyproject_path.write_text(text[: match.start()] + f"dev = [\n{insertion}]" + text[match.end() :])
+        pyproject_path.write_text(
+            text[: match.start()] + f"dev = [\n{insertion}]" + text[match.end() :], encoding="utf-8"
+        )
         return
     insert_at = match.end("items")
-    pyproject_path.write_text(text[:insert_at] + insertion + text[insert_at:])
+    pyproject_path.write_text(text[:insert_at] + insertion + text[insert_at:], encoding="utf-8")

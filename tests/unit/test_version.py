@@ -77,7 +77,7 @@ def test_bump_passes_the_root_lock_only_when_it_exists(c, tmp_cwd, monkeypatch):
     assert seen["lock_path"] is None
 
     # The workspace root's lock, never one under the member's own path.
-    (tmp_cwd / "uv.lock").write_text("")
+    (tmp_cwd / "uv.lock").write_text("", encoding="utf-8")
     version.bump.body(c, part="patch")
     assert seen["lock_path"] == Path("uv.lock")
 
@@ -269,11 +269,11 @@ _DEV_CHART = 'apiVersion: v2\nname: sample\nversion: 1.0.0\nappVersion: "1.0.0"\
 
 
 def _dev_tree(tmp_cwd: Path, chart: bool = True):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "sample"\nversion = "1.0.0"\n')
-    (tmp_cwd / "uv.lock").write_text(_DEV_LOCK)
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "sample"\nversion = "1.0.0"\n', encoding="utf-8")
+    (tmp_cwd / "uv.lock").write_text(_DEV_LOCK, encoding="utf-8")
     if chart:
         (tmp_cwd / "chart").mkdir()
-        (tmp_cwd / "chart" / "Chart.yaml").write_text(_DEV_CHART)
+        (tmp_cwd / "chart" / "Chart.yaml").write_text(_DEV_CHART, encoding="utf-8")
 
 
 def _stub_dev(monkeypatch, dirty: str = ""):
@@ -291,11 +291,11 @@ def test_set_dev_rewrites_every_file_in_the_group_without_committing(c, tmp_cwd,
 
     assert version.set_dev.body(c) == "1.0.1.dev3+gabc1234"
 
-    assert 'version = "1.0.1.dev3+gabc1234"' in (tmp_cwd / "pyproject.toml").read_text()
-    lock = (tmp_cwd / "uv.lock").read_text()
+    assert 'version = "1.0.1.dev3+gabc1234"' in (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+    lock = (tmp_cwd / "uv.lock").read_text(encoding="utf-8")
     assert 'name = "sample"\nversion = "1.0.1.dev3+gabc1234"' in lock
     assert 'name = "dep"\nversion = "1.0.0"' in lock  # the anchor kept the dependency alone
-    chart_text = (tmp_cwd / "chart" / "Chart.yaml").read_text()
+    chart_text = (tmp_cwd / "chart" / "Chart.yaml").read_text(encoding="utf-8")
     assert "version: 1.0.1-dev.3.gabc1234" in chart_text
     assert 'appVersion: "1.0.1-dev.3.gabc1234"' in chart_text
     c.run.assert_not_called()  # nothing shells out through invoke — no bump-my-version, no commit
@@ -308,12 +308,14 @@ def test_set_dev_refuses_a_dirty_tree(c, tmp_cwd, monkeypatch):
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
     with pytest.raises(ValueError, match="dirty"):
         version.set_dev.body(c)
-    assert 'version = "1.0.0"' in (tmp_cwd / "pyproject.toml").read_text()
+    assert 'version = "1.0.0"' in (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_set_dev_fails_loudly_when_a_search_string_is_absent(c, tmp_cwd, monkeypatch):
     _dev_tree(tmp_cwd)
-    (tmp_cwd / "chart" / "Chart.yaml").write_text("apiVersion: v2\nname: sample\nversion: 1.0.0\nappVersion: 1.0.0\n")
+    (tmp_cwd / "chart" / "Chart.yaml").write_text(
+        "apiVersion: v2\nname: sample\nversion: 1.0.0\nappVersion: 1.0.0\n", encoding="utf-8"
+    )
     _stub_dev(monkeypatch)
     chart = projects.HelmChart(name="sample", path=Path("chart"), registry=None, group="sample")
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [chart])

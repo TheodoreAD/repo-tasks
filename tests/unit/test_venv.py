@@ -73,7 +73,7 @@ def test_sync_registers_venv_bin_on_github_path_when_set(c, tmp_cwd, monkeypatch
     github_path_file.touch()
     monkeypatch.setenv("GITHUB_PATH", str(github_path_file))
     venv.sync.body(c)
-    assert github_path_file.read_text() == f"{(tmp_cwd / '.venv' / 'bin').resolve()}\n"
+    assert github_path_file.read_text(encoding="utf-8") == f"{(tmp_cwd / '.venv' / 'bin').resolve()}\n"
 
 
 def test_sync_python_names_the_interpreter(c):
@@ -82,12 +82,16 @@ def test_sync_python_names_the_interpreter(c):
 
 
 def _declare(tmp_cwd, spec: str) -> None:
-    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = "{spec}"\n')
+    (tmp_cwd / "pyproject.toml").write_text(
+        f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = "{spec}"\n', encoding="utf-8"
+    )
 
 
 def _venv_on(tmp_cwd, version: str) -> None:
     (tmp_cwd / ".venv").mkdir(exist_ok=True)
-    (tmp_cwd / ".venv" / "pyvenv.cfg").write_text(f"implementation = CPython\nversion_info = {version}\n")
+    (tmp_cwd / ".venv" / "pyvenv.cfg").write_text(
+        f"implementation = CPython\nversion_info = {version}\n", encoding="utf-8"
+    )
 
 
 def test_check_passes_when_the_venv_matches_the_declaration(c, tmp_cwd, capsys):
@@ -156,7 +160,7 @@ def test_pin_writes_the_declared_floor(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.delenv("UV_PYTHON", raising=False)
     _declare(tmp_cwd, ">=3.11")
     venv.pin.body(c)
-    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"
+    assert (tmp_cwd / ".python-version").read_text(encoding="utf-8") == "3.11\n"
     assert "pins 3.11" in capsys.readouterr().out
 
 
@@ -165,16 +169,16 @@ def test_pin_rewrites_a_drifted_file_and_names_what_it_replaced(c, tmp_cwd, monk
     # hand-written pin asserting an interpreter the project never declared.
     monkeypatch.delenv("UV_PYTHON", raising=False)
     _declare(tmp_cwd, ">=3.11")
-    (tmp_cwd / ".python-version").write_text("3.14\n")
+    (tmp_cwd / ".python-version").write_text("3.14\n", encoding="utf-8")
     venv.pin.body(c)
-    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"
+    assert (tmp_cwd / ".python-version").read_text(encoding="utf-8") == "3.11\n"
     assert "pins 3.11 (was 3.14)" in capsys.readouterr().out
 
 
 def test_pin_is_a_noop_when_already_correct(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.delenv("UV_PYTHON", raising=False)
     _declare(tmp_cwd, ">=3.11")
-    (tmp_cwd / ".python-version").write_text("3.11\n")
+    (tmp_cwd / ".python-version").write_text("3.11\n", encoding="utf-8")
     venv.pin.body(c)
     assert "already pins 3.11" in capsys.readouterr().out
 
@@ -186,7 +190,7 @@ def test_pin_says_when_uv_python_will_override_the_file(c, tmp_cwd, monkeypatch,
     _declare(tmp_cwd, ">=3.11")
     venv.pin.body(c)
     out = capsys.readouterr().out
-    assert (tmp_cwd / ".python-version").read_text() == "3.11\n"  # still written
+    assert (tmp_cwd / ".python-version").read_text(encoding="utf-8") == "3.11\n"  # still written
     assert "UV_PYTHON=3.14 is set and overrides this file" in out
 
 
@@ -199,7 +203,7 @@ def test_pin_has_nothing_to_pin_without_a_declaration(c, tmp_cwd, capsys):
 def test_check_reports_a_drifted_python_version_file(c, tmp_cwd, capsys):
     _declare(tmp_cwd, ">=3.11")
     _venv_on(tmp_cwd, "3.11.15")  # the venv is right; only the pin has drifted
-    (tmp_cwd / ".python-version").write_text("3.14\n")
+    (tmp_cwd / ".python-version").write_text("3.14\n", encoding="utf-8")
     with pytest.raises(Exit) as exc_info:
         venv.check.body(c)
     assert exc_info.value.code == 1

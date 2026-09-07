@@ -345,10 +345,10 @@ def set_dev(c: Context, group: str | None = None) -> str:
     entries = _file_entries(project, charts, lock_path=_lock_path())
     for entry in entries:
         search, replace = entry.rendered(current, new)
-        text = entry.filename.read_text()
+        text = entry.filename.read_text(encoding="utf-8")
         if search not in text:
             raise ValueError(f"did not find {search!r} in {entry.filename} — nothing rewritten")
-        _ = entry.filename.write_text(text.replace(search, replace, 1))
+        _ = entry.filename.write_text(text.replace(search, replace, 1), encoding="utf-8")
         print(f"[version.set_dev] {entry.filename}: {search.splitlines()[-1]} -> {replace.splitlines()[-1]}")
     print(f"[version.set_dev] undo with: git restore {' '.join(str(e.filename) for e in entries)}")
     return new.pep440()

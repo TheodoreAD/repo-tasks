@@ -130,11 +130,11 @@ def _write_module_and_test(root: Path, module: str, test: str | None) -> None:
     for the wrong reason. Tests about that skip overwrite the file themselves."""
     package = root / "src" / "pkg"
     package.mkdir(parents=True, exist_ok=True)
-    (package / module).write_text("VALUE = 1\n")
+    (package / module).write_text("VALUE = 1\n", encoding="utf-8")
     unit_dir = root / "tests" / "unit"
     unit_dir.mkdir(parents=True, exist_ok=True)
     if test is not None:
-        (unit_dir / test).write_text("")
+        (unit_dir / test).write_text("", encoding="utf-8")
 
 
 def test_untested_modules_passes_when_every_module_has_a_test(c, tmp_cwd):
@@ -167,7 +167,7 @@ def test_untested_modules_skips_a_module_with_no_code(c, tmp_cwd, source: str):
     # test_init.py for it buys a placeholder assertion in every repo, not coverage — found by
     # scaffoldapy's e2e tier, where all ten rendered combinations failed on it.
     _write_module_and_test(tmp_cwd, "__init__.py", None)
-    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text(source)
+    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text(source, encoding="utf-8")
     testing.untested_modules.body(c)
 
 
@@ -175,7 +175,9 @@ def test_untested_modules_still_wants_a_test_for_a_re_exporting_init(c, tmp_cwd)
     # The other side of the same rule: an __all__ or a re-export is a contract someone depends on,
     # which is what this package's own __init__.py is.
     _write_module_and_test(tmp_cwd, "__init__.py", None)
-    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text('from .thing import ns\n\n__all__ = ["ns"]\n')
+    (tmp_cwd / "src" / "pkg" / "__init__.py").write_text(
+        'from .thing import ns\n\n__all__ = ["ns"]\n', encoding="utf-8"
+    )
     with pytest.raises(Exit):
         testing.untested_modules.body(c)
 
@@ -184,7 +186,7 @@ def test_untested_modules_treats_an_unparseable_module_as_needing_a_test(c, tmp_
     # Silently reporting a broken file as "nothing to test" would hide it, and finding syntax
     # errors is the linter's job, not this check's.
     _write_module_and_test(tmp_cwd, "thing.py", None)
-    (tmp_cwd / "src" / "pkg" / "thing.py").write_text("def (\n")
+    (tmp_cwd / "src" / "pkg" / "thing.py").write_text("def (\n", encoding="utf-8")
     with pytest.raises(Exit):
         testing.untested_modules.body(c)
 
@@ -199,7 +201,7 @@ def test_untested_modules_noops_without_a_src_layout(c, tmp_cwd, capsys):
 def test_coverage_scopes_to_each_package_under_src(c, tmp_cwd):
     _write_module_and_test(tmp_cwd, "__init__.py", "test_init.py")
     (tmp_cwd / "src" / "other").mkdir()
-    (tmp_cwd / "src" / "other" / "__init__.py").write_text("")
+    (tmp_cwd / "src" / "other" / "__init__.py").write_text("", encoding="utf-8")
     testing.coverage.body(c)
     # Streams (echo, not hide): the term-missing report is the task's whole output, so folding it
     # on success would hide the one thing the task exists to show.

@@ -83,7 +83,8 @@ PINNED_VERSION = "0.1.0"
 # This repo's real version, read once. The fixture below swaps *this* value and nothing else, so a
 # test that builds its own project on disk keeps the version it chose.
 _REAL_VERSION: str = cast(
-    "str", tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())["project"]["version"]
+    "str",
+    tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"],
 )
 
 

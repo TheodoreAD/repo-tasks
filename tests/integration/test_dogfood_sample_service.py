@@ -137,7 +137,7 @@ def test_the_source_chart_keeps_the_quoting_the_group_bump_searches_for(service_
     unquoted `version:` literally, and bump-my-version fails on a search string it cannot find.
     Anything that reformats this file — a YAML formatter, an editor's "normalize quotes" — breaks
     the group bump, so pin the exact shapes here rather than only in the generated-config test."""
-    chart_yaml = (sample_chart_dir / "Chart.yaml").read_text()
+    chart_yaml = (sample_chart_dir / "Chart.yaml").read_text(encoding="utf-8")
     assert f"version: {service_version}\n" in chart_yaml
     assert f'appVersion: "{service_version}"' in chart_yaml
 

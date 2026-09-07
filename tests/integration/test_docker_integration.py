@@ -32,7 +32,7 @@ def test_check_fails_on_a_dockerfile_buildkit_rejects(c, monkeypatch, tmp_path):
     beside an uppercase `FROM` — a rule hadolint does not carry, so this is also evidence the two
     tools cover different ground."""
     dockerfile = tmp_path / "Dockerfile"
-    dockerfile.write_text("FROM scratch as builder\nCOPY Dockerfile /Dockerfile\n")
+    dockerfile.write_text("FROM scratch as builder\nCOPY Dockerfile /Dockerfile\n", encoding="utf-8")
     image = DockerImage(name="casing", path=tmp_path, dockerfile=dockerfile, image="casing-test", group="casing")
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [image])
     with pytest.raises(UnexpectedExit):
@@ -47,7 +47,7 @@ def test_check_noops_cleanly_in_a_repo_with_no_images(c, monkeypatch, capsys):
 
 def test_build_and_push_round_trip(c, monkeypatch, tmp_path, docker_registry):
     dockerfile = tmp_path / "Dockerfile"
-    dockerfile.write_text("FROM scratch\nCOPY Dockerfile /Dockerfile\n")
+    dockerfile.write_text("FROM scratch\nCOPY Dockerfile /Dockerfile\n", encoding="utf-8")
     image = DockerImage(
         name="scratch",
         path=tmp_path,

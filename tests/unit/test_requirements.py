@@ -88,7 +88,7 @@ def _is_task(function: ast.FunctionDef) -> bool:
 def _tasks() -> list[tuple[str, ast.FunctionDef]]:
     found: list[tuple[str, ast.FunctionDef]] = []
     for path in sorted(_SRC.glob("*.py")):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         found.extend(
             (f"repo_tasks.{path.stem}", node)
             for node in tree.body

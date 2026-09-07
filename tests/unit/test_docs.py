@@ -14,7 +14,7 @@ from repo_tasks import docs
 
 def _anchors_of(path):
     """The resolver `link_check` builds, without its per-run cache — tests want no shared state."""
-    return docs._anchors(path.read_text())
+    return docs._anchors(path.read_text(encoding="utf-8"))
 
 
 def test_clean_noop_when_site_dir_missing(c, tmp_cwd, monkeypatch, capsys):
@@ -26,14 +26,14 @@ def test_clean_noop_when_site_dir_missing(c, tmp_cwd, monkeypatch, capsys):
 def test_clean_removes_site_dir(c, tmp_path, monkeypatch):
     site_dir = tmp_path / "site"
     site_dir.mkdir()
-    (site_dir / "index.html").write_text("hi")
+    (site_dir / "index.html").write_text("hi", encoding="utf-8")
     monkeypatch.setattr(docs, "_SITE_DIR", site_dir)
     docs.clean.body(c)
     assert not site_dir.exists()
 
 
 def test_build_runs_zensical_strict(c, tmp_cwd, monkeypatch):
-    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
+    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n", encoding="utf-8")
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/zensical")
     docs.build.body(c)
     # A gate step (precommit): echoed, so report mode reports it (see runner.py).
@@ -51,7 +51,7 @@ def test_build_noops_without_an_mkdocs_config(c, tmp_cwd, capsys):
 def test_build_stops_when_the_docs_group_is_not_installed(c, tmp_cwd, monkeypatch, capsys):
     """A repo that *has* an mkdocs.yml and no zensical is broken, not docs-less — the whole point
     of keying the no-op on the config file rather than on the tool."""
-    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n")
+    (tmp_cwd / "mkdocs.yml").write_text("site_name: x\n", encoding="utf-8")
     monkeypatch.setattr(shutil, "which", lambda _: None)
     with pytest.raises(Exit):
         docs.build.body(c)
@@ -122,7 +122,7 @@ def test_relative_links_ignores_a_link_title():
 
 
 def test_bad_link_none_when_target_exists(tmp_cwd):
-    (tmp_cwd / "target.md").write_text("hi")
+    (tmp_cwd / "target.md").write_text("hi", encoding="utf-8")
     source = tmp_cwd / "source.md"
     assert docs._bad_link(source, "target.md") is None
 
@@ -135,7 +135,7 @@ def test_bad_link_reports_a_missing_target(tmp_cwd):
 def test_bad_link_checks_only_the_file_without_an_anchor_resolver(tmp_cwd):
     # The path half stands alone: given no resolver, the fragment is not looked at. link_check
     # always supplies one — this is the seam, not the shipped behaviour.
-    (tmp_cwd / "target.md").write_text("hi")
+    (tmp_cwd / "target.md").write_text("hi", encoding="utf-8")
     source = tmp_cwd / "source.md"
     assert docs._bad_link(source, "target.md#any-heading-at-all") is None
     assert docs._bad_link(source, "gone.md#heading") == "gone.md"
@@ -195,8 +195,8 @@ def test_anchors_skips_a_heading_inside_a_fenced_block():
 
 def test_bad_link_catches_a_renamed_heading_across_files(tmp_cwd):
     """The plan's fixture, and the failure this exists for: a.md cites b.md's old anchor."""
-    (tmp_cwd / "b.md").write_text("## The new heading\n")
-    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n")
+    (tmp_cwd / "b.md").write_text("## The new heading\n", encoding="utf-8")
+    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n", encoding="utf-8")
     problem = docs._bad_link(tmp_cwd / "a.md", "b.md#the-old-heading", _anchors_of)
     assert problem is not None
     assert "no such anchor in b.md" in problem
@@ -204,7 +204,7 @@ def test_bad_link_catches_a_renamed_heading_across_files(tmp_cwd):
 
 def test_bad_link_names_the_closest_surviving_anchor(tmp_cwd):
     # A renamed heading is usually a near miss, and naming it turns the report into the fix.
-    (tmp_cwd / "b.md").write_text("## The new heading\n")
+    (tmp_cwd / "b.md").write_text("## The new heading\n", encoding="utf-8")
     problem = docs._bad_link(tmp_cwd / "a.md", "b.md#the-new-headings", _anchors_of)
     assert problem is not None
     assert "closest is #the-new-heading" in problem
@@ -214,27 +214,27 @@ def test_bad_link_accepts_a_same_file_anchor(tmp_cwd):
     # 59 of the 79 fragment links measured across the family were same-file, so this is most of
     # the surface rather than an edge case.
     source = tmp_cwd / "page-a.md"
-    source.write_text("## Page A\n\nsee [above](#page-a)\n")
+    source.write_text("## Page A\n\nsee [above](#page-a)\n", encoding="utf-8")
     assert docs._bad_link(source, "#page-a", _anchors_of) is None
 
 
 def test_bad_link_catches_a_broken_same_file_anchor(tmp_cwd):
     source = tmp_cwd / "page-a.md"
-    source.write_text("## Page A\n\nsee [above](#page-b)\n")
+    source.write_text("## Page A\n\nsee [above](#page-b)\n", encoding="utf-8")
     assert docs._bad_link(source, "#page-b", _anchors_of) is not None
 
 
 def test_bad_link_ignores_a_fragment_on_a_non_markdown_target(tmp_cwd):
     # Nothing here knows how to enumerate anchors in a .py or an image, and a fragment on one is
     # not this task's business.
-    (tmp_cwd / "script.py").write_text("x = 1\n")
+    (tmp_cwd / "script.py").write_text("x = 1\n", encoding="utf-8")
     assert docs._bad_link(tmp_cwd / "a.md", "script.py#L1", _anchors_of) is None
 
 
 def test_link_check_stops_on_a_dangling_anchor(tmp_cwd, capsys):
     """End to end through the task, not just the helper — this is the gate step that has to fail."""
-    (tmp_cwd / "b.md").write_text("## The new heading\n")
-    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n")
+    (tmp_cwd / "b.md").write_text("## The new heading\n", encoding="utf-8")
+    (tmp_cwd / "a.md").write_text("[x](b.md#the-old-heading)\n", encoding="utf-8")
     c = MockContext(run=Result(stdout="a.md\nb.md\n", exited=0))
     with pytest.raises(Exit):
         docs.link_check.body(c)
@@ -247,7 +247,7 @@ def test_bad_link_rejects_a_target_outside_the_repository(tmp_cwd):
     # machine too, or the gate is green exactly where it needs to be red.
     sibling = tmp_cwd.parent / "sibling"
     sibling.mkdir(exist_ok=True)
-    (sibling / "notes.md").write_text("hi")
+    (sibling / "notes.md").write_text("hi", encoding="utf-8")
     source = tmp_cwd / "docs" / "source.md"
     problem = docs._bad_link(source, "../../sibling/notes.md")
     assert problem is not None
@@ -255,15 +255,15 @@ def test_bad_link_rejects_a_target_outside_the_repository(tmp_cwd):
 
 
 def test_link_check_passes_when_every_link_resolves(tmp_cwd, capsys):
-    (tmp_cwd / "target.md").write_text("hi")
-    (tmp_cwd / "index.md").write_text("[ok](target.md)\n")
+    (tmp_cwd / "target.md").write_text("hi", encoding="utf-8")
+    (tmp_cwd / "index.md").write_text("[ok](target.md)\n", encoding="utf-8")
     c = MockContext(run=Result(stdout="index.md\n", exited=0))
     docs.link_check.body(c)
     assert capsys.readouterr().out == ""
 
 
 def test_link_check_stops_on_a_broken_link(tmp_cwd, capsys):
-    (tmp_cwd / "index.md").write_text("intro\n\n[gone](nope.md)\n")
+    (tmp_cwd / "index.md").write_text("intro\n\n[gone](nope.md)\n", encoding="utf-8")
     c = MockContext(run=Result(stdout="index.md\n", exited=0))
     with pytest.raises(Exit) as exc_info:
         docs.link_check.body(c)

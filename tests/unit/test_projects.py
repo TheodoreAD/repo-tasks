@@ -21,12 +21,14 @@ _ROOT_PYPROJECT = '[project]\nname = "root-pkg"\nversion = "1.0.0"\n'
 def _write_member(root: Path, relative: str, name: str, version: str) -> None:
     member = root / relative
     member.mkdir(parents=True)
-    (member / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "{version}"\n')
+    (member / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "{version}"\n', encoding="utf-8")
 
 
 def _write_workspace_root(root: Path, members: str, exclude: str = "", project: str = _ROOT_PYPROJECT) -> None:
     exclude_line = f"exclude = {exclude}\n" if exclude else ""
-    (root / "pyproject.toml").write_text(f"{project}\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}")
+    (root / "pyproject.toml").write_text(
+        f"{project}\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}", encoding="utf-8"
+    )
 
 
 def test_tracked_files_quotes_every_pathspec():
@@ -67,7 +69,7 @@ def test_discover_python_projects_is_empty_without_a_pyproject(c, tmp_cwd):
 
 
 def test_discover_python_projects_no_workspace_table_means_root_alone(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text(_ROOT_PYPROJECT)
+    (tmp_cwd / "pyproject.toml").write_text(_ROOT_PYPROJECT, encoding="utf-8")
     assert projects.discover_python_projects(c) == [
         projects.PythonProject(name="root-pkg", path=Path(), version="1.0.0")
     ]
@@ -115,8 +117,8 @@ def test_discover_docker_images_empty_with_no_config_and_no_dockerfile(c, tmp_cw
 
 
 def test_discover_docker_images_zero_config_default_uses_python_project_name(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "sample-service"\nversion = "1.0.0"\n')
-    (tmp_cwd / "Dockerfile").write_text("FROM scratch\n")
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "sample-service"\nversion = "1.0.0"\n', encoding="utf-8")
+    (tmp_cwd / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     assert projects.discover_docker_images(c) == [
         projects.DockerImage(
             name="sample-service",
@@ -129,7 +131,7 @@ def test_discover_docker_images_zero_config_default_uses_python_project_name(c, 
 
 
 def test_discover_docker_images_zero_config_default_falls_back_to_dirname_without_pyproject(c, tmp_cwd):
-    (tmp_cwd / "Dockerfile").write_text("FROM scratch\n")
+    (tmp_cwd / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     result = projects.discover_docker_images(c)
     assert result == [
         projects.DockerImage(
@@ -145,7 +147,8 @@ def test_discover_docker_images_reads_explicit_repo_tasks_toml(c, tmp_cwd):
         'path = "examples/sample-service"\n'
         'dockerfile = "examples/sample-service/Dockerfile"\n'
         'image = "ghcr.io/org/sample-service"\n'
-        'group = "sample-service"\n'
+        'group = "sample-service"\n',
+        encoding="utf-8",
     )
     assert projects.discover_docker_images(c) == [
         projects.DockerImage(
@@ -160,7 +163,8 @@ def test_discover_docker_images_reads_explicit_repo_tasks_toml(c, tmp_cwd):
 
 def test_discover_docker_images_explicit_entry_group_defaults_to_name(c, tmp_cwd):
     (tmp_cwd / "repo-tasks.toml").write_text(
-        '[[docker]]\nname = "solo"\npath = "."\ndockerfile = "Dockerfile"\nimage = "ghcr.io/org/solo"\n'
+        '[[docker]]\nname = "solo"\npath = "."\ndockerfile = "Dockerfile"\nimage = "ghcr.io/org/solo"\n',
+        encoding="utf-8",
     )
     result = projects.discover_docker_images(c)
     assert result[0].group == "solo"
@@ -176,7 +180,8 @@ def test_discover_helm_charts_reads_explicit_repo_tasks_toml(c, tmp_cwd):
         'name = "sample-service-chart"\n'
         'path = "examples/sample-service/chart"\n'
         'registry = "oci://ghcr.io/org/charts"\n'
-        'group = "sample-service"\n'
+        'group = "sample-service"\n',
+        encoding="utf-8",
     )
     assert projects.discover_helm_charts(c) == [
         projects.HelmChart(
@@ -189,7 +194,7 @@ def test_discover_helm_charts_reads_explicit_repo_tasks_toml(c, tmp_cwd):
 
 
 def test_discover_helm_charts_registry_optional_and_group_defaults_to_name(c, tmp_cwd):
-    (tmp_cwd / "repo-tasks.toml").write_text('[[helm]]\nname = "solo-chart"\npath = "chart"\n')
+    (tmp_cwd / "repo-tasks.toml").write_text('[[helm]]\nname = "solo-chart"\npath = "chart"\n', encoding="utf-8")
     result = projects.discover_helm_charts(c)
     assert result == [projects.HelmChart(name="solo-chart", path=Path("chart"), registry=None, group="solo-chart")]
 
@@ -208,12 +213,12 @@ def test_discover_helm_charts_registry_optional_and_group_defaults_to_name(c, tm
     ],
 )
 def test_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, spec, expected):
-    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n')
+    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n', encoding="utf-8")
     assert projects.python_floor(tmp_cwd) == expected
 
 
 def test_python_floor_is_none_without_a_requires_python(tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
     assert projects.python_floor(tmp_cwd) is None
 
 
@@ -237,13 +242,15 @@ def test_branches_come_from_repo_tasks_toml(tmp_cwd):
     """The case that could not be expressed at all until 2026-09-06: gitflow had `main` as ~20
     string literals, so a repo on `master` had `hotfix_start` branching off a ref that does not
     exist there and no flag to say so."""
-    (tmp_cwd / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\ndevelop = "integration"\n')
+    (tmp_cwd / "repo-tasks.toml").write_text(
+        '[branches]\ntrunk = "master"\ndevelop = "integration"\n', encoding="utf-8"
+    )
     assert projects.trunk_branch() == "master"
     assert projects.develop_branch() == "integration"
 
 
 def test_one_branch_can_be_set_without_the_other(tmp_cwd):
-    (tmp_cwd / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\n')
+    (tmp_cwd / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\n', encoding="utf-8")
     assert projects.trunk_branch() == "master"
     assert projects.develop_branch() == "develop"
 
@@ -262,7 +269,7 @@ def test_a_config_that_says_nothing_usable_falls_back(tmp_cwd, body):
     """Falling back beats raising: `repo-tasks.toml` is read by every git-flow-shaped task, so a
     malformed `[branches]` would take out release, hotfix and feature flows at once for a typo in a
     section none of them requires."""
-    (tmp_cwd / "repo-tasks.toml").write_text(body)
+    (tmp_cwd / "repo-tasks.toml").write_text(body, encoding="utf-8")
     assert projects.trunk_branch() == "main"
 
 
@@ -270,7 +277,7 @@ def test_discover_python_projects_names_the_file_when_a_version_is_dynamic(c, tm
     """`dynamic = ["version"]` is the realistic way to reach this: hatch-vcs and setuptools-scm
     derive the version from git, and this package's model is a static field it rewrites. It raised
     before this — with a bare `KeyError: 'version'` naming neither the file nor the reason."""
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\ndynamic = ["version"]\n')
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\ndynamic = ["version"]\n', encoding="utf-8")
     with pytest.raises(ValueError, match=r"pyproject.toml: \[project\] declares no version") as exc_info:
         projects.discover_python_projects(c)
     assert "dynamic" in str(exc_info.value)
@@ -281,7 +288,7 @@ def test_discover_python_projects_names_the_member_whose_table_is_incomplete(c, 
     _write_workspace_root(tmp_cwd, '["members/*"]')
     member = tmp_cwd / "members" / "svc"
     member.mkdir(parents=True)
-    (member / "pyproject.toml").write_text('[project]\nname = "svc"\n')
+    (member / "pyproject.toml").write_text('[project]\nname = "svc"\n', encoding="utf-8")
     with pytest.raises(ValueError, match=r"members/svc/pyproject.toml"):
         projects.discover_python_projects(c)
 
@@ -289,7 +296,7 @@ def test_discover_python_projects_names_the_member_whose_table_is_incomplete(c, 
 @pytest.mark.parametrize("table", ["docker", "helm"])
 def test_discovery_names_the_manifest_entry_missing_a_required_key(c, tmp_cwd, table):
     # repo-tasks.toml is hand-authored, so a missing key is an ordinary typo rather than a bug.
-    (tmp_cwd / "repo-tasks.toml").write_text(f'[[{table}]]\nname = "svc"\n')
+    (tmp_cwd / "repo-tasks.toml").write_text(f'[[{table}]]\nname = "svc"\n', encoding="utf-8")
     discover = projects.discover_docker_images if table == "docker" else projects.discover_helm_charts
     with pytest.raises(ValueError, match=rf"repo-tasks.toml: a \[\[{table}\]\] entry declares no path"):
         discover(c)

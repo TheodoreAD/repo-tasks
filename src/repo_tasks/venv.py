@@ -28,7 +28,7 @@ def _venv_python() -> str | None:
     cfg = _VENV_DIR / "pyvenv.cfg"
     if not cfg.exists():
         return None
-    match = re.search(r"^version_info\s*=\s*(\d+\.\d+)", cfg.read_text(), re.MULTILINE)
+    match = re.search(r"^version_info\s*=\s*(\d+\.\d+)", cfg.read_text(encoding="utf-8"), re.MULTILINE)
     return match.group(1) if match else None
 
 
@@ -41,7 +41,7 @@ def _register_github_path(bin_dir: Path) -> None:
     github_path = os.environ.get("GITHUB_PATH")
     if not github_path:
         return
-    with Path(github_path).open("a") as f:
+    with Path(github_path).open("a", encoding="utf-8") as f:
         f.write(f"{bin_dir.resolve()}\n")
 
 
@@ -145,7 +145,7 @@ def check(c: Context):
     # A repo that has one, though, is asserting an interpreter twice, and the copy that is not
     # derived is the one that drifts — which is how a sibling ended up pinning 3.14 while declaring
     # >=3.11.
-    pinned = _PYTHON_VERSION_FILE.read_text().strip() if _PYTHON_VERSION_FILE.exists() else None
+    pinned = _PYTHON_VERSION_FILE.read_text(encoding="utf-8").strip() if _PYTHON_VERSION_FILE.exists() else None
     if pinned is not None and pinned != declared:
         print(f"[venv.check] .python-version pins {pinned}, but this project declares {declared}")
         steps.append(f"inv venv.pin  # rewrite .python-version as {declared}")
@@ -201,11 +201,11 @@ def pin(c: Context):
         print("[venv.pin] no requires-python declared — nothing to pin")
         return
 
-    existing = _PYTHON_VERSION_FILE.read_text().strip() if _PYTHON_VERSION_FILE.exists() else None
+    existing = _PYTHON_VERSION_FILE.read_text(encoding="utf-8").strip() if _PYTHON_VERSION_FILE.exists() else None
     if existing == declared:
         print(f"[venv.pin] .python-version already pins {declared}")
     else:
-        _ = _PYTHON_VERSION_FILE.write_text(f"{declared}\n")
+        _ = _PYTHON_VERSION_FILE.write_text(f"{declared}\n", encoding="utf-8")
         was = f" (was {existing})" if existing else ""
         print(f"[venv.pin] .python-version pins {declared}{was}")
 

@@ -38,8 +38,8 @@ def promote(c: Context, file: str | None = None, apply: bool = False):
         if file is None:
             raise Exit("[configs.promote] --apply writes exactly one file — name it with --file <name>")
         package_path = package_dir / file
-        package_text = package_path.read_text() if package_path.exists() else ""
-        promotable = restore_derived_lines(Path(file).read_text(), package_text)
+        package_text = package_path.read_text(encoding="utf-8") if package_path.exists() else ""
+        promotable = restore_derived_lines(Path(file).read_text(encoding="utf-8"), package_text)
         if promotable is None:
             raise Exit(
                 f"[configs.promote] {file}: root and package disagree about a line configs.pull derives "
@@ -48,16 +48,18 @@ def promote(c: Context, file: str | None = None, apply: bool = False):
         if package_text == promotable:
             print(f"[configs.promote] {file} already matches package")
             return
-        package_path.write_text(promotable)
+        package_path.write_text(promotable, encoding="utf-8")
         print(f"[configs.promote] {file}: root -> package")
         return
     changed = False
     for name in _CONFIG_FILES if file is None else [file]:
         package_path = package_dir / name
-        package_text = package_path.read_text() if package_path.exists() else ""
+        package_text = package_path.read_text(encoding="utf-8") if package_path.exists() else ""
         # The derived lines are normalized out of the comparison too, so a repo whose floor differs
         # from the packaged placeholder does not report drift on every run with nothing to promote.
-        root_text = restore_derived_lines(Path(name).read_text(), package_text) or Path(name).read_text()
+        root_text = restore_derived_lines(Path(name).read_text(encoding="utf-8"), package_text) or Path(name).read_text(
+            encoding="utf-8"
+        )
         if root_text == package_text:
             continue
         changed = True

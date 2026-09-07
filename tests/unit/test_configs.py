@@ -23,17 +23,17 @@ def test_pull_materializes_every_underived_file_verbatim_from_installed_package(
     # `configs.promote` ship the narrowed list back as canonical. The shipped globs tolerate
     # absence, so nothing about `include` is resolved any more.
     for name in configs._CONFIG_FILES:
-        pulled = (tmp_cwd / name).read_text()
-        canonical = (configs._source_dir(None) / name).read_text()
+        pulled = (tmp_cwd / name).read_text(encoding="utf-8")
+        canonical = (configs._source_dir(None) / name).read_text(encoding="utf-8")
         assert pulled == configs._derive_for_project(name, canonical, tmp_cwd)
         if name not in {"pyrightconfig.json", "pytest.ini"}:
             assert pulled == canonical
 
 
 def test_pull_derives_python_version_from_the_consumers_requires_python(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\nrequires-python = ">=3.13"\n')
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\nrequires-python = ">=3.13"\n', encoding="utf-8")
     configs.pull.body(c, source=None)
-    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text()
+    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
 
 
 def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(c, tmp_cwd):
@@ -41,18 +41,18 @@ def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(
     # `target-version` pin was deleted for — a floor nobody in that project chose. With the key
     # absent basedpyright infers the interpreter it finds, which is what it did before this
     # derivation existed, and a package with no `requires-python` is broken independently of us.
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
     configs.pull.body(c, source=None)
-    text = (tmp_cwd / "pyrightconfig.json").read_text()
+    text = (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
     assert "pythonVersion" not in text
     # The removal must not strand a comma or leave the JSON otherwise unparseable.
     assert '"typeCheckingMode": "recommended",\n' in text
 
 
 def test_pull_emits_anyio_mode_only_when_the_consumers_lock_resolves_anyio(c, tmp_cwd):
-    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n')
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n', encoding="utf-8")
     configs.pull.body(c, source=None)
-    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text()
+    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text(encoding="utf-8")
 
 
 def test_pull_drops_anyio_mode_when_the_consumer_has_no_lock(c, tmp_cwd):
@@ -60,13 +60,13 @@ def test_pull_drops_anyio_mode_when_the_consumer_has_no_lock(c, tmp_cwd):
     # executed rather than a warning — this is the branch that keeps a global-uv-tool consumer's
     # suite runnable at all.
     configs.pull.body(c, source=None)
-    text = (tmp_cwd / "pytest.ini").read_text()
+    text = (tmp_cwd / "pytest.ini").read_text(encoding="utf-8")
     assert "anyio_mode" not in text
     assert "addopts = -ra --strict-markers --strict-config\n" in text
 
 
 def test_project_resolves_anyio_is_not_fooled_by_a_prefixed_package_name(tmp_cwd):
-    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio-extras"\nversion = "1.0"\n')
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio-extras"\nversion = "1.0"\n', encoding="utf-8")
     assert configs._project_resolves_anyio(tmp_cwd) is False
 
 
@@ -97,7 +97,7 @@ def test_shipped_pyright_include_entries_tolerate_absence():
     # that shape exits 0 when nothing matches (measured against basedpyright 1.39.10), and it is
     # the entire reason pull can be verbatim. A literal entry would exit 3 in any consumer that
     # lacks the path.
-    text = (configs._source_dir(None) / "pyrightconfig.json").read_text()
+    text = (configs._source_dir(None) / "pyrightconfig.json").read_text(encoding="utf-8")
     entries: list[str] = re.findall(r'"([^"]+)"', re.search(r'"include":\s*\[([^\]]*)\]', text).group(1))  # pyright: ignore[reportOptionalMemberAccess]
     assert entries
     for entry in entries:
@@ -109,22 +109,22 @@ def test_shipped_pyright_include_entries_tolerate_absence():
 
 
 def test_pull_overwrites_existing_file(c, tmp_cwd):
-    (tmp_cwd / "ruff.toml").write_text("stale content")
+    (tmp_cwd / "ruff.toml").write_text("stale content", encoding="utf-8")
     configs.pull.body(c, source=None)
-    assert (tmp_cwd / "ruff.toml").read_text() != "stale content"
+    assert (tmp_cwd / "ruff.toml").read_text(encoding="utf-8") != "stale content"
 
 
 def test_pull_from_local_source(c, tmp_path, monkeypatch):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     for name in configs._CONFIG_FILES:
-        (source_dir / name).write_text(f"content for {name}")
+        (source_dir / name).write_text(f"content for {name}", encoding="utf-8")
     dest_dir = tmp_path / "dest"
     dest_dir.mkdir()
     monkeypatch.chdir(dest_dir)
     configs.pull.body(c, source=f"local:{source_dir}")
     for name in configs._CONFIG_FILES:
-        assert (dest_dir / name).read_text() == f"content for {name}"
+        assert (dest_dir / name).read_text(encoding="utf-8") == f"content for {name}"
 
 
 def test_source_dir_rejects_unknown_prefix():
@@ -136,7 +136,7 @@ def _write_up_to_date_dev_group(tmp_cwd):
     """A pyproject declaring the whole canonical manifest, so `diff`'s dev-group half is clean and
     a test can isolate the config-file half."""
     deps = "".join(f'  "{dep}",\n' for dep in configs._quality_deps())
-    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n")
+    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n", encoding="utf-8")
 
 
 def test_diff_reports_up_to_date_when_matching(c, tmp_cwd, capsys):
@@ -155,19 +155,20 @@ def test_diff_applies_the_same_derivation_so_a_derived_file_never_reports_drift(
     deps = "".join(f'  "{dep}",\n' for dep in configs._quality_deps())
     (tmp_cwd / "pyproject.toml").write_text(
         f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = ">=3.13"\n\n'
-        f"[dependency-groups]\ndev = [\n{deps}]\n"
+        f"[dependency-groups]\ndev = [\n{deps}]\n",
+        encoding="utf-8",
     )
-    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n')
+    (tmp_cwd / "uv.lock").write_text('[[package]]\nname = "anyio"\nversion = "4.14.2"\n', encoding="utf-8")
     configs.pull.body(c, source=None)
     configs.diff.body(c, source=None)
     assert "up to date" in capsys.readouterr().out
-    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text()
-    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text()
+    assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
+    assert "anyio_mode = auto" in (tmp_cwd / "pytest.ini").read_text(encoding="utf-8")
 
 
 def test_diff_exits_nonzero_and_prints_unified_diff_when_differing(c, tmp_cwd, capsys):
     _write_up_to_date_dev_group(tmp_cwd)
-    (tmp_cwd / "ruff.toml").write_text("stale content\n")
+    (tmp_cwd / "ruff.toml").write_text("stale content\n", encoding="utf-8")
     with pytest.raises(Exit) as exc_info:
         configs.diff.body(c, source=None)
     assert exc_info.value.code == 1
@@ -190,7 +191,7 @@ def test_diff_reports_dev_group_drift_with_configs_already_up_to_date(c, tmp_cwd
     configs.pull.body(c, source=None)
     kept = [d for d in configs._quality_deps() if configs._bare_name(d) != "actionlint-py"]
     deps = "".join(f'  "{dep}",\n' for dep in kept)
-    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n")
+    (tmp_cwd / "pyproject.toml").write_text(f"{_MINIMAL_PYPROJECT}dev = [\n{deps}]\n", encoding="utf-8")
     with pytest.raises(Exit) as exc_info:
         configs.diff.body(c, source=None)
     assert exc_info.value.code == 1
@@ -205,7 +206,8 @@ def test_declared_dev_names_follows_include_group(tmp_cwd):
     # the entries. A check that missed this would report the whole manifest missing in this repo.
     (tmp_cwd / "pyproject.toml").write_text(
         f'{_MINIMAL_PYPROJECT}repo-tasks-quality = [\n  "ruff",\n]\n'
-        'dev = [\n  { include-group = "repo-tasks-quality" },\n  "pytest",\n]\n'
+        'dev = [\n  { include-group = "repo-tasks-quality" },\n  "pytest",\n]\n',
+        encoding="utf-8",
     )
     assert configs._declared_dev_names(tmp_cwd / "pyproject.toml") == {"ruff", "pytest"}
 
@@ -213,7 +215,8 @@ def test_declared_dev_names_follows_include_group(tmp_cwd):
 def test_declared_dev_names_survives_a_cyclic_include_group(tmp_cwd):
     (tmp_cwd / "pyproject.toml").write_text(
         f'{_MINIMAL_PYPROJECT}dev = [\n  {{ include-group = "other" }},\n]\n'
-        'other = [\n  { include-group = "dev" },\n  "ruff",\n]\n'
+        'other = [\n  { include-group = "dev" },\n  "ruff",\n]\n',
+        encoding="utf-8",
     )
     assert configs._declared_dev_names(tmp_cwd / "pyproject.toml") == {"ruff"}
 
@@ -277,7 +280,8 @@ def test_require_tool_warns_against_a_real_stale_pyproject(tmp_path, monkeypatch
     group predates the manifest entry, read by the real `_missing_quality_deps`. The stubbed test
     above proves the message; this one proves the two halves are actually wired together."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "stale-consumer"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = ["ruff"]\n'
+        '[project]\nname = "stale-consumer"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = ["ruff"]\n',
+        encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(shutil, "which", lambda name: f"/home/dev/.local/bin/{name}")
@@ -300,7 +304,7 @@ def test_ensure_deps_creates_pyproject_when_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(project_dir)
     c = MockContext(run=Result(exited=1))  # no git remote (and no git repo at all)
     configs.ensure_deps.body(c)
-    text = (project_dir / "pyproject.toml").read_text()
+    text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
     assert 'name = "some-repo"' in text
     assert "package = false" in text
     assert "[tool.uv.sources]" not in text
@@ -315,31 +319,32 @@ def test_ensure_deps_creates_pyproject_when_missing(tmp_path, monkeypatch):
 def test_ensure_deps_creates_tasks_py_alongside_dummy_pyproject(tmp_cwd):
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)
-    assert "from repo_tasks import ns" in (tmp_cwd / "tasks.py").read_text()
+    assert "from repo_tasks import ns" in (tmp_cwd / "tasks.py").read_text(encoding="utf-8")
 
 
 def test_ensure_deps_does_not_overwrite_existing_tasks_py(tmp_cwd):
-    (tmp_cwd / "tasks.py").write_text("# hand-written\n")
+    (tmp_cwd / "tasks.py").write_text("# hand-written\n", encoding="utf-8")
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)
-    assert (tmp_cwd / "tasks.py").read_text() == "# hand-written\n"
+    assert (tmp_cwd / "tasks.py").read_text(encoding="utf-8") == "# hand-written\n"
 
 
 def test_ensure_deps_derives_name_from_git_remote(tmp_cwd):
     c = MockContext(run=Result(stdout="git@github.com:someone/my-project.git\n", exited=0))
     configs.ensure_deps.body(c)
-    assert 'name = "my-project"' in (tmp_cwd / "pyproject.toml").read_text()
+    assert 'name = "my-project"' in (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_ensure_deps_adds_missing_and_leaves_present_entries_untouched(tmp_cwd):
     (tmp_cwd / "pyproject.toml").write_text(
         '[project]\nname = "x"\nversion = "0.1.0"\n\n'
         "[dependency-groups]\n"
-        'dev = [\n  "ruff>=0.0.1",\n  "repo-tasks",\n  "invoke",\n]\n'
+        'dev = [\n  "ruff>=0.0.1",\n  "repo-tasks",\n  "invoke",\n]\n',
+        encoding="utf-8",
     )
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)
-    text = (tmp_cwd / "pyproject.toml").read_text()
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
     assert '"ruff>=0.0.1"' in text  # untouched, not reversioned to the canonical ruff spec
     assert text.count('"repo-tasks"') == 1  # untouched, never duplicated or removed
     assert text.count('"invoke"') == 1
@@ -354,19 +359,19 @@ def test_ensure_deps_rebuilds_an_empty_dev_array_in_multiline_shape(tmp_cwd, emp
     # bracket's line — a shape dprint rejects, and this runs before any venv (so any dprint)
     # exists. Both empty spellings must come out as the one multi-line shape dprint accepts.
     head = '[project]\nname = "x"\nversion = "0.1.0"\n\n[dependency-groups]\n'
-    (tmp_cwd / "pyproject.toml").write_text(f"{head}{empty_array}\n")
+    (tmp_cwd / "pyproject.toml").write_text(f"{head}{empty_array}\n", encoding="utf-8")
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)
     expected = "dev = [\n" + "".join(f'  "{dep}",\n' for dep in configs._quality_deps()) + "]\n"
-    assert (tmp_cwd / "pyproject.toml").read_text().endswith(f"[dependency-groups]\n{expected}")
+    assert (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8").endswith(f"[dependency-groups]\n{expected}")
 
 
 def test_ensure_deps_idempotent_on_second_run(tmp_cwd):
     c = MockContext(run=Result(exited=1))
     configs.ensure_deps.body(c)
-    first = (tmp_cwd / "pyproject.toml").read_text()
+    first = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
     configs.ensure_deps.body(c)
-    assert (tmp_cwd / "pyproject.toml").read_text() == first
+    assert (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8") == first
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +381,7 @@ def test_ensure_deps_idempotent_on_second_run(tmp_cwd):
 
 def _consumer_pyproject(tmp_path, dev_entries: str) -> None:
     (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "c"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = [{dev_entries}]\n'
+        f'[project]\nname = "c"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = [{dev_entries}]\n', encoding="utf-8"
     )
 
 

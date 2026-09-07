@@ -56,7 +56,7 @@ def _has_code(module: Path) -> bool:
     A file that does not parse counts as having code: reporting it as "nothing to test" would hide
     it, and it is not this check's job to be the one that finds a syntax error."""
     try:
-        tree = ast.parse(module.read_text())
+        tree = ast.parse(module.read_text(encoding="utf-8"))
     except SyntaxError:
         return True
     body = tree.body[1:] if ast.get_docstring(tree) else tree.body
