@@ -82,6 +82,9 @@ def test_sync_python_names_the_interpreter(c):
 
 
 def _declare(tmp_cwd, spec: str) -> None:
+    """This file's own one-liner rather than the shared `write_pyproject` factory: it is already
+    the single place these 13 tests declare a floor, so routing it through a fixture would mean
+    threading that fixture into 13 signatures to move one string."""
     (tmp_cwd / "pyproject.toml").write_text(
         f'[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = "{spec}"\n', encoding="utf-8"
     )

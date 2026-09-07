@@ -30,18 +30,18 @@ def test_pull_materializes_every_underived_file_verbatim_from_installed_package(
             assert pulled == canonical
 
 
-def test_pull_derives_python_version_from_the_consumers_requires_python(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\nrequires-python = ">=3.13"\n', encoding="utf-8")
+def test_pull_derives_python_version_from_the_consumers_requires_python(c, tmp_cwd, write_pyproject):
+    write_pyproject(tmp_cwd, version=None, requires_python=">=3.13")
     configs.pull.body(c, source=None)
     assert '"pythonVersion": "3.13",' in (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
 
 
-def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(c, tmp_cwd):
+def test_pull_omits_python_version_entirely_when_the_consumer_declares_no_floor(c, tmp_cwd, write_pyproject):
     # Not "fall back to repo-tasks' own floor": that is the failure the shipped ruff.toml's
     # `target-version` pin was deleted for — a floor nobody in that project chose. With the key
     # absent basedpyright infers the interpreter it finds, which is what it did before this
     # derivation existed, and a package with no `requires-python` is broken independently of us.
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
+    write_pyproject(tmp_cwd, version=None)
     configs.pull.body(c, source=None)
     text = (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
     assert "pythonVersion" not in text

@@ -7,7 +7,7 @@ instead; that is the intended split, not an oversight. See contributing/test-tie
 """
 
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -61,6 +61,46 @@ def c() -> MockContext:
     """A MockContext whose `run` accepts any command and reports success, so a task under test
     executes end to end and `c.run.assert_called_once_with(...)` can pin what it built."""
     return MockContext(run=True)
+
+
+@pytest.fixture
+def write_pyproject() -> Callable[..., Path]:
+    """Write a minimal `pyproject.toml` into a directory, and hand back the file.
+
+    A factory rather than a fixture with a fixed shape, since what varies is the table's contents.
+    It replaces the three helpers three test files had each grown for the same job — one for a
+    workspace member, one for a workspace root, one for a consumer's dev group — plus the literals
+    in between: the same `[project]` table was being spelled out 21 times across the tier, which
+    made the tables that differ *on purpose* (no version at all, a dynamic one, a floor to read)
+    indistinguishable from the ones that merely happened to be typed out again.
+
+    `version=None` omits the field, which is a real state — a table without one is what a project
+    deriving its version at build time has. `extra` is appended verbatim, for the workspace table
+    and anything else that is the point of one particular test.
+
+    Deliberately does not grow a `dependency_groups` argument: `configs.ensure_deps` splices text
+    into that array with a regex, so its tests pin exact formatting (`dev = []` against `dev = [\\n]`)
+    and a factory normalising it would leave them testing the factory."""
+
+    def write(
+        directory: Path,
+        *,
+        name: str = "x",
+        version: str | None = "0.1.0",
+        requires_python: str | None = None,
+        extra: str = "",
+    ) -> Path:
+        lines = ["[project]", f'name = "{name}"']
+        if version is not None:
+            lines.append(f'version = "{version}"')
+        if requires_python is not None:
+            lines.append(f'requires-python = "{requires_python}"')
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / "pyproject.toml"
+        path.write_text("\n".join(lines) + "\n" + extra, encoding="utf-8")
+        return path
+
+    return write
 
 
 @pytest.fixture

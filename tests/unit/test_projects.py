@@ -8,6 +8,7 @@ member, a
 member dir with no pyproject.toml, a table-less root), independent of whatever the dogfood sample
 happens to look like."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -15,20 +16,23 @@ from invoke import MockContext, Result
 
 from repo_tasks import projects
 
-_ROOT_PYPROJECT = '[project]\nname = "root-pkg"\nversion = "1.0.0"\n'
 
+@pytest.fixture
+def workspace_root(write_pyproject: Callable[..., Path]) -> Callable[..., Path]:
+    """A workspace root: the shared `[project]` table plus the `[tool.uv.workspace]` half these
+    tests are actually about. `project=False` writes the table-less "virtual" root uv allows, which
+    is a shape the shared factory deliberately cannot express."""
 
-def _write_member(root: Path, relative: str, name: str, version: str) -> None:
-    member = root / relative
-    member.mkdir(parents=True)
-    (member / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "{version}"\n', encoding="utf-8")
+    def write(root: Path, members: str, exclude: str = "", project: bool = True) -> Path:
+        exclude_line = f"exclude = {exclude}\n" if exclude else ""
+        workspace = f"\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}"
+        if not project:
+            path = root / "pyproject.toml"
+            path.write_text(workspace.lstrip("\n"), encoding="utf-8")
+            return path
+        return write_pyproject(root, name="root-pkg", version="1.0.0", extra=workspace)
 
-
-def _write_workspace_root(root: Path, members: str, exclude: str = "", project: str = _ROOT_PYPROJECT) -> None:
-    exclude_line = f"exclude = {exclude}\n" if exclude else ""
-    (root / "pyproject.toml").write_text(
-        f"{project}\n[tool.uv.workspace]\nmembers = {members}\n{exclude_line}", encoding="utf-8"
-    )
+    return write
 
 
 def test_tracked_files_quotes_every_pathspec():
@@ -68,17 +72,17 @@ def test_discover_python_projects_is_empty_without_a_pyproject(c, tmp_cwd):
     assert projects.discover_python_projects(c) == []
 
 
-def test_discover_python_projects_no_workspace_table_means_root_alone(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text(_ROOT_PYPROJECT, encoding="utf-8")
+def test_discover_python_projects_no_workspace_table_means_root_alone(c, tmp_cwd, write_pyproject):
+    write_pyproject(tmp_cwd, name="root-pkg", version="1.0.0")
     assert projects.discover_python_projects(c) == [
         projects.PythonProject(name="root-pkg", path=Path(), version="1.0.0")
     ]
 
 
-def test_discover_python_projects_resolves_workspace_member_globs(c, tmp_cwd):
-    _write_workspace_root(tmp_cwd, '["examples/*"]')
-    _write_member(tmp_cwd, "examples/beta", "beta", "0.2.0")
-    _write_member(tmp_cwd, "examples/alpha", "alpha", "0.1.0")
+def test_discover_python_projects_resolves_workspace_member_globs(c, tmp_cwd, workspace_root, write_pyproject):
+    workspace_root(tmp_cwd, '["examples/*"]')
+    write_pyproject(tmp_cwd / "examples" / "beta", name="beta", version="0.2.0")
+    write_pyproject(tmp_cwd / "examples" / "alpha", name="alpha", version="0.1.0")
     # Root first, then members sorted — callers index [0] for "the repo's own project".
     assert projects.discover_python_projects(c) == [
         projects.PythonProject(name="root-pkg", path=Path(), version="1.0.0"),
@@ -87,26 +91,26 @@ def test_discover_python_projects_resolves_workspace_member_globs(c, tmp_cwd):
     ]
 
 
-def test_discover_python_projects_honours_workspace_exclude(c, tmp_cwd):
-    _write_workspace_root(tmp_cwd, '["examples/*"]', exclude='["examples/skipped"]')
-    _write_member(tmp_cwd, "examples/kept", "kept", "0.1.0")
-    _write_member(tmp_cwd, "examples/skipped", "skipped", "0.1.0")
+def test_discover_python_projects_honours_workspace_exclude(c, tmp_cwd, workspace_root, write_pyproject):
+    workspace_root(tmp_cwd, '["examples/*"]', exclude='["examples/skipped"]')
+    write_pyproject(tmp_cwd / "examples" / "kept", name="kept", version="0.1.0")
+    write_pyproject(tmp_cwd / "examples" / "skipped", name="skipped", version="0.1.0")
     result = projects.discover_python_projects(c)
     assert [p.name for p in result] == ["root-pkg", "kept"]
 
 
-def test_discover_python_projects_skips_member_dir_without_pyproject(c, tmp_cwd):
-    _write_workspace_root(tmp_cwd, '["examples/*"]')
-    _write_member(tmp_cwd, "examples/real", "real", "0.1.0")
+def test_discover_python_projects_skips_member_dir_without_pyproject(c, tmp_cwd, workspace_root, write_pyproject):
+    workspace_root(tmp_cwd, '["examples/*"]')
+    write_pyproject(tmp_cwd / "examples" / "real", name="real", version="0.1.0")
     (tmp_cwd / "examples" / "not-a-project").mkdir()
     result = projects.discover_python_projects(c)
     assert [p.name for p in result] == ["root-pkg", "real"]
 
 
-def test_discover_python_projects_allows_a_table_less_workspace_root(c, tmp_cwd):
+def test_discover_python_projects_allows_a_table_less_workspace_root(c, tmp_cwd, workspace_root, write_pyproject):
     """uv's "virtual" workspace root — a pyproject.toml that only groups members, no [project]."""
-    _write_workspace_root(tmp_cwd, '["examples/*"]', project="")
-    _write_member(tmp_cwd, "examples/only", "only", "0.1.0")
+    workspace_root(tmp_cwd, '["examples/*"]', project=False)
+    write_pyproject(tmp_cwd / "examples" / "only", name="only", version="0.1.0")
     assert projects.discover_python_projects(c) == [
         projects.PythonProject(name="only", path=Path("examples/only"), version="0.1.0")
     ]
@@ -116,8 +120,8 @@ def test_discover_docker_images_empty_with_no_config_and_no_dockerfile(c, tmp_cw
     assert projects.discover_docker_images(c) == []
 
 
-def test_discover_docker_images_zero_config_default_uses_python_project_name(c, tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "sample-service"\nversion = "1.0.0"\n', encoding="utf-8")
+def test_discover_docker_images_zero_config_default_uses_python_project_name(c, tmp_cwd, write_pyproject):
+    write_pyproject(tmp_cwd, name="sample-service", version="1.0.0")
     (tmp_cwd / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     assert projects.discover_docker_images(c) == [
         projects.DockerImage(
@@ -212,13 +216,13 @@ def test_discover_helm_charts_registry_optional_and_group_defaults_to_name(c, tm
         ("<4.0", None),
     ],
 )
-def test_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, spec, expected):
-    (tmp_cwd / "pyproject.toml").write_text(f'[project]\nname = "x"\nrequires-python = "{spec}"\n', encoding="utf-8")
+def test_python_floor_reads_the_lower_bound_whichever_operator_states_it(tmp_cwd, write_pyproject, spec, expected):
+    write_pyproject(tmp_cwd, version=None, requires_python=spec)
     assert projects.python_floor(tmp_cwd) == expected
 
 
-def test_python_floor_is_none_without_a_requires_python(tmp_cwd):
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
+def test_python_floor_is_none_without_a_requires_python(tmp_cwd, write_pyproject):
+    write_pyproject(tmp_cwd, version=None)
     assert projects.python_floor(tmp_cwd) is None
 
 
@@ -273,22 +277,20 @@ def test_a_config_that_says_nothing_usable_falls_back(tmp_cwd, body):
     assert projects.trunk_branch() == "main"
 
 
-def test_discover_python_projects_names_the_file_when_a_version_is_dynamic(c, tmp_cwd):
+def test_discover_python_projects_names_the_file_when_a_version_is_dynamic(c, tmp_cwd, write_pyproject):
     """`dynamic = ["version"]` is the realistic way to reach this: hatch-vcs and setuptools-scm
     derive the version from git, and this package's model is a static field it rewrites. It raised
     before this — with a bare `KeyError: 'version'` naming neither the file nor the reason."""
-    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "x"\ndynamic = ["version"]\n', encoding="utf-8")
+    write_pyproject(tmp_cwd, version=None, extra='dynamic = ["version"]\n')
     with pytest.raises(ValueError, match=r"pyproject.toml: \[project\] declares no version") as exc_info:
         projects.discover_python_projects(c)
     assert "dynamic" in str(exc_info.value)
 
 
-def test_discover_python_projects_names_the_member_whose_table_is_incomplete(c, tmp_cwd):
+def test_discover_python_projects_names_the_incomplete_member(c, tmp_cwd, workspace_root, write_pyproject):
     # The half a KeyError could not answer: which of a workspace's pyproject.toml files it was.
-    _write_workspace_root(tmp_cwd, '["members/*"]')
-    member = tmp_cwd / "members" / "svc"
-    member.mkdir(parents=True)
-    (member / "pyproject.toml").write_text('[project]\nname = "svc"\n', encoding="utf-8")
+    workspace_root(tmp_cwd, '["members/*"]')
+    write_pyproject(tmp_cwd / "members" / "svc", name="svc", version=None)
     with pytest.raises(ValueError, match=r"members/svc/pyproject.toml"):
         projects.discover_python_projects(c)
 
