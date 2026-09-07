@@ -11,7 +11,6 @@ another; `docker.py`/`helm.py` ask for `semver()` and `dist.py` reads the PEP 44
 contributing/versioning.md."""
 
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -333,8 +332,12 @@ def set_dev(c: Context, group: str | None = None) -> str:
     `helm.package --dev`, which call it first. Refuses on a dirty tree, so it can never write over
     uncommitted work and the undo is always the `git restore` it prints; a CI checkout is clean by
     construction. Returns the new PEP 440 string."""
-    dirty = subprocess.run(["git", "status", "--porcelain"], check=True, capture_output=True, text=True).stdout
-    if dirty.strip():
+    # Through `c.run`, like every other command in this package, rather than the `subprocess.run`
+    # this used to call while holding a Context: a command that reaches around the runner is
+    # invisible to report mode, and its unit test had to monkeypatch `subprocess.run` for the whole
+    # process to control an answer the MockContext was already there to give. `trunkflow` asks the
+    # same question the same way.
+    if c.run("git status --porcelain", hide=True).stdout.strip():
         raise ValueError(
             "working tree is dirty — set_dev only rewrites a clean checkout, so its undo is a plain git restore"
         )

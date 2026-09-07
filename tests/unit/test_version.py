@@ -2,11 +2,11 @@
 logic — the per-group config bump-my-version actually reads) plus bump's overall command shape,
 following test_quality.py's existing MockContext style."""
 
-import subprocess
 import tomllib
 from pathlib import Path
 
 import pytest
+from invoke import MockContext, Result
 
 from repo_tasks import projects, version
 
@@ -276,14 +276,26 @@ def _dev_tree(tmp_cwd: Path, chart: bool = True):
         (tmp_cwd / "chart" / "Chart.yaml").write_text(_DEV_CHART, encoding="utf-8")
 
 
+_GIT_STATUS = "git status --porcelain"
+
+
+def _dev_context(dirty: str = "") -> MockContext:
+    """A context whose only command is the clean-tree check `set_dev` makes.
+
+    The check used to go through `subprocess.run`, so these tests had to monkeypatch that for the
+    whole process to answer it; it goes through `c.run` now, so the answer comes from the same
+    MockContext every other test in this file already uses."""
+    return MockContext(run={_GIT_STATUS: Result(stdout=dirty, exited=0)})
+
+
 def _stub_dev(monkeypatch, dirty: str = ""):
     monkeypatch.setattr(version, "_dev_version", lambda: version.Version.parse("1.0.1.dev3+gabc1234"))
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=dirty, stderr=""))
     project = projects.PythonProject(name="sample", path=Path(), version="1.0.0")
     monkeypatch.setattr(version, "discover_python_projects", lambda c: [project])
 
 
-def test_set_dev_rewrites_every_file_in_the_group_without_committing(c, tmp_cwd, monkeypatch, capsys):
+def test_set_dev_rewrites_every_file_in_the_group_without_committing(tmp_cwd, monkeypatch, capsys):
+    c = _dev_context()
     _dev_tree(tmp_cwd)
     _stub_dev(monkeypatch)
     chart = projects.HelmChart(name="sample", path=Path("chart"), registry=None, group="sample")
@@ -298,20 +310,25 @@ def test_set_dev_rewrites_every_file_in_the_group_without_committing(c, tmp_cwd,
     chart_text = (tmp_cwd / "chart" / "Chart.yaml").read_text(encoding="utf-8")
     assert "version: 1.0.1-dev.3.gabc1234" in chart_text
     assert 'appVersion: "1.0.1-dev.3.gabc1234"' in chart_text
-    c.run.assert_not_called()  # nothing shells out through invoke — no bump-my-version, no commit
+    # The clean-tree check and nothing else: no bump-my-version, no commit. Asserted as the whole
+    # call list rather than as "not called", which stopped being true when the check moved onto
+    # `c.run` and would otherwise have been weakened to nothing.
+    assert [call[0][0] for call in c.run.call_args_list] == [_GIT_STATUS]  # pyright: ignore[reportAttributeAccessIssue]
     assert "git restore pyproject.toml uv.lock chart/Chart.yaml chart/Chart.yaml" in capsys.readouterr().out
 
 
-def test_set_dev_refuses_a_dirty_tree(c, tmp_cwd, monkeypatch):
+def test_set_dev_refuses_a_dirty_tree(tmp_cwd, monkeypatch):
+    c = _dev_context(dirty=" M pyproject.toml\n")
     _dev_tree(tmp_cwd)
-    _stub_dev(monkeypatch, dirty=" M pyproject.toml\n")
+    _stub_dev(monkeypatch)
     monkeypatch.setattr(version, "discover_helm_charts", lambda c: [])
     with pytest.raises(ValueError, match="dirty"):
         version.set_dev.body(c)
     assert 'version = "1.0.0"' in (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
 
 
-def test_set_dev_fails_loudly_when_a_search_string_is_absent(c, tmp_cwd, monkeypatch):
+def test_set_dev_fails_loudly_when_a_search_string_is_absent(tmp_cwd, monkeypatch):
+    c = _dev_context()
     _dev_tree(tmp_cwd)
     (tmp_cwd / "chart" / "Chart.yaml").write_text(
         "apiVersion: v2\nname: sample\nversion: 1.0.0\nappVersion: 1.0.0\n", encoding="utf-8"
