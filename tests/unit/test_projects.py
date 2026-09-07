@@ -302,3 +302,11 @@ def test_discovery_names_the_manifest_entry_missing_a_required_key(c, tmp_cwd, t
     discover = projects.discover_docker_images if table == "docker" else projects.discover_helm_charts
     with pytest.raises(ValueError, match=rf"repo-tasks.toml: a \[\[{table}\]\] entry declares no path"):
         discover(c)
+
+
+def test_current_branch_reads_the_checkouts_own_head():
+    # The one git question both branching models ask, and asked the same way by each of them
+    # before it moved here.
+    c = MockContext(run=Result(stdout="release/1.2.0\n", exited=0))
+    assert projects.current_branch(c) == "release/1.2.0"
+    c.run.assert_called_once_with("git rev-parse --abbrev-ref HEAD", hide=True)  # pyright: ignore[reportAttributeAccessIssue]

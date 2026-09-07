@@ -20,17 +20,13 @@ gitflow.
 from invoke import Context, task
 
 from .nextsteps import next_steps
-from .projects import trunk_branch
+from .projects import current_branch, trunk_branch
 from .requirements import NETWORK, requires
 
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
 # namespace, not out of sibling modules. Same import shape as gitflow.py's.
 from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
 from .version import current_version, next_version
-
-
-def _current_branch(c: Context) -> str:
-    return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
 
 
 def _require_clean_tree(c: Context) -> None:
@@ -81,7 +77,7 @@ def cut(c: Context, bump: str = "minor", branch: str | None = None, group: str |
     contributing/release-flow.md.
     """
     branch = branch or trunk_branch()
-    current = _current_branch(c)
+    current = current_branch(c)
     if current != branch:
         raise ValueError(f"on {current}, not {branch} — check out {branch} first, or pass --branch")
     _require_clean_tree(c)

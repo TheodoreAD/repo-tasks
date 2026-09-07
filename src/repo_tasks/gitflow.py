@@ -31,17 +31,13 @@ import shlex
 from invoke import Context, task
 
 from .nextsteps import next_steps
-from .projects import develop_branch, trunk_branch
+from .projects import current_branch, develop_branch, trunk_branch
 from .requirements import GH, NETWORK, requires
 from .version import Version, current_version, next_version
 
 # `_bump` is the plain function behind the `bump` task; the underscore keeps it out of the CLI
 # namespace, not out of sibling modules.
 from .version import _bump as version_bump  # pyright: ignore[reportPrivateUsage]
-
-
-def _current_branch(c: Context) -> str:
-    return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
 
 
 def _open_release_branch(c: Context) -> str | None:
@@ -191,7 +187,7 @@ def _require_branch(c: Context, prefix: str, hint: str) -> str:
     The advice is the argument that matters: "checkout the branch you want to finish" and "checkout
     the branch whose PR you just merged" send the reader to different places, and folding them into
     one generic sentence would be the wrong kind of deduplication."""
-    branch = _current_branch(c)
+    branch = current_branch(c)
     if not branch.startswith(prefix):
         raise ValueError(f"not on a {prefix}* branch (currently on {branch!r}) — {hint}")
     return branch
@@ -204,7 +200,7 @@ def _release_branch(c: Context) -> str:
     Not `_require_branch`: two acceptable prefixes rather than one, so the message names a pair.
     Collapsing them would mean a prefix argument that is sometimes a tuple and a message assembled
     from it, which is more machinery than the one call site it would serve."""
-    branch = _current_branch(c)
+    branch = current_branch(c)
     if not branch.startswith(("release/", "hotfix/")):
         raise ValueError(
             f"not on a release/* or hotfix/* branch (currently on {branch!r}) — candidates are cut from the branch "

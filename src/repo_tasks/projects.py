@@ -36,6 +36,18 @@ def tracked_files(c: Context, *patterns: str) -> list[str]:
     return result.stdout.split() if result.ok else []
 
 
+def current_branch(c: Context) -> str:
+    """The branch the checkout is on.
+
+    Here rather than in a branching-model module, because it is a fact about the checkout and not
+    about any model: `gitflow.py` and `trunkflow.py` each had their own identical copy, which is
+    what a question filed under whoever asked it first looks like. It sits beside `tracked_files`
+    for the same reason — this module is already where the package asks git about the repo it is
+    standing in, and `trunk_branch`/`develop_branch`, the names a repo *declares*, are the other
+    half of the same subject."""
+    return c.run("git rev-parse --abbrev-ref HEAD", hide=True).stdout.strip()
+
+
 @dataclass(frozen=True)
 class PythonProject:
     name: str
