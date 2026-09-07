@@ -43,8 +43,8 @@ command -v uv > /dev/null 2>&1 || {{
 
 
 def _remote_tags(c: Context) -> list[str]:
-    """Every `vX.Y.Z` tag on the upstream repo, newest first — empty if it has none yet
-    (repo-tasks itself, pre-first-release, is exactly this case today)."""
+    """Every `vX.Y.Z` tag on the upstream repo, newest first — empty if it has none yet, which is
+    what `update` falls back to the default branch for."""
     result = c.run(f"git ls-remote --tags --refs --sort=-v:refname {_REPO_URL} 'v*'", hide=True, warn=True)
     if not result.ok or not result.stdout.strip():
         return []
