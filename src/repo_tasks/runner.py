@@ -50,7 +50,7 @@ visible. That is invoke's own interface and a semantic no-op when report mode is
 import os
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from invoke import Collection, Exit, Result
 from invoke.runners import Local
@@ -75,7 +75,6 @@ class _Ledger:
 
     steps: int = 0
     seconds: float = 0.0
-    notes: list[str] = field(default_factory=list)
 
 
 _ledger = _Ledger()
