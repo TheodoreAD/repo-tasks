@@ -87,3 +87,29 @@ def test_the_shipped_pytest_ini_still_promotes_other_warnings(tmp_path: Path):
     result = _run_pytest_under_shipped_config(tmp_path)
     assert result.returncode != 0, result.stdout
     assert "DeprecationWarning" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("statement", "flagged"),
+    [
+        ("import sys\n\nsys.path.insert(0, '../other/src')\n", True),
+        ("import sys as s\n\ns.path.append('../other/src')\n", True),
+        ("from sys import path\n\npath.append('../other/src')\n", True),
+        ("import site\n\nsite.addsitedir('../other/src')\n", True),
+        # The rule is about reaching a sibling distribution by path, not about reading sys.path.
+        ("import sys\n\nprint(sys.executable)\n", False),
+    ],
+)
+def test_the_shipped_ruff_config_refuses_to_reach_a_sibling_by_path(tmp_path: Path, statement: str, flagged: bool):
+    """Real ruff against the shipped `ruff.toml`, because the config is what ships and a copy of the
+    rule in a unit test would pass while the shipped file said something else.
+
+    Two distributions in one repo import each other through their installed (editable) form. A path
+    insert makes the import work while the dependency stays undeclared — absent from the lock, from
+    `uv sync`, and from the wheel, which then fails on the machine that installs it."""
+    shutil.copy(_CONFIGS_DIR / "ruff.toml", tmp_path / "ruff.toml")
+    (tmp_path / "probe.py").write_text(statement, encoding="utf-8")
+    result = subprocess.run(
+        ["ruff", "check", "--no-cache", "probe.py"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert ("TID251" in result.stdout) is flagged, result.stdout
