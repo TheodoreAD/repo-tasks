@@ -315,3 +315,23 @@ unavoidably has to live in `pyproject.toml`.
 
 Docker images and Helm charts aren't modeled by `uv` workspaces at all, which is why they get
 `repo-tasks.toml` rather than being bolted onto `pyproject.toml`.
+
+## Every file read and write names its encoding
+
+`Path.read_text()`, `write_text()` and text-mode `open()` all take the platform default —
+`locale.getencoding()` — which is not this package's to assume. Every call site in the package and
+the suite passes `encoding="utf-8"`, and a new one should too.
+
+[DECISION: swept across 182 call sites 2026-09-07 rather than left to the cases that looked risky.
+The exposure is concrete rather than theoretical: the config files this package ships and reads back
+are full of em dashes, so under a non-UTF-8 locale `configs.pull` mojibakes what it copies and
+`configs.diff` then reports drift against a file it wrote itself, while a write of the same text
+raises `UnicodeEncodeError`. Linux and macOS are safe by luck rather than by design — PEP 540 turns
+UTF-8 mode on for the `C` and `POSIX` locales, verified on 3.14, so the ordinary agent and CI cases
+never see it — which is exactly the shape of bug that only ever appears on somebody else's machine.]
+
+[PITFALL: **nothing enforces this.** ruff's `PLW1514` (`unspecified-encoding`) is the rule for it
+and is preview-only, so selecting it means turning preview on in a config every consumer pulls, and
+preview rules change between releases. Until that changes the convention is this paragraph and code
+review. The sweep is re-runnable as an `ast` walk over `read_text`/`write_text`/`open` calls looking
+for a missing `encoding` keyword — that is how the 182 were found and how the zero was confirmed.]

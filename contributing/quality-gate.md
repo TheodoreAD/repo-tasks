@@ -336,6 +336,20 @@ zensical is in the consumer's own `docs` group, so a consumer following that rem
 the wrong group and see nothing change. `docs.py` carries its own preflight naming
 `uv sync --group docs`.]
 
+[DECISION: **which preflight a tool gets follows from what installs it, and the question is worth
+asking at every new call site.** A binary the `repo-tasks-quality` manifest ships gets
+`configs.require_tool`, which names the entry to add and the three commands that add it —
+`_GATE_TOOL_DISTRIBUTIONS` is the map, and `act` is in it even though `test.workflows` is not a gate
+step, because the manifest is still what installs it. A binary no dependency group can supply gets
+its own preflight naming the real installer: `docs._require_zensical` for the consumer's `docs`
+group, `ci._require_gh` for the GitHub CLI. Both of those were found the same way, one of them
+2026-09-07 — `ci.status` was routing `gh` through `require_tool`, so a machine without `gh` was told
+to sync a dependency group that has never contained it. Two bespoke preflights is not yet a pattern
+to extract: their messages differ in exactly the part that matters, and a shared helper taking the
+message as an argument would be the same code with a longer signature. `docker` and `helm` get no
+preflight at all — `@requires(DOCKER)` already declares the need, and those tools' own errors are
+clear.]
+
 This is also the one step that makes "no changes written" not literally true: a repo with an
 `mkdocs.yml` gets `site/` rebuilt. `site/` is gitignored in every consumer and `build` cleans on
 entry rather than on exit, so nothing tracked moves and nothing accumulates between runs.
