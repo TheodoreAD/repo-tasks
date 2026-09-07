@@ -57,6 +57,45 @@ def test_stamp_falls_back_to_unpinned_when_no_matching_tag(tmp_cwd, monkeypatch,
     assert "isn't a real upstream tag yet" in capsys.readouterr().out
 
 
+def _tool_list(*lines: str) -> dict[str, Result]:
+    """`uv tool list` output: one `<name> v<version>` line per tool, executables indented under it."""
+    return {selfinstall._TOOL_LIST_CMD: Result(stdout="".join(f"{line}\n" for line in lines), exited=0)}
+
+
+def test_status_reports_the_global_install_alongside_the_active_one(tmp_cwd, monkeypatch, capsys):
+    """The whole point: two numbers, named, because only one used to be printed."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.2.0")
+    c = MockContext(run=_tool_list("repo-tasks v0.3.0", "- inv", "- repo-tasks", "shfmt-py v4.0.0"))
+    selfinstall.status.body(c)
+    out = capsys.readouterr().out
+    assert "active: 0.2.0 (this process)" in out
+    assert "global uv tool: 0.3.0 (differs)" in out
+
+
+def test_status_says_so_when_the_two_agree(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    c = MockContext(run=_tool_list("repo-tasks v0.3.0", "- inv"))
+    selfinstall.status.body(c)
+    assert "global uv tool: 0.3.0 (same)" in capsys.readouterr().out
+
+
+def test_status_does_not_treat_a_missing_global_install_as_an_error(tmp_cwd, monkeypatch, capsys):
+    """A consumer taking repo-tasks as a project dependency legitimately has no tool install."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    c = MockContext(run=_tool_list("shfmt-py v4.0.0", "- shfmt"))
+    selfinstall.status.body(c)
+    assert "not installed, or uv unavailable" in capsys.readouterr().out
+
+
+def test_status_survives_uv_being_absent(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    c = MockContext(run={selfinstall._TOOL_LIST_CMD: Result(stdout="", exited=127)})
+    selfinstall.status.body(c)
+    out = capsys.readouterr().out
+    assert "not installed, or uv unavailable" in out
+    assert "active: 0.3.0" in out  # the reading that does not need uv still lands
+
+
 def test_status_reports_no_stamp_yet(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
     selfinstall.status.body(c)

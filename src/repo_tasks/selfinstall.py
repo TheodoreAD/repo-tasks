@@ -21,6 +21,10 @@ from .requirements import NETWORK, requires
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")
 _INSTALL_CMD = "uv tool install --force --with-executables-from invoke"
+# Reading the global install's version, which `importlib.metadata` structurally cannot do: it can
+# only answer for the interpreter running it. No new dependency — `update` already shells out to
+# `uv tool install`, and this module exists to manage a uv tool.
+_TOOL_LIST_CMD = "uv tool list"
 
 # Must stay shfmt-clean under the shipped .editorconfig (`space_redirects = true`: `> /dev/null`,
 # never `>/dev/null`) — otherwise `configure` writes it and `quality.fix` rewrites it, forever.
@@ -81,37 +85,67 @@ def update(c: Context):
     c.run(f"{_INSTALL_CMD} '{target}'", echo=True)
 
 
+def _global_version(c: Context) -> str | None:
+    """The version of the global `uv tool` install, or None when uv cannot answer.
+
+    Read from uv rather than from this process, which is the whole point: `_installed_version` can
+    only ever report the interpreter executing it, and in a repo carrying its own `repo-tasks` that
+    is a different copy. None covers both "uv is not on PATH" and "repo-tasks is not installed as a
+    tool" — neither is an error, since a consumer taking this package as a project dependency
+    legitimately has no global install at all.
+    """
+    result = c.run(_TOOL_LIST_CMD, hide=True, warn=True)
+    if not result.ok:
+        return None
+    for line in result.stdout.splitlines():
+        # `uv tool list` prints `repo-tasks v0.3.0` then its executables, each indented.
+        name, _, rest = line.partition(" ")
+        if name == "repo-tasks" and rest.startswith("v"):
+            return rest[1:].strip()
+    return None
+
+
 @task
 def status(c: Context):
-    """Compare the *active* repo-tasks version against what this repo was last `configure`d
-    against — drift detection, read-only.
+    """Report both repo-tasks versions in play, and compare against what this repo was last
+    `configure`d against — drift detection, read-only.
 
-    Active means whatever `inv` process is executing this, which is the global daily-driver install
-    only in a repo that has none of its own. A repo carrying `repo-tasks` in its own environment —
-    this one, and any consumer taking it as a project dependency — reports that copy instead, so
-    the number can differ from the global tool's and did on 2026-09-08, straight after an upgrade.
-    See plans/2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md for whether
-    that should change; this docstring states what it does today.
+    **Two numbers, always, because they are routinely different and only one of them used to be
+    printed.** The *active* version is whatever `inv` process is executing this; the *global* one is
+    the `uv tool` install. They coincide in a repo that carries no `repo-tasks` of its own, which is
+    where this is usually run — and differ in this repo and in any consumer taking the package as a
+    project dependency. Printing one under a name implying the other is what made a successful
+    upgrade read as a failed one, 2026-09-08.
+
+    Both readings are local and cheap. The third number an agent might want — the latest released
+    tag — deliberately is not here: it needs the network, which routine tasks in this package do not
+    take (see `ci.check-actions`, kept out of the gate for the same reason).
     """
-    installed = _installed_version("repo-tasks")
+    active = _installed_version("repo-tasks")
+    global_version = _global_version(c)
+    if global_version is None:
+        where = "global uv tool: not installed, or uv unavailable"
+    elif global_version == active:
+        where = f"global uv tool: {global_version} (same)"
+    else:
+        where = f"global uv tool: {global_version} (differs)"
+    print(f"[repo-tasks.status] active: {active} (this process); {where}")
+
     if not _STAMP_PATH.exists():
-        print(
-            f"[repo-tasks.status] installed: {installed}; this repo has no stamped "
-            "bootstrap-repo-tasks.sh yet (run `inv configure`)"
-        )
+        print("[repo-tasks.status] this repo has no stamped bootstrap-repo-tasks.sh yet (run `inv configure`)")
         return
     expected = _stamped_version()
     if expected is None:
         print(
-            f"[repo-tasks.status] installed: {installed}; {_STAMP_PATH} is pinned to an unpinned "
-            "(default-branch) install — nothing to compare a version against"
+            f"[repo-tasks.status] {_STAMP_PATH} is pinned to an unpinned (default-branch) "
+            "install — nothing to compare a version against"
         )
         return
-    if installed == expected:
-        print(f"[repo-tasks.status] up to date — installed {installed}, repo expects {expected}")
+    if active == expected:
+        print(f"[repo-tasks.status] up to date — active {active}, repo expects {expected}")
     else:
         print(
-            f"[repo-tasks.status] drift — installed {installed}, repo expects {expected}. "
+            f"[repo-tasks.status] drift — active {active}, repo expects {expected}. "
             "Run `inv repo-tasks.update` to move the global install forward, or `inv configure` "
             "to re-pin this repo to what's currently installed."
         )
