@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-07
+status: in-progress
+updated: 2026-09-08
 source_repo: github.com-personal/scaffoldapy
 source_session: 7a3f34e6-b0c7-4532-8c89-ec43239414e7.jsonl
 source_moment: 2026-09-07T20:45:00Z
@@ -67,17 +67,18 @@ this is a second, independent deprecation reaching the same line.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: an `ignore` entry, or wait for starlette's release? The two `ignore` lines
-this file already carries are both permanent conditions — pytest's own `testpaths` fallback, and
-invoke leaking pipe handles. This one has a known end date, so it would be the first entry that is
-meant to be deleted. Against waiting: every web-service consumer's gate is red until upstream ships,
-and the date is not ours to pick.]
+[DECISION: an `ignore` entry, not waiting for starlette's release. The two entries this file already
+carried are permanent conditions — pytest's own `testpaths` fallback, and invoke leaking pipe
+handles — and this is the first one meant to be deleted. It went in anyway because the alternative
+prices a red gate for every web-service consumer against a release date that is not ours to pick.
+Re-checked on PyPI 2026-09-08: still starlette 1.6.0, so the window is open and not closing on its
+own.]
 
-[NEEDS CLARIFICATION: if an entry goes in, how narrowly is it spelled? `ignore::DeprecationWarning`
-would silence the class this file's `error` policy exists to surface. Matching the message
-(`ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning`) keeps every other
-deprecation loud and expires naturally — it stops matching anything the moment starlette ships the
-rename, which is what makes it safe to forget.]
+[DECISION: matched on the message, not on the class. `ignore::DeprecationWarning` would silence the
+category this file's `error` policy exists to surface; the message match keeps every other
+deprecation loud and stops matching anything by itself the moment starlette ships the rename, which
+is what makes it safe to forget. Both halves were measured rather than reasoned about — see
+Verification.]
 
 [NEEDS CLARIFICATION: is a temporary entry supposed to leave a trigger behind? The comment can say
 "drop this once starlette releases the `anyio.from_thread` rename", the same shape as the invoke
@@ -95,3 +96,33 @@ should not be blocked by — with the difference that this one has an upstream f
 Note the ordering for whoever takes it: `scaffoldapy`'s end-to-end tier renders against the
 **globally installed** `repo-tasks`, not a checkout, so the verification there needs this pushed and
 `inv repo-tasks.update` run in that repo before its `web_service` combination can go green.
+
+## Verification (2026-09-08)
+
+The entry landed in `487c9c8`, written into the root `pytest.ini` and promoted into the shipped copy
+with `inv configs.promote --file pytest.ini --apply` — the direction this repo owns, rather than
+editing the packaged file directly.
+
+Measured against a throwaway project holding nothing but the shipped `pytest.ini` and one
+`from fastapi.testclient import TestClient`, resolved with no project environment in the way, on the
+current release of both halves:
+
+| config                        | result                                            |
+| ----------------------------- | ------------------------------------------------- |
+| the file as it stood at HEAD  | `collected 0 items / 1 error`, exit 2, at line 53 |
+| with the new entry            | `1 passed`                                        |
+| plus an unrelated deprecation | that test **fails** — the narrow match holds      |
+
+[PITFALL: the obvious probe does not reach this warning. Without `httpx2` installed, starlette's
+testclient raises its own earlier deprecation at line 36 and collection dies there instead — a
+different error at a different line, which reads as the bug reproducing when it is not. The `httpx2`
+dependency that a real web-service consumer already carries is what exposes line 53, so a probe
+built to be minimal is a probe that measures the wrong thing.]
+
+The third check is the one that matters and is why the entry is spelled the way it is: silencing the
+class would have passed the first two identically.
+
+[UNVERIFIED: the original repro, in the repo that found it. This plan carries `source_repo`, so it
+is not done until `scaffoldapy`'s `web_service` end-to-end combination goes green — and that needs
+this pushed and `inv repo-tasks.update` run there first, per the ordering note above. Held
+deliberately: the push is the user's call and was declined for now.]
