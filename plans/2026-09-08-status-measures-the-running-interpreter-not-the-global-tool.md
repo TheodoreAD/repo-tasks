@@ -3,7 +3,10 @@ status: idea
 updated: 2026-09-08
 ---
 
-# `repo-tasks.status` answers a different question than its docstring promises
+# `repo-tasks.status` measures the running interpreter, not the global tool
+
+_The docstring that promised otherwise is fixed; what remains is whether the measurement itself
+should change. The filename still describes the behaviour, which is unchanged._
 
 ## Context
 
@@ -69,12 +72,18 @@ task was written and lost by the time the other two reused the helper.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: fix the measurement, or fix the docstrings? Reading the global tool properly
-means asking uv (`uv tool list`, or running the installed `repo-tasks` executable and reading its
-own answer) rather than asking this process — a real change, and one that needs `uv` on PATH for a
-task that currently needs nothing. Narrowing the docstrings to "the active install" costs nothing
-and makes all three tasks honest, but leaves nobody answering the question `status` was named for,
-which is the drift question a consumer actually has.]
+[DECISION: **the docstring half is done, 2026-09-08 (`c55f7d4`), and it settles nothing about the
+measurement.** `status` now says it reads the _active_ version and names the case where that is not
+the global tool. Done separately and immediately because a docstring making a false claim is wrong
+whichever way the question below goes, and this one had just misled a reader — leaving it in place
+as evidence for a plan would have cost the next person the same minutes it cost the first.]
+
+[NEEDS CLARIFICATION: should the **measurement** change? Reading the global tool properly means
+asking uv (`uv tool list`, or running the installed `repo-tasks` executable and reading its own
+answer) rather than asking this process — a real change, and one that gives a task needing nothing
+today a dependency on `uv` being on PATH. The docstring fix has made the task honest without making
+it useful: nobody is now answering the drift question `status` was named for, and the argument for
+leaving it that way is that the question may belong to a different task entirely.]
 
 [NEEDS CLARIFICATION: does `stamp` want the same answer as `status`? It might not. `stamp` records
 what a consumer's bootstrap should install, and an argument exists that the active environment is
@@ -89,13 +98,17 @@ two versions currently in play.]
 
 ## Recommended direction
 
-Rough, and the first question above comes first because the other two follow from it.
+Rough, and the measurement question comes first because the other two follow from it.
 
-The cheap honest step is to make `status` print **both** numbers with their sources named — the
-active install and what the global tool reports — since the whole failure here is one number
-appearing under the other's name. That is a small change, needs no new dependency when the global
-reading is unavailable, and would have made the original symptom self-explaining rather than
-alarming.
+The remaining step, if one is wanted, is to make `status` print **both** numbers with their sources
+named — the active install and what the global tool reports — since the whole failure here was one
+number appearing under the other's name. That needs no new dependency when the global reading is
+unavailable, and would have made the original symptom self-explaining rather than alarming.
+
+**It is now legitimate to close this as won't-fix**, which was not true before the docstring landed.
+The task is honest today, and the drift question it does not answer has no recorded instance of
+anyone needing it — this plan's own evidence is a session confused by the wording, not by the
+absence of the reading.
 
 Whatever is decided, the fix belongs with a test that runs the two readings apart. A unit test with
 a mocked context cannot see this: the defect is which interpreter answers, and a mock supplies the
