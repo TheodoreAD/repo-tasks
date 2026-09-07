@@ -188,9 +188,27 @@ def hotfix_start(c: Context, bump: str, group: str | None = None, rc: bool = Fal
     _next_steps(*steps)
 
 
+def _require_branch(c: Context, prefix: str, hint: str) -> str:
+    """The current branch, which must be under `prefix` — every task past the start of a flow acts
+    on the branch you are standing on rather than one it is told about, so the guard is the same
+    four times over and only the prefix and the advice differ.
+
+    The advice is the argument that matters: "checkout the branch you want to finish" and "checkout
+    the branch whose PR you just merged" send the reader to different places, and folding them into
+    one generic sentence would be the wrong kind of deduplication."""
+    branch = _current_branch(c)
+    if not branch.startswith(prefix):
+        raise ValueError(f"not on a {prefix}* branch (currently on {branch!r}) — {hint}")
+    return branch
+
+
 def _release_branch(c: Context) -> str:
     """The current release/* or hotfix/* branch, or a raise naming what was expected — the
-    candidate cycle runs on either, since a hotfix can opt into it."""
+    candidate cycle runs on either, since a hotfix can opt into it.
+
+    Not `_require_branch`: two acceptable prefixes rather than one, so the message names a pair.
+    Collapsing them would mean a prefix argument that is sometimes a tuple and a message assembled
+    from it, which is more machinery than the one call site it would serve."""
     branch = _current_branch(c)
     if not branch.startswith(("release/", "hotfix/")):
         raise ValueError(
@@ -227,13 +245,8 @@ def _drop_rc(c: Context, group: str | None) -> None:
 
 
 def _local_finish(c: Context, kind: str, push: bool, group: str | None) -> None:
-    branch = _current_branch(c)
     prefix = f"{kind}/"
-    if not branch.startswith(prefix):
-        raise ValueError(
-            f"not on a {prefix}* branch (currently on {branch!r}) — checkout the {prefix}* branch you want to "
-            "finish first"
-        )
+    branch = _require_branch(c, prefix, f"checkout the {prefix}* branch you want to finish first")
     tag = f"v{branch.removeprefix(prefix)}"
     _drop_rc(c, group)
     trunk = trunk_branch()
@@ -258,13 +271,8 @@ def _local_finish(c: Context, kind: str, push: bool, group: str | None) -> None:
 
 
 def _pr_finish(c: Context, kind: str, group: str | None) -> None:
-    branch = _current_branch(c)
     prefix = f"{kind}/"
-    if not branch.startswith(prefix):
-        raise ValueError(
-            f"not on a {prefix}* branch (currently on {branch!r}) — checkout the {prefix}* branch you want to "
-            "finish first"
-        )
+    branch = _require_branch(c, prefix, f"checkout the {prefix}* branch you want to finish first")
     version = branch.removeprefix(prefix)
     _drop_rc(c, group)
     trunk = trunk_branch()
@@ -309,13 +317,8 @@ def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: st
 
 
 def _finalize(c: Context, kind: str) -> None:
-    branch = _current_branch(c)
     prefix = f"{kind}/"
-    if not branch.startswith(prefix):
-        raise ValueError(
-            f"not on a {prefix}* branch (currently on {branch!r}) — checkout the {prefix}* branch whose PR you "
-            "just merged, then re-run this"
-        )
+    branch = _require_branch(c, prefix, f"checkout the {prefix}* branch whose PR you just merged, then re-run this")
     tag = f"v{branch.removeprefix(prefix)}"
     trunk = trunk_branch()
 
@@ -402,13 +405,8 @@ def support_hotfix_start(c: Context, support: str, bump: str, group: str | None 
 
 
 def _support_hotfix_branch_and_tag(c: Context, support: str) -> tuple[str, str]:
-    branch = _current_branch(c)
     prefix = f"support-hotfix/{support}/"
-    if not branch.startswith(prefix):
-        raise ValueError(
-            f"not on a {prefix}* branch (currently on {branch!r}) — checkout the {prefix}* branch for this "
-            "support line first"
-        )
+    branch = _require_branch(c, prefix, f"checkout the {prefix}* branch for this support line first")
     return branch, f"v{branch.removeprefix(prefix)}"
 
 
