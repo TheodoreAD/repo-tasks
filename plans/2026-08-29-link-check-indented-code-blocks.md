@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-29
+updated: 2026-09-08
 ---
 
 # `docs.link-check` does not recognise indented code blocks
@@ -55,14 +55,27 @@ it away needs a deliberate decision, not a drive-by.]
 
 ## The other scope the task deliberately does not cover
 
-[DEFERRED: **external URLs and anchors/fragments**. `docs.link-check` is relative file links only,
-by design — that is what lets it be dependency-free and therefore a gate step
+**The anchor half is done, and this entry used to claim both halves were open.** `7fc0b23` added
+`_anchors`, which resolves a link's fragment against the union of what python-markdown's toc
+extension and github.com would emit, per tracked `.md` and cached per run — so a renamed heading is
+now caught, and the report names the nearest surviving anchor. It needed no parser and no
+dependency, which is the part worth keeping: the entry below predicted the opposite.
+
+[DEFERRED: **external URLs**, and only those. `docs.link-check` checks relative file links and their
+fragments; a scheme-bearing target is skipped by `_EXTERNAL`, because checking one is a network call
+and that is what keeps the task in the gate
 ([`../contributing/quality-gate.md`](../contributing/quality-gate.md)). Moved here from the retired
 quality-gate sweep plan, because it is the same task's scope question. `lychee-bin` remains the tool
 if this is ever wanted, at 78 MB and one release ever; its maintenance record is worth re-checking
-before adopting rather than trusting the 2026-08 measurement. Note this interacts with the
-`markdown-it-py` question above: a real parser closes the anchor half locally, while only a network
-checker closes the external-URL half, so they are two decisions rather than one.]
+before adopting rather than trusting the 2026-08 measurement.]
+
+[PITFALL: this entry said "a real parser closes the anchor half locally", pairing that half with the
+`markdown-it-py` question above and making both look like one decision. They were not: anchors are a
+heading-slug problem, not a block-structure one, and `7fc0b23` (2026-09-04) closed them with two
+sluggers and a regex while leaving `markdown-it-py` exactly as open as before. A scope note that
+bundles a gap with a proposed mechanism makes the gap look more expensive than it is — and it
+outlives the fix, since nothing sends the session that closes the gap back to the plan that
+mispriced it: this entry still claimed the anchor half was open four days after it shipped.]
 
 ## Recommended direction
 
