@@ -1,6 +1,6 @@
 ---
 status: blocked on the batched consumer sweep, which is the only thing that can verify the derivation at a consumer
-updated: 2026-08-30
+updated: 2026-09-08
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---
 
@@ -168,3 +168,24 @@ plan because it is a line in this same file with a stated expiry condition and n
 watches invoke releases for it, so it will be noticed whenever someone next reads `pytest.ini`,
 where the comment names the condition. Unlike `anyio_mode` this one is unconditional today and does
 not need deriving — the question is only when it can go.]
+
+**Re-checked 2026-09-08: not yet, and not close.** invoke's latest release is `3.0.3`, which is what
+this repo locks, so "is there a newer release" answers nothing — the check has to read the code. On
+`pyinvoke/invoke` `main@6a71e68`, `Local.start` opens `stdout`/`stderr`/`stdin` as pipes
+(`invoke/runners.py:1363`) and `Local.stop` (`:1420`) closes only `self.parent_fd`, and only on the
+PTY path; `stdin` is closed separately during writing, and the two read pipes are closed by nothing.
+So the expiry condition is unmet upstream, not merely unreleased.
+
+The re-check is two commands, which is the point of writing them down — a release number and a probe
+that measures the invoke actually installed:
+
+```shell
+curl -s https://pypi.org/pypi/invoke/json  # is there anything newer than what we lock?
+python -W error::ResourceWarning -c "import gc; from invoke import Context; Context().run('true', hide=True); gc.collect()"
+```
+
+The probe prints two `unclosed file` lines today. When it prints nothing, the ignore can go.
+
+[PITFALL: the probe reports the warnings but **exits 0**, because they are raised during
+finalization, where `-W error` cannot turn them into a failure. Reading the exit code rather than
+the output says "fixed" about a version that still leaks.]
