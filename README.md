@@ -1,35 +1,47 @@
 # repo-tasks
 
 Shared, reproducible [invoke](https://www.pyinvoke.org/) tasks for personal Python repos — one
-module per facility: `quality` (`lint`/`format`/`type_check`/`shell_check`/`shell_format`/
-`workflow_check`/`dockerfile_check`, and the composite `fix`/`check`/`precommit` graph), `test` (one
-target per tier — `unit`/`integration`/`smoke`/`regression`/`all`, with only the unit tier in the
-default gate, plus `untested-modules` and the standalone `coverage` report — plus `workflows`, which
-runs the repo's GitHub Actions locally through [act](https://github.com/nektos/act)), `venv`
-(`sync`/`create`/`delete`/`install_wheel` — lock-respecting venv lifecycle, CI/docker-aware), `deps`
-(`lock`/`check`/`list`/`tree`/`export` — the only tasks that ever write `uv.lock`), `dist`
-(`clean`/`build`/`publish`/`versions` — build a wheel, publish it, and query a package index for a
-project's released versions), `docker` (`check`/`build`/`push`/`release`/`login` — image
+module per facility: `quality` (`lint`/`format`/`type_check`/`verify_types`/`shell_check`/
+`shell_format`/`workflow_check`/`dockerfile_check`, and the composite `fix`/`check`/`precommit`
+graph), `test` (one target per tier — `unit`/`integration`/`smoke`/`regression`/`all`, with only the
+unit tier in the default gate, plus `untested-modules` and the standalone `coverage` report — plus
+`workflows`, which runs the repo's GitHub Actions locally through
+[act](https://github.com/nektos/act)), `venv`
+(`sync`/`create`/`recreate`/`delete`/`pin`/`check`/`install_wheel` — lock-respecting venv lifecycle,
+CI/docker-aware, with `pin`/`check`/`recreate` keeping the interpreter matched to
+`requires-python`), `deps` (`lock`/`check`/`list`/`tree`/`export`/`audit` — the only tasks that ever
+write `uv.lock`, plus an advisory check over the locked set), `dist`
+(`clean`/`build`/`publish`/`list_versions` — build a wheel, publish it, and query a package index
+for a project's released versions), `version` (`bump`/`set_dev` — one logical version written into
+every file the group's projects declare it in, plus a dev-build stamp for the working tree),
+`gitflow` (`feature_*`/`release_*`/`hotfix_*`/`support_*` — nvie's branching model, PR mode by
+default, with a `*_finalize` step that tags the trunk once GitHub has merged the PR), `trunkflow`
+(`cut` — the trunk-based sibling: bump and tag locally, push nothing), `release`
+(`push_tag`/`create` — send a local tag and its branch, then publish it as a GitHub Release;
+model-agnostic, so either flow feeds it), `docker` (`check`/`build`/`push`/`release`/`login` — image
 name/Dockerfile resolved from `repo-tasks.toml` or a zero-config root `Dockerfile`, tagged from the
 version-grouping model; `login` names the registry for you and lets docker prompt and store the
 credential itself), `helm` (`lint`/`package`/`push`/`login` — charts resolved from
 `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
-idempotent shell auto-activation), `agents` (`claude_hook` — wiring an AI coding agent's shell
+idempotent shell auto-activation), `agents` (`wire_claude_hook` — wiring an AI coding agent's shell
 execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap
 composing all of the above), `docs` (`clean`/`build`/`serve`, wrapping
-[zensical](https://zensical.org/)), `ci` (`status`/`check-actions` — GitHub Actions read through
-`gh`: the previous push's conclusion, the warning annotations a green run hides, and which pinned
-actions are behind their latest release), `configs` (`pull`/`diff` — materializes
+[zensical](https://zensical.org/), plus `link_check`, the dependency-free relative-link check that
+runs in the gate), `ci` (`status`/`check-actions` — GitHub Actions read through `gh`: the previous
+push's conclusion, the warning annotations a green run hides, and which pinned actions are behind
+their latest release), `configs` (`pull`/`diff`/`ensure_deps`/`promote` — materializes
 `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
-package's own canonical copies), and `repo_tasks` (nested as `repo-tasks.*` on the CLI —
-`update`/`status`/`version`/`stamp`, managing this package's own daily-driver global install,
-decoupled from any consumer's dependency groups) — extracted from
-[power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own `tasks/`
-directory so a fix or improvement lands once and reaches every consumer deliberately (a pinned
-dependency bump), instead of being hand-copied and silently drifting per repo. `inv configure`
-(bare, unnested) is the one command anything outside this package should ever need to name directly
-— `venv`/`direnv`/`agents`/`configs` are free to be reshuffled later without anything downstream (a
-[`scaffoldapy`](https://github.com/TheodoreAD/scaffoldapy) `_tasks` hook, a human) noticing.
+package's own canonical copies, reports what a consumer is behind on, and declares the quality
+tooling those configs need; `promote` runs the other direction and is for this repo only), and
+`repo_tasks` (nested as `repo-tasks.*` on the CLI — `update`/`status`/`version`/`stamp`, managing
+this package's own daily-driver global install, decoupled from any consumer's dependency groups) —
+extracted from [power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup)'s own
+`tasks/` directory so a fix or improvement lands once and reaches every consumer deliberately (a
+pinned dependency bump), instead of being hand-copied and silently drifting per repo.
+`inv configure` (bare, unnested) is the one command anything outside this package should ever need
+to name directly — `venv`/`direnv`/`agents`/`configs` are free to be reshuffled later without
+anything downstream (a [`scaffoldapy`](https://github.com/TheodoreAD/scaffoldapy) `_tasks` hook, a
+human) noticing.
 
 ## Scope
 
