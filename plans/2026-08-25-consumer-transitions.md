@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-08-30
+updated: 2026-09-08
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -222,6 +222,22 @@ so it survives the session that wrote it:
   gate a consumer already runs, so unlike the others it changes an outcome rather than a
   configuration — a consumer's CI could go from red to green on the sweep, which is the one way a
   prediction of "both CIs stay green" could be right for the wrong reason.
+- `7fc0b23` (2026-09-04) — `docs.link-check` now resolves a link's **fragment** against the target's
+  real headings, across every tracked `.md`. Same task as the item above and the opposite risk: that
+  one could only turn a consumer red-to-green, this one is strictly _stricter_ and can turn a green
+  consumer **red on links nothing has ever checked**. It is a gate step, so a consumer meets it on
+  its first `quality.check` after the bump with no config change of its own. Expect hits wherever a
+  heading has been renamed since a link to it was written — which is every repo with a long-lived
+  `contributing/` or `plans/` tree. Run this item first in each consumer, since a red gate here
+  blocks reading anything else the sweep does.
+- `487c9c8` (2026-09-08) — `ignore:The anyio.abc.BlockingPortal alias is deprecated` in the shipped
+  `pytest.ini`. The first entry in that file meant to be **deleted** again, and the only sweep item
+  that fixes a consumer rather than moving it: a repo whose tests import `fastapi.testclient`
+  currently cannot collect at all under the shipped `filterwarnings = error`.
+  [`2026-09-07-starlette-anyio-deprecation-breaks-web-consumers.md`](2026-09-07-starlette-anyio-deprecation-breaks-web-consumers.md)
+  owns it and its `[UNVERIFIED:]` is discharged by exactly this sweep reaching `scaffoldapy` — that
+  repo's `web_service` e2e combination is the original repro, and it needs this pushed and
+  `inv repo-tasks.update` run there before it can go green.
 - `949607c` — `target-version` deleted from the shipped `ruff.toml`. The sweep's own `configs.pull`
   will rewrite each consumer's copy, after which that consumer's `requires-python` decides its ruff
   floor. Check the field exists in each before pulling: a consumer without it moves from a 3.11
@@ -287,6 +303,15 @@ so it survives the session that wrote it:
   report mode actually moves the piped-gate rate, which `power-user-linux-setup`'s
   `plans/2026-09-05-pipefail-in-the-agent-shell.md` owns along with the baseline to compare
   against.]
+
+[PITFALL: **this list is the sweep's only definition of scope, and nothing adds to it.** Every entry
+above was written by the session that landed the change, which works exactly as long as every such
+session remembers — and two did not: `7fc0b23` and `487c9c8` were both found by a later audit
+reading the source, four days and same-day respectively, and `7fc0b23` is a gate step that can turn
+a consumer red. A missing entry is invisible in the worst way, because the list looks complete and
+the sweep that runs from it reports success. Until something derives the list, treat "diff the
+shipped configs and the gate steps against the last swept commit" as a step of the sweep itself
+rather than trusting what is written here.]
 
 ## The batched sweep's first half ran (2026-09-05): `power-user-linux-setup`
 
