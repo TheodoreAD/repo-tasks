@@ -436,6 +436,16 @@ _truthful_ — a comment saying `# v7.0.1` beside a SHA that is something else w
 current. `pinact` does verify this. Not a gap worth a Go-binary install method on its own, but worth
 knowing the check has a floor.]
 
-[DEFERRED: the README's namespace overview never named `gitflow` either. `ad4b84d` added `ci`
-because this session added a task to it; `gitflow` is a pre-existing gap, mentioned in the
-release-flow prose further down but absent from the list that claims to enumerate every facility.]
+**The README's namespace overview is fixed, 2026-09-08 (`56371b1`).** `ad4b84d` had added `ci`
+because that session added a task to it; `gitflow` was a pre-existing gap in the same list, named in
+the release-flow prose further down but absent from the list that claims to enumerate every
+facility.
+
+[PITFALL: **the gap was three times the size it looked, and only counting found the rest.** Reading
+the paragraph for plausibility turns up the namespace that is obviously missing; diffing it against
+`inv -l` turned up four missing namespaces (`version`, `gitflow`, `trunkflow`, `release`) and six
+listed namespaces whose task lists had drifted, including one task named as `claude_hook` that has
+never existed under that name. A prose list claiming to enumerate something is checkable
+mechanically, and that is the only way it was ever going to be checked — which is the argument
+[`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md) is
+already making about generating such lists rather than maintaining them.]
