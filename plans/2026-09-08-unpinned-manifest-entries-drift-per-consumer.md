@@ -21,12 +21,61 @@ consumer then resolves it **at its own lock time** and freezes. So the manifest 
 a version, and the version actually in effect is per-consumer lock state that nothing here can see
 or report.
 
-Measured 2026-09-07/08: `repo-tasks` moved from `ad052ca` (0.1.0) to `9ec1974` (0.2.0) to `1c3bbeb`
-(0.3.0) over one day. `scaffoldapy` was still locked at `ad052ca` — the distribution's **first**
-commit, frozen when `configs.ensure-deps` first put the entry there on 2026-08-25. Two repos, one
+Measured 2026-09-07/08: `repo-tasks` moved through all three `invoke-stubs` releases in one day —
+`ad052ca` (0.1.0), `13bcc9e` (0.2.0), `f70ff01` (0.3.0), taken here by `a21f447`, `9ec1974` and
+`1c3bbeb` respectively. `scaffoldapy` was still locked at `ad052ca`, the distribution's **first**
+commit, frozen when `configs.ensure-deps` first put the entry there on 2026-08-25 — two repos, one
 manifest line, two versions, twelve days apart. A freshly _generated_ repo, meanwhile, resolves
 whatever `main` holds at generation time, so it is on a third value again — confirmed the same day:
 ten rendered repos all installed `f70ff01` (0.3.0) while the repo that generated them held 0.1.0.
+
+[PITFALL: **the sentence above originally read "moved from `ad052ca` to `9ec1974` to `1c3bbeb`",
+which mixes two kinds of SHA in one list.** `ad052ca` is an `invoke-stubs` rev; the other two are
+`repo-tasks` commits that _took_ a new rev. Read as written it names three versions of the
+dependency, and the reader then cannot match any of them against a consumer's lock, because two of
+them never appear in one. Corrected 2026-09-08 from `git log -G'invoke-stubs#' -- uv.lock`, which is
+the query that separates them — note that `-S` does not: it counts occurrences, so it reports only
+the commit that introduced the line and silently hides every later rev change.]
+
+## Re-measured 2026-09-08: the drift is real, in the repo this plan never looked at
+
+| repo                     | `invoke-stubs` rev | version   |
+| ------------------------ | ------------------ | --------- |
+| `repo-tasks`             | `f70ff01`          | 0.3.0     |
+| `scaffoldapy`            | `f70ff01`          | 0.3.0     |
+| `power-user-linux-setup` | `ad052ca`          | **0.1.0** |
+
+**The central claim is confirmed independently in the same pass.** `configs.diff` was run against
+both consumers on 2026-09-08 (recorded in
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)) and reported config-file
+drift on three files plus one unconstrained `hadolint-py` entry — and **said nothing whatever**
+about `power-user-linux-setup` sitting two releases back on `invoke-stubs`. That is the plan's
+thesis demonstrated rather than argued: the drift is invisible to the command whose whole job is
+reporting how far behind a consumer is, and it is invisible correctly, because that command asks a
+different question.
+
+Two corrections, and together they move the plan's evidence rather than weakening its argument.
+
+**`scaffoldapy` is no longer the example.** It was bumped in `92f8d9f`, "deps: take invoke-stubs
+0.3.0, straight from 0.1.0", at 2026-09-07 23:54:46 +0300 — which is **26 minutes before this plan's
+own `source_moment`** of 2026-09-07T21:20:00Z. The session that filed this plan had already fixed
+the instance it filed the plan about, which is exactly what the Context describes ("a session in
+this repo bumped the stubs, noticed `scaffoldapy` would be behind, and filed a plan by hand"). The
+plan is right that this does not scale; it just reads as though the drift is still live there, and
+it is not.
+
+**`power-user-linux-setup` is the example, and this plan never measured it.** It sits at `ad052ca` —
+the distribution's first commit, two releases and a month behind — which is precisely the state the
+plan's headline uses. The argument had a live instance the whole time and was making it from a repo
+that had already been fixed.
+
+[PITFALL: **"two repos, one manifest line, two versions" was drawn from a two-repo sample of a
+three-repo family**, and the omitted one was the laggard. `power-user-linux-setup` is easy to skip
+because it consumes `repo-tasks` as a pinned project dependency rather than through the global tool,
+so it does not come to mind when the question is framed as "what does the generator hand out" — but
+the manifest entry reaches it the same way, through `configs.ensure-deps`, and it froze the entry
+earlier and has not re-resolved since. Any future measurement of manifest drift enumerates every
+consumer, not the ones the question is phrased around.]
 
 **This is a sibling of the drift this plan's own item 2 closed, not the same one.**
 [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) added dev-group drift to
