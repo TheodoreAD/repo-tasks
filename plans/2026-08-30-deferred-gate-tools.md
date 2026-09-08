@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-08-30
+updated: 2026-09-08
 ---
 
 # Gate candidates offered during the coverage sweep and not taken
@@ -95,6 +95,19 @@ src/repo_tasks/version.py:336:28: S607 Starting a process with a partial executa
 ```
 
 `S602` (`shell=True`) fires nowhere at all.
+
+**Re-measured 2026-09-08: still three findings, and every line of that block is now wrong.**
+`configs.py` moved from `:67` to `:71`; `version.py:336`'s `S607` is **gone**, because that call was
+deliberately moved onto `c.run` (the comment recording why is at `version.py:345`); and a third
+finding appeared in `interactive.py:39`, a module that did not exist on 2026-08-30. The count is
+identical and not one of the three is the same finding.
+
+[PITFALL: **the stable number hid a fully turned-over set, and the turnover argues the plan's own
+case harder than the original measurement did.** The finding that disappeared did so because this
+package migrated a call _towards_ `c.run` — the exact call shape these rules cannot see — so the
+package moves away from their coverage as a matter of house style, not by accident. A count re-read
+nine days later would have said "unchanged, nothing to do"; the composition says the rules are
+tracking a surface this repo is actively shrinking.]
 
 [PITFALL: the fear that these rules would produce a wall of `noqa` rested on a wrong premise — that
 `S603` flags every `subprocess` call, "which in this package is close to every task". It is not
