@@ -62,6 +62,25 @@ per-package entry in `pyproject.toml`'s `[tool.deptry]`; `DEP003` carries a real
 is suppressible per occurrence. The `repo_tasks` self-import — the one finding genuinely unique to
 this repo's dogfooding — is the suppressible kind.
 
+**Re-measured 2026-09-08 on `deptry 0.25.1`: the same four findings, and this time the set really is
+unchanged.** The three distributions are identical and each verdict still holds — `python-dotenv`
+re-verified independently, `rg dotenv` over `src/`, `tests/` and `tasks.py` still returning nothing.
+What moved is incidental: 22 files scanned became **27**, and the `DEP003` pair shifted from
+`tasks.py:10`/`:11` to `:9`/`:10`.
+
+[PITFALL: **this is the counter-example to the lesson the `S60x` re-measure below teaches, and both
+are needed.** That one found a stable count hiding a fully turned-over set; this one found a stable
+count meaning exactly what it appears to mean, over the same nine days and the same tree. So the
+rule is "re-read the composition rather than the count" — not "a count that has not moved is lying".
+One measurement drifting is no evidence about another.]
+
+[PITFALL: **the isolated invocation this plan prescribes was itself untested until now.** It was
+written in the aftermath of the destruction described below, as the fix, and never run. Measured
+2026-09-08: under `env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --with deptry`, `sys.prefix`
+is a uv build temp rather than the project venv, and `.venv/pyvenv.cfg` has the same inode and mtime
+before and after the run. It works — but a prescription written from a post-mortem is a hypothesis
+until someone runs it, and this one sat as advice for nine days.]
+
 [PITFALL: `uv run --with deptry` **deleted and recreated this repo's `.venv`**, and neither `--with`
 nor deptry is the cause. `uv run` in a project directory resolves an interpreter and, when the
 result differs from the venv already sitting there, silently removes and recreates it. **What made
@@ -147,9 +166,9 @@ small for the wrong reason.]
 Both measurements are in, and neither tool comes out of them looking like a gate step.
 
 1. **Leave deptry standalone and keep the table above current**, so the next ad-hoc run is not a
-   surprise — it has now reproduced identically twice. Revisit adoption only alongside a
-   `scaffoldapy` change that seeds `[tool.deptry]`; without one, every consumer's first gate run is
-   red for reasons that are not its fault.
+   surprise — it has now reproduced identically three times, across nine days and a tool version
+   bump. Revisit adoption only alongside a `scaffoldapy` change that seeds `[tool.deptry]`; without
+   one, every consumer's first gate run is red for reasons that are not its fault.
 2. **Do not add `S602`/`S603`/`S607` to the shipped `ruff.toml` on this repo's evidence.** If the
    consumer-side question is worth answering, measure it against a consumer.
 3. Neither blocks anything. This plan's value is now the measurements rather than the decision, and
