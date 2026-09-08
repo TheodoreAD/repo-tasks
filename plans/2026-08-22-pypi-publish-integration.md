@@ -1,6 +1,6 @@
 ---
 status: blocked on the one-time manual trusted-publisher setup on TestPyPI and PyPI, which only a human can do
-updated: 2026-08-30
+updated: 2026-09-08
 ---
 
 ## Context
@@ -151,14 +151,18 @@ it runs on.
 ### 4. CI workflow
 
 `.github/workflows/publish.yml` (landed 2026-08-24, alongside the existing `ci.yml` and the docker
-workflows), triggered on a `vX.Y.Z` tag push (matches `version.py`'s existing tag scheme, per
-[`contributing/versioning.md`](../contributing/versioning.md)) or by hand, with
-`permissions: id-token: write` (required for OIDC trusted publishing). Two jobs:
-`inv dist.publish --index testpypi` first (unconditional), then `inv dist.publish` against real PyPI
-in the `pypi` GitHub Environment, whose required-reviewer protection rule is the actual safety gate
-ensuring a human confirms before the irreversible real-PyPI step — not `--dry-run` (which stays a
-local-iteration tool, not a CI gate). The workflow cannot succeed until §5's manual steps are done:
-neither index has a pending publisher registered, and the `pypi` environment does not exist yet.
+workflows), originally triggered on a `vX.Y.Z` tag push (matching `version.py`'s tag scheme, per
+[`contributing/versioning.md`](../contributing/versioning.md)) or by hand — **the tag trigger was
+removed 2026-09-04 in `02c3ed7`, leaving manual dispatch only**, because the unconditional TestPyPI
+job made `inv trunkflow.cut` mean "upload a release candidate" rather than "bump the version". The
+file's own header carries that reasoning in full and is the current account; this section describes
+the design as built, not as it stands. With `permissions: id-token: write` (required for OIDC
+trusted publishing). Two jobs: `inv dist.publish --index testpypi` first (unconditional), then
+`inv dist.publish` against real PyPI in the `pypi` GitHub Environment, whose required-reviewer
+protection rule is the actual safety gate ensuring a human confirms before the irreversible
+real-PyPI step — not `--dry-run` (which stays a local-iteration tool, not a CI gate). The workflow
+cannot succeed until §5's manual steps are done: neither index has a pending publisher registered,
+and the `pypi` environment does not exist yet.
 
 ### 5. Rollout order
 
@@ -192,8 +196,17 @@ neither index has a pending publisher registered, and the `pypi` environment doe
   unclaimed). Each of these is a manual, human-supervised, one-time step — never automated, and
   never triggered by an agent without explicit confirmation immediately beforehand, given the
   irreversibility above.]
-- [UNVERIFIED: `publish.yml`'s rc gating (a `vX.Y.ZrcN` tag runs the TestPyPI job and skips the
-  `pypi` job via `!contains(github.ref_name, 'rc')`) — landed 2026-08-25 from the now-retired
-  `plans/2026-08-25-prerelease-versions.md`, checked by actionlint only. The first
-  `inv gitflow.release-candidate` push after this rollout is the real test; confirm the `pypi` job
-  shows as skipped, not failed, in that run.]
+- [UNVERIFIED: `publish.yml`'s rc gating — `!contains(github.ref_name, 'rc')` on the `pypi` job,
+  landed 2026-08-25 from the now-retired `plans/2026-08-25-prerelease-versions.md` and checked by
+  actionlint only. **The test this entry named no longer exists**: it said the first
+  `inv gitflow.release-candidate` push would exercise it, and since `02c3ed7` no tag push triggers
+  this workflow at all. Under dispatch the condition reads a _branch_ name, so from `main` it is
+  always true and gates nothing — the file's header says so. Verifying the rc gating therefore means
+  restoring a tag trigger, which is a decision this plan has not made; until then the entry is a
+  record that the condition is unexercised, not a step anyone can run.]
+
+  [PITFALL: **a plan's `[UNVERIFIED:]` can be invalidated by a change that had nothing to do with
+  it.** Removing the tag trigger was about decoupling `trunkflow.cut` from publishing; it silently
+  deleted the only path that could ever have exercised this condition, and the entry went on naming
+  a command as the test for four days. An `[UNVERIFIED:]` naming a _mechanism_ rather than a _claim_
+  is the shape that rots this way, since the mechanism is what other work moves.]
