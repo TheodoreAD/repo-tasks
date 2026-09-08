@@ -93,9 +93,25 @@ Add the message-matched `ignore` with a comment naming the upstream fix (`f03f65
 judgement the `unclosed file` entry already made — a third-party defect the family cannot fix and
 should not be blocked by — with the difference that this one has an upstream fix already written.
 
-Note the ordering for whoever takes it: `scaffoldapy`'s end-to-end tier renders against the
+~~Note the ordering for whoever takes it: `scaffoldapy`'s end-to-end tier renders against the
 **globally installed** `repo-tasks`, not a checkout, so the verification there needs this pushed and
-`inv repo-tasks.update` run in that repo before its `web_service` combination can go green.
+`inv repo-tasks.update` run in that repo before its `web_service` combination can go green.~~
+
+**Both prerequisites are already met, confirmed 2026-09-08.** `487c9c8` is on `origin/main` and
+contained in `v0.3.0`, and the global tool is at `v0.3.0` — verified by reading the entry in the
+installed copy at
+`~/.local/share/uv/tools/repo-tasks/lib/python3.14/site-packages/repo_tasks/configs/pytest.ini`
+rather than from the version number, since the version alone does not say which commits it carries.
+So `inv repo-tasks.update` is a no-op and nothing is ordered behind anything: what remains is
+running `scaffoldapy`'s e2e tier, and only that.
+
+[PITFALL: the struck note also said to run `inv repo-tasks.update` **"in that repo"**, which is
+wrong independently of the ordering. It is a single global step that moves one `uv tool` install for
+the whole machine, not a per-consumer one —
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) records the 2026-08-26
+walk-through correcting `contributing/consumer-sweep.md` on exactly this. Two errors in one
+sentence, both of which would have sent the next session doing unnecessary work before the real
+step.]
 
 ## Verification (2026-09-08)
 
@@ -123,6 +139,11 @@ The third check is the one that matters and is why the entry is spelled the way 
 class would have passed the first two identically.
 
 [UNVERIFIED: the original repro, in the repo that found it. This plan carries `source_repo`, so it
-is not done until `scaffoldapy`'s `web_service` end-to-end combination goes green — and that needs
-this pushed and `inv repo-tasks.update` run there first, per the ordering note above. Held
-deliberately: the push is the user's call and was declined for now.]
+is not done until `scaffoldapy`'s `web_service` end-to-end combination goes green. **Nothing is
+blocking it as of 2026-09-08** — the entry is pushed, released in `v0.3.0`, and present in the
+installed global tool that repo renders against, so the one remaining step is `inv test.integration`
+there. Filed for that repo as `2026-09-08-sweep-to-repo-tasks-v0-3-0.md`, which carries this
+verification alongside the rest of its sweep.
+
+The entry previously read "Held deliberately: the push is the user's call and was declined for now",
+which stopped being true when the commit was pushed and stayed on the page afterwards.]
