@@ -1,7 +1,7 @@
 ---
-status: blocked on the batched consumer sweep reaching scaffoldapy and agent-skills
-updated: 2026-09-04
-depends_on: [scaffoldapy, power-user-linux-setup, agent-skills]
+status: blocked on bumping actions/checkout in agent-skills, the last two call sites in the family
+updated: 2026-09-08
+depends_on: [agent-skills]
 ---
 
 # The family's pinned actions target a deprecated Node, and the template ships it onward
@@ -50,10 +50,11 @@ at the time of the change rather than trusting this line.
 
 [PITFALL: the one call site that matters most is not in any of these four repos' own CI.
 `scaffoldapy/template/.github/workflows/` carries `checkout@v4` too, so every repo generated from
-here inherits the deprecation at birth. The blast radius grows with each generation, and a generated
-repo's owner has no reason to suspect it. This is the same "true of scaffoldapy's own tree, false of
-what it generates" shape that
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) records for
+here inherits the deprecation at birth. **Fixed — the template is on `@v7` as of the 2026-09-08
+measurement below**; kept because the shape recurs with the next deprecation and this is where it
+was first named. The blast radius grew with each generation, and a generated repo's owner had no
+reason to suspect it. This is the same "true of scaffoldapy's own tree, false of what it generates"
+shape that [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) records for
 `failOnWarnings`.]
 
 ### What actually changed across the majors
@@ -72,6 +73,35 @@ Read from the upstream release notes rather than assumed, because two of the thr
   PRs, so the risk here is low and the security default is the one we want anyway.
 - **`setup-python@v6.0.0`** (2025-09-04) — explicitly labelled a breaking change: upgrade to
   Node 24.
+
+## Measured 2026-09-08: one repo left, and it is not the one the status says
+
+The status line reads "blocked on the batched consumer sweep reaching `scaffoldapy` and
+`agent-skills`". Half of that is discharged. Every `actions/checkout` and `actions/setup-python` in
+the family, read directly:
+
+| repo                     | state                                                                |
+| ------------------------ | -------------------------------------------------------------------- |
+| `repo-tasks`             | `@v7` throughout, plus the two `publish.yml` SHA pins at `v7.0.1`    |
+| `power-user-linux-setup` | `@v7` throughout, `setup-python@v7`, `artipacked` suppression intact |
+| `scaffoldapy`            | `@v7` in its own `ci.yml` **and in `template/.github/workflows/`**   |
+| `agent-skills`           | **`@v4`** in `ci.yml` and `tests-windows.yml`                        |
+
+**The template is done, which is the item this plan called the highest-leverage one.** Its `PITFALL`
+above says every repo generated from `scaffoldapy` inherits the deprecation at birth; that is no
+longer true, and the blast radius the plan worried about has stopped growing.
+
+`agent-skills` is the only site left, at two call sites. It is also worth noting that it is **not a
+`repo-tasks` consumer** — no `from repo_tasks` in its tasks, no bootstrap script — so folding it
+into "the batched consumer sweep" was a category error from the start. It needs an action bump, not
+a sweep, and nothing about it is waiting on the sweep's ordering.
+
+[PITFALL: **`rg` skips dot-directories by default, so the first pass over the template reported no
+workflows at all.** `rg 'uses: ' <repo>/template` returns nothing while
+`template/.github/workflows/ci.yml` sits right there, because `.github` is hidden — `--hidden` is
+what finds it. This is the same silent-empty-result trap `~/AGENTS.md` documents for `fd`, and it
+applies to `rg` identically. It matters here specifically: the template is the site this plan cares
+about most, its path is hidden, and an empty result reads exactly like "already clean".]
 
 ## Open questions
 
