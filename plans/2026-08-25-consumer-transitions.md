@@ -226,10 +226,11 @@ so it survives the session that wrote it:
   real headings, across every tracked `.md`. Same task as the item above and the opposite risk: that
   one could only turn a consumer red-to-green, this one is strictly _stricter_ and can turn a green
   consumer **red on links nothing has ever checked**. It is a gate step, so a consumer meets it on
-  its first `quality.check` after the bump with no config change of its own. Expect hits wherever a
-  heading has been renamed since a link to it was written — which is every repo with a long-lived
-  `contributing/` or `plans/` tree. Run this item first in each consumer, since a red gate here
-  blocks reading anything else the sweep does.
+  its first `quality.check` after the bump with no config change of its own. **Measured 2026-09-08
+  and the risk is empty in fact** — both consumers report no broken links under the new check, and
+  `scaffoldapy` was never behind on it at all, since it takes the task code from the global tool.
+  See "The anchor-check prediction, falsified" below; the sequencing this item originally asked for
+  is withdrawn.
 - `487c9c8` (2026-09-08) — `ignore:The anyio.abc.BlockingPortal alias is deprecated` in the shipped
   `pytest.ini`. The first entry in that file meant to be **deleted** again, and the only sweep item
   that fixes a consumer rather than moving it: a repo whose tests import `fastapi.testclient`
@@ -372,3 +373,42 @@ This section is merged in from `2026-09-05-power-user-linux-setup-swept.md`, fil
 from that consumer's own session (`25ea8788-b99d-43a2-9611-2d0c1f207694.jsonl`, around
 2026-09-05T18:00Z) and absorbed 2026-09-06 — the name to search for with `plans.py archive` if the
 original filing is ever wanted.
+
+## What both consumers are actually behind on (measured 2026-09-08, read-only)
+
+Measured rather than read off the checklist, by running the **installed `v0.3.0` tool's** own
+`configs.diff` and `link_check` against each consumer's tree from outside it — no write, no pull,
+and nothing in either working tree touched. Both consumers report **identical** drift:
+
+| item                                                 | on the checklist above? |
+| ---------------------------------------------------- | ----------------------- |
+| `ruff.toml` — the `sys.path`/`site.addsitedir` bans  | **no**                  |
+| `dprint.json` — sha256 checksums on all five plugins | **no**                  |
+| `pytest.ini` — the starlette `anyio` ignore          | yes (added 2026-09-08)  |
+| dev group — `hadolint-py` missing `!=2.15.1.2`       | **no**                  |
+
+[PITFALL: **the checklist was missing three of the four, and the pitfall above understated it at
+two.** Both entries found by reading source that day were real, and measurement then found two more
+that no amount of re-reading the plan would have surfaced — the `ruff.toml` coupling bans and the
+`dprint.json` checksums, each landed by a session that had no reason to think of this file. That
+settles the question the pitfall left open: the sweep cannot start from this list. `configs.diff`
+against the installed tool **is** the list, and it takes one command per consumer.]
+
+**`power-user-linux-setup` was swept on 2026-09-05 and is already behind again on three items**,
+which is the same point from the other end: the list is not merely incomplete, it is a snapshot of a
+moving target, and a sweep is only current on the day it runs.
+
+### The anchor-check prediction, falsified
+
+The `7fc0b23` item was sequenced first above on the grounds that a stricter link check can turn a
+green consumer red on links nothing has ever checked. **It does not, for either consumer** — the
+v0.3.0 `link_check` reports no broken links against `scaffoldapy` or `power-user-linux-setup`. The
+risk was real in kind and empty in fact, and the ordering it justified can be dropped.
+
+[PITFALL: **`scaffoldapy` was never behind on that item at all**, and the checklist entry would have
+sent someone looking. It consumes `repo-tasks` as the **global uv tool**, which is already `v0.3.0`,
+so every task-code change — the anchor check included — has been live there since the moment the
+tool moved. Only the pulled config _files_ and the dev group are snapshots that drift. The two
+consumers are behind in genuinely different ways, and the checklist's flat list of commits does not
+express that: `power-user-linux-setup` pins `repo-tasks` in its own lock, so task code and configs
+both lag; `scaffoldapy` lags on configs only.]
