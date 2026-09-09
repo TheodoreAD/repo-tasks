@@ -45,6 +45,11 @@ here in the same commit.]
 Because the surface is broad, **minors are common and patch is narrow.** That is the rule working,
 not a flaw in it.
 
+**Exercised for real on `v0.3.0`**, 2026-09-08: diffing the enumerated surface over the 125 commits
+since `v0.2.0` showed four shipped files moved and three new task modules, so minor, and no
+judgement call arose at any point in deciding it. That is the property the rule is for — the answer
+came from a diff rather than from an assessment of what the release "felt like".
+
 [DECISION: at 1.0 exactly one rule is added — breaking goes to major — and minor and patch keep the
 meanings consumers already learned. Nothing has to be re-explained, which is what makes this
 reinterpretation safe to adopt now rather than a debt.]
@@ -122,6 +127,17 @@ Three constraints shaped the spellings, all verified 2026-08-25:
 Pre-releases are opt-in for every consumer by each ecosystem's own rules — pip/uv skip them unless
 asked, `helm install` skips them without `--devel`, and `docker.release` never tags an rc or dev
 build `latest`.
+
+[DECISION: **no moving `stable` tag here**, ruled out by the user 2026-09-10 — a fourth spelling for
+a question nothing in this repo asks. A `stable` tag answers "what should I install", which is the
+convention `power-user-linux-setup` uses; version tags answer "what am I pinned to", and that is the
+only question this repo's consumers put. They pin `security-reusable.yml` at a SHA,
+`ci.check-actions` reads GitHub Releases rather than tags, and `bootstrap-repo-tasks.sh`
+deliberately installs from the default branch unpinned. The two mechanisms are complementary rather
+than alternatives, so adopting one would not simplify the other. It becomes a live question again
+only if the bootstrap script is ever pointed at a ref — which is the "is the fix pinning, or a
+release cadence?" question that `plans/2026-08-25-consumer-transitions.md` owns, and it should be
+answered there rather than by adding a tag first.]
 
 ### The rc cycle
 
