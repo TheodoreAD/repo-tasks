@@ -431,6 +431,53 @@ watches the Actions tab.
 release flow, which is not where these pushes happen — direct pushes to `main` are. A preflight in
 gitflow would guard the path that needs it least.]
 
+### Action currency has two halves, and each is blind to the other
+
+`ci.status` reports what GitHub has decided to deprecate; `ci.check-actions` reports what is merely
+behind. They look like one feature and are not. Measured here 2026-08-29, on the three actions that
+were out of date at the same moment:
+
+| action                | behind by | GitHub annotated it?                   |
+| --------------------- | --------- | -------------------------------------- |
+| `actions/checkout`    | 3 majors  | **yes** — a deprecated Node 20 runtime |
+| `astral-sh/setup-uv`  | 1 major   | no                                     |
+| `docker/login-action` | 1 major   | no                                     |
+
+[DECISION: build both, having first decided to build only the annotation half. Annotations are
+strictly the more _general_ check — no version oracle, no new dependency, one extra call inside a
+task already talking to GitHub, and they catch every future deprecation class (runner images, action
+archival, the next Node bump) rather than only the one that prompted them. That reasoning was right
+and was not a substitute: two thirds of what was actually stale here was invisible to it, and would
+have stayed invisible forever rather than merely once.]
+
+**Verify a deprecation fix by annotation, not by conclusion.** A green run looks identical before
+and after the fix — that is the whole reason the family's actions sat three majors behind a
+deprecated Node for roughly eleven months. The check that closes such a fix is re-reading the
+annotations on a post-change run:
+
+```shell
+gh api repos/<owner>/<repo>/actions/runs/<run-id>/jobs --jq '.jobs[] | .id, .name'
+gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations --jq '.[] | .annotation_level + " | " + .message'
+```
+
+[PITFALL: an empty `[]` means two different things — no annotations, or a call that could not read
+check runs at all. Confirm the absence against a run known to carry the warning (the pre-fix run of
+the same workflow) before reading silence as success. `inv ci.status --limit 3` shows both at once:
+the older runs print the warning, the newest prints nothing.]
+
+[PITFALL: **a version bump can invalidate a prose comment, and no gate can see it.** A
+`persist-credentials: false` was explained by a comment saying the credentials would otherwise be
+left in `.git/config` — true through `actions/checkout` v5, false from v6, which moved them to a
+separate file. Neither actionlint, nor zizmor, nor a test suite reads English, so the sentence would
+have survived the bump unread. When bumping a major, grep the workflow's comments for claims about
+the old behaviour, not just its `uses:` lines.]
+
+[PITFALL: **`rg` skips dot-directories, so a sweep over `.github/` silently reports nothing.**
+`rg 'uses: ' <repo>/template` returns no hits while `template/.github/workflows/ci.yml` sits right
+there; `--hidden` is what finds it. It matters most exactly where it hurts most — a template's
+workflows are the highest-leverage call site in this family, their path is hidden, and an empty
+result reads as "already clean".]
+
 ### Nothing here runs on a schedule, and that is the decision
 
 Three things answer a question whose answer changes without any code changing, so each is correctly
@@ -561,11 +608,70 @@ actually cost something. Pinning everywhere without dependabot means pins rot; a
 means a recurring PR stream on repos whose owner pushes straight to `main` and reviews no PRs. One
 file's pins are maintainable by hand.]
 
+**Re-resolving one of those pins is a two-line job, and the second line is the one that catches
+people.** Ask GitHub for the tag's ref rather than copying a SHA out of a document:
+
+```shell
+gh api repos/actions/checkout/git/ref/tags/v7.0.1 --jq '.object.type + " " + .object.sha'
+commit 3d3c42e5aac5ba805825da76410c181273ba90b1
+```
+
+`commit` means a lightweight tag, so the ref already _is_ the commit. An annotated tag answers `tag`
+and needs one more call to dereference — pinning the tag object's SHA instead of the commit's is a
+ref no checkout resolves. Re-resolve at the time of the change; a SHA written down elsewhere is a
+claim about a moment, and the version comment beside it is what makes the pin readable.
+
+[DECISION: bump the plain version refs and re-resolve the SHA pins as **separate commits**. They
+have separate failure modes — a stale version ref is a version mismatch, a stale SHA is a checkout
+of something nobody reviewed — and mixing them makes the pinned pair the easy half to miss.]
+
+The auto-bumping tools were surveyed before `ci.check-actions` was written rather than after,
+2026-08-28:
+
+| tool                                                                        | fit                                                                                                                                   |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [Dependabot](https://docs.github.com/en/code-security/) (`version-updates`) | native, free, no install; opens a PR per bump — the friction against this family's direct-to-main habit                               |
+| [`pinact`](https://github.com/suzuki-shunsuke/pinact)                       | pins _and_ updates, and verifies the `# v7.0.1`-style comment beside a SHA — the only surveyed tool that handles a hash pin correctly |
+| [`ratchet`](https://github.com/sethvargo/ratchet)                           | same space; Renovate understands its `# ratchet:` comments                                                                            |
+| [`actions-up`](https://github.com/azat-io/actions-up)                       | interactive, warns on major bumps; interactivity is wrong for a task                                                                  |
+| [Renovate](https://docs.renovatebot.com/modules/manager/github-actions/)    | most configurable, heaviest to adopt                                                                                                  |
+
+[DECISION: a detector, not a bumper. Doing five bumps by hand cost minutes, and every bit of that
+cost was reading each major's release notes to decide whether its breaking change reaches these
+repos. An auto-bumping tool does the cheap half and hands over a green diff whose risk is unread —
+worse than no tool on repos that push through a branch-protection bypass, because nothing downstream
+forces the read. `ci.check-actions` inverts it: it automates the part that gets forgotten and leaves
+the part that needs judgement. The reasoning lives beside the code in `ci.py`'s docstring too, since
+that is where someone asking "why doesn't this fix it for me" is standing.]
+
+[PITFALL: `pinact` is the best technical fit and the worst install fit, and that — not its merits —
+is what decided it. None of `pinact`, `ratchet`, `actions-up` or a `*-py` wrapper of any of them
+exists on PyPI (checked directly 2026-08-28); only `gha-update`, at two releases and a 5 KB
+pure-Python wheel, which is too little adoption to lean on. Adopting `pinact` means a Go-binary
+install method in `setup.toml` rather than the one `uv-tool` mechanism everything else uses.]
+
+Whether `ci.check-actions` makes pinning _every_ workflow maintainable after all — the third option
+the decision above did not have — is open in
+[`../plans/2026-09-10-action-pinning-and-currency.md`](../plans/2026-09-10-action-pinning-and-currency.md),
+along with the checker's own floor: it reads a SHA pin's version comment without checking that the
+comment is true.
+
 [PITFALL: `enable-cache` on `astral-sh/setup-uv` looks like a missing option and is not one. Its
 default is `auto`, which already enables the cache on GitHub-hosted runners for exactly the `push`
 and `pull_request` events this workflow uses — it is disabled only for release/tag,
 `pull_request_target` and `workflow_run` events, and on self-hosted runners. Read an action's own
 input defaults before recording a missing-option finding.]
+
+[PITFALL: **a checkout major that changes where credentials live does not retire an `artipacked`
+suppression.** `actions/checkout` v6 moved persisted credentials out of `.git/config` into a
+separate file, which reads like the finding's premise going away — it is not, because zizmor audits
+the `uses:` block's _inputs_, so a v7 site with `persist-credentials` unset is flagged identically
+to a v4 one. Confirmed 2026-09-04 by dropping the one suppression in the family and running the
+gate. It was restored, with the retest written into the comment: the job it guards force-pushes a
+tag with the checkout's own credentials, so `persist-credentials: false` would break the thing being
+flagged. A `low`/`help` finding that fails no gate is still worth suppressing deliberately rather
+than leaving present, because a permanently-present accepted finding is how a real one later goes
+unread.]
 
 What zizmor found on its first run, all fixed on their merits rather than suppressed: `artipacked`
 (every checkout left the job token in `.git/config`), `template-injection` (`${{ inputs.project }}`
