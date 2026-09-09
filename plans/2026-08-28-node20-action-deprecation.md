@@ -1,6 +1,6 @@
 ---
-status: in-progress
-updated: 2026-09-09
+status: landed
+updated: 2026-09-10
 ---
 
 # The family's pinned actions target a deprecated Node, and the template ships it onward
@@ -256,9 +256,9 @@ Rough — the questions above come first, particularly the `v5`-vs-`v7` one.
    on a post-change run of each repo — `gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations`
    — and confirming the Node 20 message is gone. A passing CI run proves nothing here.
 
-[DEFERRED: the standing-check question in the last open question above is a separate piece of work
-with its own trade-offs (Dependabot's PR-per-bump model against this family's direct-to-main
-convention), and should not hold up clearing the deprecation itself.]
+~~The standing-check question is separate work and should not hold up clearing the deprecation.~~
+**Discharged 2026-08-29**: both halves were built rather than deferred (`e51e062`, `9f3a03f`), and
+the deprecation cleared regardless.
 
 ## Landed: `repo-tasks` (2026-08-29)
 
@@ -336,9 +336,10 @@ half and hands over a diff whose risk is still unread. A _detector_ that reports
 the bump to a human or agent inverts that: it automates the part that gets forgotten and leaves the
 part that needs judgement.
 
-[UNVERIFIED: nothing here has measured how often a major in this family carries a change that
-actually reaches these repos. Today's sample is three actions, of which one (setup-uv v10) had a
-breaking change worth checking and none had one that bit. A sample of three is not a rate.]
+Nothing here has measured how often a major in this family carries a change that actually reaches
+these repos, and the sample stayed one-sided to the end. **Moved 2026-09-10 to
+[`2026-09-10-action-pinning-and-currency.md`](2026-09-10-action-pinning-and-currency.md)**, which
+owns it as an open question — the answer changes the case for report-only, so it outlives this plan.
 
 ### A is cheap, and now proven rather than assumed
 
@@ -420,8 +421,8 @@ there explained `persist-credentials: false` by saying the credentials would oth
 test suite reads English, so the sentence would have survived the bump unread. Committed as its own
 fix, and worth a grep for `.git/config` in `agent-skills` and `scaffoldapy` while bumping them.]
 
-[DEFERRED: **`power-user-linux-setup` publishes no `ci` namespace, and wiring it today would ship
-the wrong version.** Its `tasks/__init__.py` adds no `ci` collection, so `inv ci.status` and
+**`power-user-linux-setup` published no `ci` namespace, and wiring it that day would have shipped
+the wrong version.** Its `tasks/__init__.py` added no `ci` collection, so `inv ci.status` and
 `inv ci.check-actions` do not exist there and every annotation and version comparison above was done
 with raw `gh api` calls. Wiring the collection is one line — but the `repo_tasks` resolved into that
 repo's venv predates both `e51e062` (the annotation printing) and `9f3a03f` (`check_actions`), so
@@ -445,7 +446,13 @@ assumed**: `e51e062` and `9f3a03f` were both already ancestors of the _old_ pin 
 collection wired on 2026-09-04 was never publishing the blind-spot version. The bump was owed
 anyway. Recorded so nobody re-derives it. `--branch master` is still needed on every call there,
 since the task's default is `main`; a per-consumer ergonomic rather than a defect, but that consumer
-can never use the bare form. `scaffoldapy` and `agent-skills` are still unchecked.]
+can never use the bare form.
+
+**`scaffoldapy` and `agent-skills` are checked as of 2026-09-10 — both publish the namespace**,
+since each `tasks.py` is `from repo_tasks import ns`. That, and the correction that `agent-skills`
+was a consumer all along, moved to
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), which owns the consumer
+set.
 
 ## Built: both halves (2026-08-29)
 
@@ -487,18 +494,12 @@ the question is still open, in `scaffoldapy`'s own `plans/2026-08-30-scheduled-c
 (filed there from here on 2026-08-30), because a generated repo with actual reviewers has the reader
 this one lacks.
 
-[DEFERRED: **SHA-pinning every workflow, plus dependabot to keep the pins fresh.** Only
-`publish.yml` is pinned today, by the decision now recorded in
-[`../contributing/quality-gate.md`](../contributing/quality-gate.md) — pinning everywhere without
-dependabot means pins rot, and dependabot means a recurring PR stream on repos whose owner pushes
-straight to `main` and reviews no PRs. Moved here from the retired quality-gate sweep plan because
-`ci.check-actions` is the third option that decision did not have: a checker that reports staleness
-without opening a PR may make pinning everywhere maintainable by hand after all.]
-
-[DEFERRED: `ci.check-actions` reads the pin's version but never checks that a SHA pin's comment is
-_truthful_ — a comment saying `# v7.0.1` beside a SHA that is something else would be reported as
-current. `pinact` does verify this. Not a gap worth a Go-binary install method on its own, but worth
-knowing the check has a floor.]
+**SHA-pinning every workflow plus dependabot**, and **the checker's inability to tell a truthful pin
+comment from a lying one**, both **moved 2026-09-10 to
+[`2026-09-10-action-pinning-and-currency.md`](2026-09-10-action-pinning-and-currency.md)**. They
+arrived here from the retired quality-gate sweep plan and would otherwise be retired a second time
+without an owner; they are one subject with the unmeasured breaking-change rate above, and none of
+the three is about Node 20.
 
 **The README's namespace overview is fixed, 2026-09-08 (`56371b1`).** `ad4b84d` had added `ci`
 because that session added a task to it; `gitflow` was a pre-existing gap in the same list, named in
@@ -513,3 +514,49 @@ never existed under that name. A prose list claiming to enumerate something is c
 mechanically, and that is the only way it was ever going to be checked — which is the argument
 [`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md) is
 already making about generating such lists rather than maintaining them.]
+
+## Migrated to
+
+Retired 2026-09-10. The subject is finished and verified — every `actions/checkout` and
+`actions/setup-python` in the family is on `@v7`, the template included — so what is left here is
+rationale and residue, and each piece has been given a home.
+
+**[`../contributing/quality-gate.md`](../contributing/quality-gate.md)**, as design rationale:
+
+- "Action currency has two halves, and each is blind to the other" — the A-vs-B measurement (one of
+  three stale actions was annotated), the decision to build both after deciding to build one, the
+  verify-by-annotation procedure with its `gh api` calls, and three pitfalls: `[]` meaning two
+  different things, a version bump invalidating a prose comment, and `rg` skipping dot-directories.
+- "Workflow hardening" — how to re-resolve a SHA pin and why the tag object matters, the
+  version-refs-and-SHA-pins-are-separate-commits rule, the auto-bumping tool survey with `pinact`'s
+  install-fit pitfall, the detector-over-bumper decision, and the `artipacked`-survives-v6 pitfall.
+
+**[`2026-09-10-action-pinning-and-currency.md`](2026-09-10-action-pinning-and-currency.md)**, a new
+plan holding everything still open: whether `ci.check-actions` makes pinning every workflow
+maintainable, the checker's inability to verify a SHA pin's version comment, and the unmeasured rate
+at which a major actually reaches these repos.
+
+**[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)** — that `scaffoldapy`
+and `agent-skills` both publish the `ci` namespace through `from repo_tasks import ns`, and the
+correction that `agent-skills` was a consumer all along rather than the non-consumer this plan
+recorded.
+
+**Filed for `agent-skills`** as `2026-09-10-setup-uv-pins-two-majors-behind.md` — its two
+`astral-sh/setup-uv@v9.0.0` pins, the family's last currency residue, with v10's cache change left
+as an open question to read against its own workflows.
+
+Deliberately not migrated:
+
+- **The v5/v6/v7 and setup-python v6/v7 release-note readings.** Every repo is past them, so the
+  findings are spent; what was durable was the _method_ — read each major against this family rather
+  than in the abstract — and that is the detector-over-bumper decision in `quality-gate.md`.
+- **The template-inherits-the-deprecation pitfall.** `ci.check-actions`' `--path` docstring already
+  carries it, at the place someone stands when they need it.
+- **"The filing and the clearing were hours apart."** `agent-skills` owns that concern in its own
+  `2026-09-08-stale-claims-in-live-plans-have-no-prompt.md`; migrating it here would ship a second
+  copy that repo would then have to keep in step.
+- **The README namespace-list gap.** Its argument belongs to
+  [`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md), which
+  is open and already makes it.
+- **The stale suppression count, the ordering tension between template-first and repo-tasks-first,
+  and every verification log.** Acted on, spent, or already in the commits they describe.
