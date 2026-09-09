@@ -412,3 +412,37 @@ tool moved. Only the pulled config _files_ and the dev group are snapshots that 
 consumers are behind in genuinely different ways, and the checklist's flat list of commits does not
 express that: `power-user-linux-setup` pins `repo-tasks` in its own lock, so task code and configs
 both lag; `scaffoldapy` lags on configs only.]
+
+## The consumer set is three, not two (2026-09-10)
+
+Carried here from the retired `2026-08-28-node20-action-deprecation.md`, which had deferred "worth
+checking whether `scaffoldapy` and `agent-skills` publish the `ci` namespace either" after finding
+that `power-user-linux-setup` did not.
+
+**Both publish it, by the strongest route available**: each repo's `tasks.py` is
+`from repo_tasks import ns`, so every namespace this package ships is live there the moment their
+tool moves — `ci.status` and `ci.check-actions` included. Neither needed the wiring
+`power-user-linux-setup` needed, because neither builds its own collection.
+
+[PITFALL: **`agent-skills` was recorded as not a consumer at all, and it has been one since its
+first commit.** The node20 plan stated on 2026-09-09 that it had "no `from repo_tasks` in its tasks,
+no bootstrap script"; both files are there in `9e49f39`, 2026-08-27. That claim was wrong when
+written rather than gone stale, and it had a consequence — it routed that repo's action work out of
+"the batched consumer sweep" as a category error, when the category was right and only the sweep's
+membership list was short. Check the file, not the memory of the file: the whole consumer set is
+`rg -l 'from repo_tasks' <projects root>/*/*/tasks.py`, which takes one command.]
+
+So the flavours, corrected — and it is the flavour rather than the count that this plan needs:
+
+| consumer                 | how it consumes              | what lags                 |
+| ------------------------ | ---------------------------- | ------------------------- |
+| `power-user-linux-setup` | pinned in its own lock       | task code **and** configs |
+| `scaffoldapy`            | the global `uv tool` install | configs only              |
+| `agent-skills`           | the global `uv tool` install | configs only              |
+| `repo-tasks` itself      | dogfoods its own `ns`        | n/a                       |
+
+`agent-skills` also carries the family's last action-currency residue — two
+`astral-sh/setup-uv@v9.0.0` pins against `v10.0.1`, which its own `inv ci.check-actions` can see.
+Filed for that repo as `2026-09-10-setup-uv-pins-two-majors-behind.md` rather than swept from here,
+since the reading of v10's cache change has to be done against its workflows, the Windows job
+included.
