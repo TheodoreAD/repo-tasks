@@ -114,7 +114,7 @@ def _report_annotations(c: Context, run: Run) -> None:
 
     Reports only, and deliberately: an annotation is upstream telling you about a deadline, not a
     break, and a task that failed on one would make the pre-push check red for something nobody can
-    fix in that moment. See plans/2026-08-28-node20-action-deprecation.md."""
+    fix in that moment. See contributing/quality-gate.md, "Action currency has two halves"."""
     run_id = run.get("databaseId")
     if not run_id:
         return
@@ -266,7 +266,8 @@ def check_actions(c: Context, path: str = ".github/workflows"):
     Reports only. Nothing here edits a workflow, and that is the design rather than a missing
     feature — the cost of a bump is not the edit, it is reading the major's release notes and
     deciding whether its breaking change reaches this repo. A tool that rewrites the file does the
-    cheap half and leaves the risk unread. See plans/2026-08-28-node20-action-deprecation.md.
+    cheap half and leaves the risk unread. The survey that priced the alternatives is in
+    contributing/quality-gate.md, "Workflow hardening".
 
     `--path` because the highest-value call site in this family is a template's workflows rather
     than a repo's own — a generated repo inherits whatever the template pins."""
