@@ -1,7 +1,6 @@
 ---
-status: blocked on bumping actions/checkout in agent-skills, the last two call sites in the family
-updated: 2026-09-08
-depends_on: [agent-skills]
+status: in-progress
+updated: 2026-09-09
 ---
 
 # The family's pinned actions target a deprecated Node, and the template ships it onward
@@ -74,27 +73,62 @@ Read from the upstream release notes rather than assumed, because two of the thr
 - **`setup-python@v6.0.0`** (2025-09-04) — explicitly labelled a breaking change: upgrade to
   Node 24.
 
-## Measured 2026-09-08: one repo left, and it is not the one the status says
+## Measured and cleared 2026-09-08, verified here 2026-09-09: the family is entirely on `@v7`
 
-The status line reads "blocked on the batched consumer sweep reaching `scaffoldapy` and
-`agent-skills`". Half of that is discharged. Every `actions/checkout` and `actions/setup-python` in
-the family, read directly:
+When this section was written the status line read "blocked on the batched consumer sweep reaching
+`scaffoldapy` and `agent-skills`", and half of that was already discharged. Every `actions/checkout`
+and `actions/setup-python` in the family, read directly:
 
 | repo                     | state                                                                |
 | ------------------------ | -------------------------------------------------------------------- |
 | `repo-tasks`             | `@v7` throughout, plus the two `publish.yml` SHA pins at `v7.0.1`    |
 | `power-user-linux-setup` | `@v7` throughout, `setup-python@v7`, `artipacked` suppression intact |
 | `scaffoldapy`            | `@v7` in its own `ci.yml` **and in `template/.github/workflows/`**   |
-| `agent-skills`           | **`@v4`** in `ci.yml` and `tests-windows.yml`                        |
+| `agent-skills`           | `@v7` in `ci.yml` and `tests-windows.yml` — **cleared 2026-09-08**   |
 
 **The template is done, which is the item this plan called the highest-leverage one.** Its `PITFALL`
 above says every repo generated from `scaffoldapy` inherits the deprecation at birth; that is no
 longer true, and the blast radius the plan worried about has stopped growing.
 
-`agent-skills` is the only site left, at two call sites. It is also worth noting that it is **not a
-`repo-tasks` consumer** — no `from repo_tasks` in its tasks, no bootstrap script — so folding it
-into "the batched consumer sweep" was a category error from the start. It needs an action bump, not
-a sweep, and nothing about it is waiting on the sweep's ordering.
+`agent-skills` was the only site left, at two call sites, and it read `@v4` when this section was
+first written. It is also worth noting that it is **not a `repo-tasks` consumer** — no
+`from repo_tasks` in its tasks, no bootstrap script — so folding it into "the batched consumer
+sweep" was a category error from the start. It needed an action bump, not a sweep, which is why
+nothing reached it for eleven days.
+
+### It was cleared the same day, and the loop is worth recording
+
+Merged in from `2026-09-08-node20-blocker-cleared-by-agent-skills.md`, filed back here by the
+`agent-skills` session that did the work and absorbed 2026-09-09 — the name to search for with
+`plans.py archive` if the original filing is wanted.
+
+[PITFALL: **the filing and the clearing were hours apart, and this plan went on saying `blocked` for
+a day** — the same rot this session had spent that day cataloguing in nine other plans, arriving on
+the one edit made to fix it. The status was corrected only because a harvest read the store queue;
+nothing about landing the work in `agent-skills` touches the plan here that names it as a blocker.
+That asymmetry is the whole argument of `agent-skills`'
+`2026-09-08-stale-claims-in-live-plans-have-no-prompt.md`, filed the same day, and this is its
+cleanest instance: cross-repo, both halves done correctly, and still stale in between.]
+
+A plan filed from here for `agent-skills` was absorbed there (`34a9599`) and carried out in
+**`450cf68`**, pushed to `main` and green on both the Linux and the Windows job. That session's own
+commit message records why none of the three majors reaches those workflows, checked against them
+rather than in the abstract: `v5`'s minimum runner version binds self-hosted runners only and both
+jobs are hosted, `v6`'s separate credentials file is moot because both checkouts already set
+`persist-credentials: false`, and `v7`'s fork-checkout block applies to `pull_request_target` and
+`workflow_run`, neither of which those workflows use.
+
+**Verified here rather than taken on trust**, 2026-09-09, which is what the filing plan asked for:
+`rg -n --hidden 'actions/checkout@' <agent-skills>/.github` returns `@v7` at both sites. So no
+`actions/checkout` or `actions/setup-python` anywhere in the family still targets Node 20.
+
+**The filing plan's second open question is answered too.** It asked whether anything _other_ than
+`actions/checkout` is still on a Node 20 action, noting that only checkout had been measured. Swept
+across all four repos plus `scaffoldapy`'s template on 2026-09-09, and `inv ci.check-actions` run
+here: **0 of 3 actions behind** in this repo, and nothing in the family on a version this plan's
+survey flagged. One residue, and it is a currency question rather than a Node one — **two
+`astral-sh/setup-uv@v9.0.0` call sites against twelve at `@v10.0.1`**, both outside this repo, so
+each repo's own `ci.check-actions` owns it.
 
 [PITFALL: **`rg` skips dot-directories by default, so the first pass over the template reported no
 workflows at all.** `rg 'uses: ' <repo>/template` returns nothing while
