@@ -536,12 +536,19 @@ already parses a job-level `uses:` for a reusable workflow, recognises a 40-hex 
 trailing `# <version>` comment as the human-readable pin, so a stale ref is reportable rather than
 invisible.]
 
-[PITFALL: that currency check does not actually work for this pin **yet**. `_latest_tag` asks
-`gh api repos/<owner>/<repo>/releases/latest`, which answers with GitHub Releases, not tags — and
-this repo has a `v0.2.0` tag and no Release, so the reusable workflow's own ref resolves to
-"nobody's release to track" and is skipped rather than reported. Until `inv release.create` has
-published one, a pinned consumer goes stale silently and the bump is a thing someone has to
-remember. That is the real cost of pinning here, and it is paid for stability deliberately.]
+[PITFALL: **`_latest_tag` reads GitHub Releases, not tags**, so a repo that tags without releasing
+is invisible to the currency check rather than reported as behind. That was this repo's own state
+until 2026-09-08 — a `v0.2.0` tag and no Release, so a consumer's pin to `security-reusable.yml`
+went stale silently. Closed by publishing `v0.3.0` through `inv release.create`, which is what made
+the check live for this pin; the trap remains for any action or reusable workflow whose owner tags
+only.]
+
+[PITFALL: **the check cannot be observed from inside this repo, and its silence here is correct.**
+This repo calls its own reusable workflow by relative path, which resolves to no `owner/repo`, so
+`ci.check-actions` prints no line for it however stale a consumer's pin gets. Confirm it one level
+down instead: `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` answering rather than
+404ing is what tells you a consumer will now get a verdict. Whoever next wonders why the task says
+nothing about the pin this section is about will otherwise re-derive it.]
 
 [PITFALL: the job installs nothing and caches nothing, and that is not an oversight to "fix" later.
 `uv audit --locked` reads `uv.lock` and queries OSV — measured 2026-08-31 on a clean checkout with
