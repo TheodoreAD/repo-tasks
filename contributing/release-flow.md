@@ -46,6 +46,17 @@ meant "upload to TestPyPI and queue a PyPI approval". The unit tests could not c
 they mock every `c.run` and so know nothing about what a real push triggers. `publish.yml` is now
 disabled at its trigger; see the header comment in that file for what re-enabling needs.]
 
+**Re-check that before every tag push rather than remembering it.** The property that makes a tag
+push cheap — no workflow in this repo triggers on tags — was once false here, and re-establishing it
+costs one `rg` over `.github/workflows/`. That is the difference between a version number and a
+publication, and it was confirmed again before pushing `v0.3.0` on 2026-09-08.
+
+[PITFALL: **a `release:` line in a workflow is as likely to be a job name as a trigger, and they
+mean opposite things.** `docker-release.yml` reads as though it fires on `release:`, which would
+couple `inv release.create` to an image push; that `release:` is the job's name and the workflow is
+`workflow_dispatch` only. A grep for `^  release:` finds both spellings at the same indent, so read
+the block it belongs to rather than the line.]
+
 [DECISION: both publication steps live in `release.py`, not in either flow, because neither is
 specific to a branching model — gitflow tags `main` after a PR merges, trunkflow tags it directly,
 and either tag is published identically. `release.push-tag` sends the branch first, then the tag, so
