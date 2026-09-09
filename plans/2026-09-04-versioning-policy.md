@@ -1,6 +1,6 @@
 ---
-status: in-progress
-updated: 2026-09-08
+status: landed
+updated: 2026-09-10
 ---
 
 # What a version number means here, and cutting the first real release
@@ -85,16 +85,19 @@ release — it is the open "is the fix pinning, or a release cadence?" question 
 answered it silently by making every consumer stop tracking `main`. `bootstrap-repo-tasks.sh` stays
 unpinned until that is decided on its own terms.
 
-[DEFERRED: **a task that computes the part for you.** `inv version.next-part --since v0.2.0` diffing
-the surfaces enumerated in `versioning.md` and printing `minor` or `patch` is the natural end state,
-and it is exactly the kind of thing this package exists to hand other repos. Not needed for the
-first release, and designing it before the rule has been used a few times would be the wrong order.]
+**A task that computes the part for you** — `inv version.next-part --since v0.2.0` — moved
+2026-09-10 to [`2026-09-10-version-next-part-task.md`](2026-09-10-version-next-part-task.md), with
+the reason it was deferred intact: the rule has been used for real exactly once, and each further
+release is free evidence about what the task would have to get right.
 
-[NEEDS CLARIFICATION: does `repo-tasks` want a moving `stable` tag as well, the convention
-`power-user-linux-setup` uses? It is a different mechanism for a different question — `stable` says
-"what should I install", version tags say "what am I pinned to" — so they are complementary rather
-than alternatives. Probably not needed here, since consumers pin SHAs and the currency check reads
-Releases, but it is the convention the user named and worth ruling in or out deliberately.]
+~~Does `repo-tasks` want a moving `stable` tag as well?~~ **No**, ruled out by the user 2026-09-10.
+It answers "what should I install"; every question this repo's consumers actually put is "what am I
+pinned to" — they pin `security-reusable.yml` at a SHA, `ci.check-actions` reads Releases rather
+than tags, and `bootstrap-repo-tasks.sh` installs from the default branch unpinned by design.
+Recorded in [`../contributing/versioning.md`](../contributing/versioning.md), "One version, three
+spellings", including the one condition that would reopen it: pointing the bootstrap script at a
+ref, which is `2026-08-25-consumer-transitions.md`'s pinning-versus-cadence question and not this
+plan's to answer.
 
 A false alarm worth keeping so nobody re-finds it: `docker-release.yml` looks like it triggers on
 `release:`, which would couple `release.create` to an image push. It does not — that `release:` is
@@ -114,3 +117,41 @@ about it.
 The deferred `next-part` task stays deferred. It was to be reconsidered once the rule had been
 applied a few times; it has now been applied twice, both times in under a minute with an unambiguous
 answer, which is evidence against building it rather than for.
+
+## Migrated to
+
+Retired 2026-09-10. The release this plan was cut to dogfood happened on 2026-09-08 and the last
+open question — a moving `stable` tag — was ruled out by the user on 2026-09-10, so nothing here is
+live.
+
+**[`../contributing/versioning.md`](../contributing/versioning.md)**: the `stable`-tag decision, in
+"One version, three spellings", including the single condition that would reopen it; and, under the
+minor-versus-patch rule, that the rule was exercised for real on `v0.3.0` and produced its answer
+from a diff with no judgement call at any point. That last is the only evidence the rule has, and
+the rule is the plan's whole subject.
+
+**[`../contributing/release-flow.md`](../contributing/release-flow.md)**, beside the existing
+tag-trigger pitfall: that the property making a tag push cheap is re-checked before each push rather
+than remembered, since it was once false here; and the `release:`-is-a-job-name false alarm, which
+reads exactly like a trigger coupling `release.create` to an image push.
+
+**[`../contributing/quality-gate.md`](../contributing/quality-gate.md)**: the stale-pin pitfall
+there claimed the currency check could not work for a consumer's pin "yet", which stopped being true
+when `v0.3.0` was released. Corrected, and the reason the check prints nothing when run _here_ — a
+relative-path reusable workflow resolves to no `owner/repo` — recorded beside it, with the
+one-level- down check that does answer.
+
+**[`2026-09-10-version-next-part-task.md`](2026-09-10-version-next-part-task.md)**: the deferred
+`version.next-part` task, carried with the evidence that now argues against building it.
+
+Deliberately not migrated:
+
+- **The `v0.2.0`-versus-`v0.3.0` sequencing** — why the older Release was skipped rather than
+  created retroactively. It is a decision about one release, not about how releases work.
+- **The three-step run log and the CI-green confirmations.** `release-flow.md` documents the
+  sequence; that it ran as written is what a commit message is for.
+- **`repo-tasks.stamp` deliberately not run.** It belongs to
+  [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)'s open
+  pinning-versus-cadence question, which is live and already states it.
+- **The `repo-tasks.status` defect** found while upgrading the global tool — already its own plan,
+  [`2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md`](2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md).
