@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-01
+status: in-progress
+updated: 2026-09-12
 ---
 
 # A shared "generate docs" step, early in `quality.precommit`
@@ -38,44 +38,80 @@ upstream bump nobody chose. **Generating** from the repo's own code has no upstr
 and its output land in the same commit. Both rules now live in that section with the distinction
 stated; don't collapse them again.]
 
+## The mechanism landed for this repo's own blocks (2026-09-12)
+
+`5ed82c5`. `docs.generate` renders each block into the marked region of its file;
+`docs.generate-check` fails when one has drifted. The first block is the task-requirements table in
+`README.md` — every task needing network, Docker or an authenticated `gh`, read from the `@requires`
+declarations and, for a composite, from its chain. It exists because
+`contributing/task-module-conventions.md` settled that a composite's requirements are computed
+rather than restated, which left nobody able to _read_ them.
+
+Three of the four questions below are answered by what shipped, and the answers held up against a
+real formatter rather than in the abstract:
+
+- **Where in the chain:** first in `fix`, ahead of the linters and formatters, as the direction
+  said. The renderer emits plain markdown and `dprint` owns the layout.
+- **Does `check` run it and fail on a diff:** yes, `docs.generate-check` sits in `_CHECKS`. It
+  writes nothing and needs no temp file — it renders in memory and compares — so the read-only
+  contract of that half is intact.
+- **Namespace:** `docs.generate` and `docs.generate-check`. The second name matters beyond
+  readability: `<ns>.*-check` is auto-approved as read-only by this machine's agent allowlist, so a
+  check half that mutated would run unprompted.
+
+[PITFALL: **the comparison is where the whole ordering argument actually lives, and whitespace is
+only half of it.** `dprint` aligns table pipes _and_ pads the delimiter row to the column width, so
+a rendering never matches the formatted file byte-for-byte. Normalizing whitespace alone still
+failed, on the dashes — found by running it rather than by reasoning about it. Both halves now
+normalize whitespace and dash runs, and **`generate` uses that comparison too**, which is the
+sharper case: a byte comparison would rewrite the block on every run, the formatter would re-align
+it, and the file would show as modified after every `inv quality.fix` forever. That is the
+oscillation this ordering exists to remove, reintroduced by the generator instead of by the
+renderer's padding. Verified by running `fix` twice and diffing: the second run changes nothing.]
+
+**The marker is the opt-in, and that is the contract for a block this package owns.** A file without
+markers is skipped in silence, so a consumer repo pays a no-op rather than being exempted — the
+family rule for a shared composite. A consumer that wanted the same table would paste the markers
+into its own README and get it.
+
 ## Open questions
 
-[NEEDS CLARIFICATION: what is the generator contract? A consumer repo has to declare _what_ to run.
-Candidates: a well-known task name the chain calls if it exists (`docs.generate` in the consumer's
-own namespace, skipped silently when absent); a list in `pyproject.toml`'s tool config; or a `pre=`
-chain the consumer assembles itself. The first keeps consumer repos from composing anything — which
-is the family convention for shared tooling — but "call it if it exists" needs a way to ask invoke
-whether a task exists without importing the consumer's namespace twice.]
+[NEEDS CLARIFICATION: what is the generator contract **for a consumer's own generator**? This is the
+one question the landed mechanism does not answer: it covers blocks rendered from _this package's_
+code, where the renderer ships alongside the chain that calls it. `power-user-linux-setup`'s tag
+table is rendered from a constant in its own `tasks/`, and nothing here can call it: `pre=` chains
+are composed in this repo, and a repo-tasks task cannot see the consumer's namespace. The candidates
+are unchanged — a well-known task name invoked as a subprocess, or a list in `repo-tasks.toml`,
+which is the consumer config schema that already exists. That repo is the test case, and it is now
+the only thing between the mechanism and the problem that prompted it.]
 
-[NEEDS CLARIFICATION: where exactly in the chain? "Early, before the linters and formatters" is the
-stated intent, and the reason is real — `power-user-linux-setup`'s generated block is pre-padded to
-dprint's own table style precisely because the two would otherwise disagree forever about the
-"idempotent" output (see the comment on `_tag_table()` there). Running the generator first and
-letting `dprint fmt` format its output removes that whole class of problem, and would let that
-pre-padding be deleted. But it also means the generator runs on every `inv quality.fix`, including
-runs that touch nothing it reads.]
+~~Where exactly in the chain?~~ **First in `fix`**, and the pre-padding it was weighed against can
+indeed be deleted — the generator emits plain markdown and `dprint` formats it like anything else.
+The objection that it then runs on every `inv quality.fix` including runs that touch nothing it
+reads is real and costs nothing measurable: rendering is pure introspection, and the comparison
+means an unchanged block is not even written.
 
-[NEEDS CLARIFICATION: does `check` (the CI half) run the generator too, and fail on a diff? That is
-the enforcement the deleted auto-commit job was standing in for, and without it a contributor who
-skips the gate still ships drift. The argument against is that it makes `quality.check` non-read-
-only unless it generates into a temp location and compares.]
+~~Does `check` run the generator too, and fail on a diff?~~ **Yes**, and the argument against it
+dissolved on contact: `docs.generate-check` renders in memory and compares, so it needs neither a
+temp location nor a write, and `quality.check` stays read-only.
 
-[NEEDS CLARIFICATION: is `docs` the right namespace? `repo_tasks.docs` already exists and is
-published into consumers as its own collection. If the task lands there it is `inv docs.generate`,
-which reads well but sits beside whatever that module does today.]
+~~Is `docs` the right namespace?~~ **Yes** — `inv docs.generate` and `inv docs.generate-check`,
+which also satisfies the allowlist convention that a `*-check` name never mutates.
 
 ## Recommended direction
 
-Add the step to the `fix` half of the chain, ahead of the formatters, gated on the consumer actually
-declaring a generator — a repo with nothing to generate must no-op cleanly rather than be exempted,
-per the family convention that the shared composite is mandatory and identical and degrades
-gracefully instead of being opted out of.
+~~Add the step to the `fix` half of the chain, ahead of the formatters~~ — done, `5ed82c5`. The
+"gated on the consumer actually declaring a generator" half became "gated on the file carrying the
+markers", which is the same property with nothing to declare.
 
-Pair it with a `check`-side verification that fails on a diff, since the whole point is that CI
-stops being the thing that fixes drift. Prove it against `power-user-linux-setup` first — it is the
-repo with a real generator, and its `_tag_table()` pre-padding is a measurable before/after: if the
-ordering is right, that workaround can be deleted and the output stays stable across
-`inv quality.fix` runs.
+~~Pair it with a `check`-side verification that fails on a diff~~ — done, same commit.
+
+**What is left is the half this repo cannot test on itself.** The mechanism was proved against a
+block rendered from this package's own code, so the ordering argument is settled but the consumer
+contract is not: `power-user-linux-setup`'s `_tag_table()` is rendered from a constant in that
+repo's own `tasks/`, and reaching it needs the open question above. Its pre-padding is still the
+measurable before/after — this repo's equivalent padding was never written, and a second `fix` run
+now changes nothing, so the ordering does what it was expected to.
 
 [DEFERRED: `power-user-linux-setup` currently has no automatic drift protection at all, between the
 CI job being deleted and this landing. A unit test asserting the rendered block matches the file
