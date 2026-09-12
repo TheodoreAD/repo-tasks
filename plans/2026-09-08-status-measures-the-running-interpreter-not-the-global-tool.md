@@ -152,15 +152,25 @@ release, and an empty tag list — plus the existing not-a-real-tag fallback, al
 before the declaration was added, and failed on `selfinstall.stamp` alone; that failure is the
 oracle, since a check that passes either way proves nothing.
 
-[NEEDS CLARIFICATION: **does a composite task have to declare what its `pre` chain needs?**
-`inv
-configure` reaches the network twice — `dev_env.setup` for `uv sync`, `stamp` for the tag list
-— and declares nothing, because the convention is "declare at the task that runs the command" and no
-composite in this package declares anything. That is consistent rather than an oversight, but it
-means the one command a new consumer actually runs is also the one whose requirements you cannot
-read off it. Either the composites declare the union, or the convention says explicitly that a
-composite's requirements are its chain's and something prints them. Not touched here, since changing
-it unilaterally would move a convention this plan is not about.]
+~~Does a composite task have to declare what its `pre` chain needs?~~ **No — it is computed, not
+restated**, settled by the user 2026-09-12 and landed the same day (`71a0caf`, `b8541f9`).
+`requirements.effective(task)` walks `pre` and unions what the chain declares, so `inv configure`
+answers `network` and `inv testing.all` answers `docker` with nothing hand-maintained anywhere. The
+alternative — each composite declaring its own union — was rejected on the objection this package
+already makes to every hand-maintained list: a second copy of a derivable fact, wrong the first time
+a step in the chain gains a requirement, and silent about being wrong.
+
+The rule now has a check from the declaration side to match the one from the command-string side:
+`effective(quality.check)` and `effective(quality.precommit)` must be empty, which catches a gate
+step that declares a requirement by hand — a library-mediated network call, say, that has no command
+to derive from.
+
+[DEFERRED: **the reading surface, which is what the question was actually about.** Nothing prints a
+task's requirements: `effective` is consumed by tests, so a consumer wanting to know what
+`inv configure` needs still reads source across three modules. A generated table is the right shape,
+and it belongs to
+[`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md) rather
+than to a hand-written list here, which would drift exactly the way the unions would.]
 
 What is left is the deferred network reading above and the composite question. `stamp`'s source
 question, and both measurement questions, are answered.
