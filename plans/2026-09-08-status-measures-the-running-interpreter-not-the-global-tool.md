@@ -174,3 +174,17 @@ has a consumer that is not a test. The reasoning is in
 
 What is left is the deferred network reading above. `stamp`'s source question, and both measurement
 questions, are answered.
+
+[DEFERRED: **the stamp template installs without `--python`, and the plan that noticed lives in a
+repo that cannot fix it.** `power-user-linux-setup`'s
+`plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` carries it as a deferred item whose own text
+says "belongs to `repo-tasks`' stamp template, not here": `bootstrap-repo-tasks.sh` stamps a bare
+`uv tool install`, while that repo's `bootstrap.sh` passes `--python "${UV_PYTHON_DEFAULT}"`, so the
+stamped script installs against whatever interpreter uv happens to pick. Harmless on this machine
+today, where uv's default and the pinned default agree.
+
+Recorded here 2026-09-12 because nothing in **this** repo pointed at it, which is the whole failure
+mode: the work belongs to the stamp template, the note sits in another repo's plan, and a session
+editing `stamp` — this one, that day — has no reason to open it. That same plan's item 3 (mirror the
+shadowing guard into `selfinstall.update`) is untouched by today's work for the same reason and is
+not discharged by it.]
