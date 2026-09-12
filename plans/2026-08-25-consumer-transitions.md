@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-08
+updated: 2026-09-12
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -434,12 +434,21 @@ membership list was short. Check the file, not the memory of the file: the whole
 
 So the flavours, corrected — and it is the flavour rather than the count that this plan needs:
 
-| consumer                 | how it consumes              | what lags                 |
-| ------------------------ | ---------------------------- | ------------------------- |
-| `power-user-linux-setup` | pinned in its own lock       | task code **and** configs |
-| `scaffoldapy`            | the global `uv tool` install | configs only              |
-| `agent-skills`           | the global `uv tool` install | configs only              |
-| `repo-tasks` itself      | dogfoods its own `ns`        | n/a                       |
+| consumer                 | how it consumes              | what lags                 | regenerates from the namespace |
+| ------------------------ | ---------------------------- | ------------------------- | ------------------------------ |
+| `power-user-linux-setup` | pinned in its own lock       | task code **and** configs | yes — a task index             |
+| `scaffoldapy`            | the global `uv tool` install | configs only              | no                             |
+| `agent-skills`           | the global `uv tool` install | configs only              | no                             |
+| `repo-tasks` itself      | dogfoods its own `ns`        | n/a                       | yes — the requirements table   |
+
+The fourth column is not the same information as "builds its own collection", which is what it was
+first suspected of duplicating. `repo-tasks` imports its own `ns` and regenerates; `scaffoldapy`
+builds its own collection in the repos it **generates** while importing `ns` itself, and regenerates
+nothing. Measured 2026-09-12 rather than reasoned about:
+`rg -l 'render-docs|ensure_block|BEGIN
+GENERATED'` finds nothing in `scaffoldapy` or `agent-skills`.
+It earns the column because it decides whether a sweep there can be split into separately-gated
+commits at all.
 
 `agent-skills` also carries the family's last action-currency residue — two
 `astral-sh/setup-uv@v9.0.0` pins against `v10.0.1`, which its own `inv ci.check-actions` can see.
@@ -483,12 +492,19 @@ builds its own collection and so the one with a namespace-derived artifact.]
 by association: none of the four items is a gate binary, so that run could not have fired the
 preflight from a consumer's own CI.
 
-[NEEDS CLARIFICATION: does [`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md)
-want the generated-artifact clause? For: the sweep doc is what a session follows, and the failure it
-prevents looks like a bad bump. Against: no other consumer builds its own collection, so it would be
-dead text for two of the three. Carried from the filed plan rather than decided in the merge.]
+~~Does [`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md) want the
+generated-artifact clause?~~ **Yes**, added 2026-09-12. The objection — dead text for two of three
+consumers — dissolves once the clause is written **conditionally**: "where a consumer regenerates
+anything from the live namespace" skips itself in a repo that does not, and carries a one-command
+test (`rg -n '^\[docs\]' repo-tasks.toml`) so a reader settles it rather than remembering it. Dead
+text is a paragraph that applies to nobody, not a guarded one that applies to somebody.
 
-[NEEDS CLARIFICATION: does the flavour table above want a fourth column for whether a consumer
-regenerates anything from the namespace? It is the same information as "builds its own collection",
-which the table implies without stating — and the pitfall above is what makes the distinction cost
-something.]
+It is also smaller than it looked. `docs.generate` is the first step of `fix`, so the sweep's
+existing `inv quality.precommit` already does the regenerating; what the doc was missing was only
+how the result gets committed — which is the half that fails confusingly.
+
+~~Does the flavour table want a fourth column for namespace regeneration?~~ **Yes**, added above —
+and the premise that it duplicates "builds its own collection" is wrong, which is why it was worth
+checking rather than reasoning about. `repo-tasks` imports its own `ns` and regenerates;
+`scaffoldapy` builds its own collection only in the repos it generates, and regenerates nothing
+itself. Two of the four rows differ from what the implication would have predicted.
