@@ -1,14 +1,15 @@
 ---
-status: idea
-updated: 2026-09-08
+status: in-progress
+updated: 2026-09-12
 ---
 
 # `repo-tasks.status` measures the running interpreter, not the global tool
 
-_Both halves are now fixed: the docstring that promised otherwise, and the measurement — `status`
-reads uv as well and prints both numbers. The filename records the behaviour that prompted the plan,
-and is kept rather than renamed because `selfinstall.py` cites it by path. What is left is one
-deferred network reading and an open question about `stamp`._
+_All three halves are now fixed: the docstring that promised otherwise, the measurement — `status`
+reads uv as well and prints both numbers — and `stamp`, which keeps the active reading but says so
+and warns when it is behind. The filename records the behaviour that prompted the plan, and is kept
+rather than renamed because `selfinstall.py` cites it by path. What is left is one deferred network
+reading and one question about composite tasks, raised by the fix rather than by the defect._
 
 ## Context
 
@@ -94,11 +95,29 @@ opens by calling itself a manager of "this package's own daily-driver install as
 `uv tool`". There was no new dependency class to add. Worth recording as a correction rather than
 quietly fixing, because the objection was the main thing arguing for won't-fix.]
 
-[NEEDS CLARIFICATION: does `stamp` want the same answer as `status`? It might not. `stamp` records
-what a consumer's bootstrap should install, and an argument exists that the active environment is
-the right source for that — it is what the person running `configure` is actually using. If so the
-fix there is a docstring and a printed line saying which version it pinned and where that number
-came from, not a change of source.]
+~~Does `stamp` want the same answer as `status`?~~ **No — the active reading stays, and the fix was
+the one this question predicted**, settled by the user 2026-09-12 and landed the same day
+(`773af0b`). The script records what this repo was last configured against, so a consumer carrying
+its own pinned `repo-tasks` should stamp the version its own tooling resolves to rather than
+whatever is installed globally on that machine. What changed is everything around the number: the
+task prints which source it came from on every run, warns when that version is behind the newest
+upstream release without overriding the pin, and separates the two causes of an empty tag list —
+nothing tagged yet, and an unreachable remote — which both stamp unpinned and used to be reported as
+the first.
+
+**`stamp` was also reaching the network undeclared**, through `_remote_tags` running
+`git ls-remote`, and now carries `@requires(NETWORK)`. That is the sharper finding, because nothing
+was ever going to notice it: the requirements check read string literals in a task's own body only,
+so a command built in a module-level helper was invisible to it — and `update`, which reaches the
+same helper, was declared by hand and therefore looked like evidence the check was working.
+
+[PITFALL: **the check's documented limit was doing the hiding.** `test_requirements.py` stated the
+helper blind spot in its own docstring as a deliberate limit, with "must declare its requirements by
+hand" as the mitigation — which reads as a decision rather than as a gap, and nothing measured
+whether the hand-declaring was actually happening. It was, for one of the two tasks. The derivation
+now follows a task into its own module's functions transitively (`3903ad5`); run against the whole
+package it flagged exactly one task, which is what makes it a strengthening rather than a new
+policy.]
 
 [DEFERRED: the third reading — the latest released tag. Now that `releases/latest` resolves it is
 answerable, and for an agent asking "am I current?" it is arguably the actionable number, since
@@ -125,5 +144,23 @@ heading and once as an indented executable, and a looser match would read the se
 returns `0.3.0` correctly. The "differs" branch is covered only by unit test, because forcing a real
 mismatch means downgrading the machine's global install for the sake of a check.]
 
-What is left is only the deferred network reading above. The two questions this plan opened about
-measurement are answered, and `stamp`'s remains.
+## Verification (2026-09-12)
+
+`stamp`'s three new paths are unit-tested — pinned and current, pinned but behind the latest
+release, and an empty tag list — plus the existing not-a-real-tag fallback, all through
+`MockContext` with no network. The strengthened requirements derivation was run against the package
+before the declaration was added, and failed on `selfinstall.stamp` alone; that failure is the
+oracle, since a check that passes either way proves nothing.
+
+[NEEDS CLARIFICATION: **does a composite task have to declare what its `pre` chain needs?**
+`inv
+configure` reaches the network twice — `dev_env.setup` for `uv sync`, `stamp` for the tag list
+— and declares nothing, because the convention is "declare at the task that runs the command" and no
+composite in this package declares anything. That is consistent rather than an oversight, but it
+means the one command a new consumer actually runs is also the one whose requirements you cannot
+read off it. Either the composites declare the union, or the convention says explicitly that a
+composite's requirements are its chain's and something prints them. Not touched here, since changing
+it unilaterally would move a convention this plan is not about.]
+
+What is left is the deferred network reading above and the composite question. `stamp`'s source
+question, and both measurement questions, are answered.
