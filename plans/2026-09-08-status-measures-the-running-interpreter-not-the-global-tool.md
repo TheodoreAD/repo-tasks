@@ -9,8 +9,8 @@ _All three halves are now fixed: the docstring that promised otherwise, the meas
 reads uv as well and prints both numbers — and `stamp`, which keeps the active reading but says so
 and warns when it is behind. The filename records the behaviour that prompted the plan, and is kept
 rather than renamed because `selfinstall.py` cites it by path. What is left is two deferred items
-the fix raised rather than the defect: the third version reading, which needs the network, and
-mirroring the tool-shadowing guard into `update`._
+the fixes raised rather than the defect: the third version reading, which needs the network, and
+whether the tool-shadowing report `update` now prints wants a `status` or `doctor` of its own._
 
 ## Context
 
@@ -173,8 +173,8 @@ so `inv configure` answering `network` is readable without opening three modules
 has a consumer that is not a test. The reasoning is in
 [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Generation runs first".
 
-What is left is the deferred network reading above, and the shadowing guard at the end of the
-section below. `stamp`'s source question, and both measurement questions, are answered.
+What is left is the deferred network reading above, and the doctor question at the end of the file.
+`stamp`'s source question, and both measurement questions, are answered.
 
 ## Should the stamp template pin an interpreter? (2026-09-12)
 
@@ -216,7 +216,49 @@ tool installs.
 Landed as a comment at `_INSTALL_CMD` in `selfinstall.py` (`6d30b1c`) rather than only here, because
 the question gets asked by whoever is editing that line.
 
-[DEFERRED: the other half of that plan's item, which the answer above does not touch — mirror the
-shadowing guard into `selfinstall.update`, so the human-facing update path cannot recreate a split
-where `invoke` and `repo-tasks` are both installed as uv tools and one shadows the other's `inv`.
-The two were found beside each other in the same bootstrap scripts and share nothing else.]
+## The shadowing guard, the other half of that item (2026-09-12)
+
+Deferred an hour earlier in this same plan and then done, so the bracket is gone rather than
+answered in place. `update` now reports when `invoke` is installed as a uv tool of its own beside
+this one (`dbe84e4`) — the third of the three paths `power-user-linux-setup`'s plan names, after its
+own `bootstrap.sh` and this repo's stamp template.
+
+~~Report, refuse, or remove?~~ **Report.** Removing another tool mutates machine state outside this
+package, which is the first rule in
+[`../contributing/task-module-conventions.md`](../contributing/task-module-conventions.md) — a task
+surfaces a problem rather than papering over one — and refusing to install would leave the one
+command that moves the global install unable to move it. Which of the two tools should survive is
+not answerable from here: something else on the machine may want bare `invoke`, so the message names
+both directions and `next_steps` carries the command.
+
+[DECISION: **the reading is generalised out of `_global_version` rather than added beside it.**
+`_installed_tools` parses `uv tool list` once into name -> version, and the version lookup becomes a
+`.get` on it. That is a widening, so it needed a guard the old code did not: `name == "repo-tasks"`
+could not misread anything, while a dict comprehension reads `- vhs` as the tool `-` at version
+`hs`. The first character now has to be alphanumeric, which is what separates a tool heading from
+the executables listed under it, and a test holds it.
+
+None and an empty dict are kept distinct — uv failing to answer is not the same as uv having nothing
+installed, and the reporter stays silent on the first rather than inventing a warning from it.]
+
+[PITFALL: **there is still no machine-readable `uv tool list`**, checked against uv 0.11.19's own
+`--help` rather than assumed: `--show-paths`, `--show-version-specifiers`, `--show-with`,
+`--show-extras`, `--show-python`, `--outdated`, and nothing else. The plan that raised this asked
+whether reading `~/.local/share/uv/tools/` directly would be more honest; it would not — that path
+is only uv's default, and `uv tool list` honours `UV_TOOL_DIR` where a hardcoded path silently would
+not.]
+
+Verified against the real listing and not only through `MockContext`, because this module has
+already been caught once writing a parser against fabricated output: 16 tools parsed from this
+machine's own `uv tool list`, with no executable line read as a tool — `nuitka`'s three included.
+`invoke` is correctly absent, that split having been cleared by hand on 2026-08-23, so the reporter
+stays silent here and the fabricated-listing test is what covers the case that fires.
+
+[DEFERRED: whether `status` should report the same thing, or whether it wants a `repo-tasks.doctor`
+of its own. `power-user-linux-setup`'s plan calls it "worth doing in the same pass" and the marginal
+cost is now near zero, since `_installed_tools` is already there and `status` already calls it. Left
+alone deliberately: that plan pairs the shadowing case with a second failure that shares its symptom
+— invoke resolving `tasks.py` by walking up from **cwd**, so a command run against another repo
+collects the calling repo's tasks — and says a check reporting only the first "would still leave the
+cwd half undiagnosed, and the two are hard to tell apart from the symptom". A doctor task that
+answers half the question is worth designing rather than reaching for.]
