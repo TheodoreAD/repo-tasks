@@ -319,7 +319,13 @@ def _normalized(text: str) -> list[str]:
     workaround somebody has to maintain in the renderer — the whole reason the generator runs
     *before* the formatters is so it can emit plain markdown and let dprint own the layout. The
     dashes are the half that whitespace normalization alone does not reach, and the half that was
-    found by running it."""
+    found by running it.
+
+    **This is per line, so it does not cover prose the formatter re-wraps.** A block whose body is a
+    paragraph rather than a table changes its line breaks under `dprint`'s `lineWidth`, and a
+    line-by-line comparison reads that as a difference — so such a block would need either a
+    pre-wrapped rendering or a paragraph-aware comparison here. Every block today is a table; the
+    first prose block is the change that has to answer this."""
     return [_DASH_RUN_RE.sub("---", " ".join(line.split())) for line in text.splitlines() if line.strip()]
 
 
