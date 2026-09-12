@@ -158,18 +158,45 @@ def version(c: Context):
     print(_installed_version("repo-tasks"))
 
 
+@requires(NETWORK)
 @task
 def stamp(c: Context):
     """Regenerate bootstrap-repo-tasks.sh, pinning the repo-tasks version active right now. Runs
     as part of `inv configure` — see the generated script's own header for why a human shouldn't
-    run it directly. Falls back to an unpinned install if `v{installed version}` isn't an actual
+    run it directly. Falls back to an unpinned install if `v{active version}` isn't an actual
     upstream tag (e.g. this checkout is ahead of the last release, or nothing's been tagged yet) —
-    pinning to a tag that doesn't exist would make the generated script fail every time it runs."""
-    installed = _installed_version("repo-tasks")
-    pinned_ref = f"@v{installed}" if f"v{installed}" in _remote_tags(c) else ""
-    if not pinned_ref:
-        print(f"[repo-tasks.stamp] v{installed} isn't a real upstream tag yet — stamping an unpinned install")
+    pinning to a tag that doesn't exist would make the generated script fail every time it runs.
+
+    **The number is the *active* one — this process's `repo-tasks`, not the global uv tool — and
+    that is deliberate.** The script records what this repo was last configured against, so a
+    consumer carrying its own pinned `repo-tasks` should stamp the version its own tooling resolves
+    to rather than whatever happens to be installed globally on the machine. `status` reads both and
+    says so; this reads one and says which.
+
+    It therefore says which source it used and warns when that version is behind the newest release,
+    because the failure mode is silent: an editable install's recorded metadata does not move when
+    `bump-my-version` edits `pyproject.toml`, so a stale reading looks like an ordinary version and
+    pins consumers to a genuinely older release. This is why the task needs the network at all — the
+    tag list is what makes "behind" answerable, and it was reaching for it undeclared until
+    2026-09-12."""
+    active = _installed_version("repo-tasks")
+    tags = _remote_tags(c)
+    pinned_ref = f"@v{active}" if f"v{active}" in tags else ""
+    print(f"[repo-tasks.stamp] active version {active}, read from the interpreter running this task")
+    if not tags:
+        print(
+            "[repo-tasks.stamp] the upstream tag list came back empty — nothing is tagged yet, or "
+            "the remote was unreachable; stamping an unpinned install"
+        )
+    elif not pinned_ref:
+        print(f"[repo-tasks.stamp] v{active} isn't a real upstream tag — stamping an unpinned install")
+    elif tags[0] != f"v{active}":
+        print(
+            f"[repo-tasks.stamp] v{active} is behind the latest release {tags[0]} — pinning v{active}, "
+            "since that is what this repo is configured against. `inv repo-tasks.update` then "
+            "`inv configure` if you meant to move forward."
+        )
     script = _STAMP_TEMPLATE.format(install_cmd=_INSTALL_CMD, repo_url=_REPO_URL, pinned_ref=pinned_ref)
     _STAMP_PATH.write_text(script, encoding="utf-8")
     _STAMP_PATH.chmod(_STAMP_PATH.stat().st_mode | 0o111)
-    print(f"[repo-tasks.stamp] wrote {_STAMP_PATH}" + (f", pinned to v{installed}" if pinned_ref else ""))
+    print(f"[repo-tasks.stamp] wrote {_STAMP_PATH}" + (f", pinned to v{active}" if pinned_ref else ""))

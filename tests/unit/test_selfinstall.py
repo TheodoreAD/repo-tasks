@@ -35,7 +35,7 @@ def test_version_prints_installed_version(c, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "1.2.3"
 
 
-def test_stamp_writes_pinned_install_script_when_tag_exists(tmp_cwd, monkeypatch):
+def test_stamp_writes_pinned_install_script_when_tag_exists(tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
     c = MockContext(run=_ls_remote("v1.2.3", "v1.0.0"))
     selfinstall.stamp.body(c)
@@ -44,6 +44,20 @@ def test_stamp_writes_pinned_install_script_when_tag_exists(tmp_cwd, monkeypatch
     text = script.read_text(encoding="utf-8")
     assert f"repo-tasks @ git+{selfinstall._REPO_URL}@v1.2.3'" in text
     assert script.stat().st_mode & 0o111  # executable
+    # Which source the number came from, on every run: the pin is only readable if you know that.
+    assert "active version 1.2.3, read from the interpreter running this task" in capsys.readouterr().out
+
+
+def test_stamp_warns_when_the_active_version_is_behind_the_latest_release(tmp_cwd, monkeypatch, capsys):
+    """The case that prompted the warning: an editable install whose recorded metadata is stale
+    reads as an ordinary version and pins consumers to a genuinely older release."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
+    c = MockContext(run=_ls_remote("v2.0.0", "v1.2.3"))
+    selfinstall.stamp.body(c)
+    text = (tmp_cwd / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
+    # Still pinned to the active version -- the warning informs, it does not override the source.
+    assert f"repo-tasks @ git+{selfinstall._REPO_URL}@v1.2.3'" in text
+    assert "v1.2.3 is behind the latest release v2.0.0" in capsys.readouterr().out
 
 
 def test_stamp_falls_back_to_unpinned_when_no_matching_tag(tmp_cwd, monkeypatch, capsys):
@@ -54,7 +68,19 @@ def test_stamp_falls_back_to_unpinned_when_no_matching_tag(tmp_cwd, monkeypatch,
     text = (tmp_cwd / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
     assert f"repo-tasks @ git+{selfinstall._REPO_URL}'" in text
     assert "@v1.2.3" not in text
-    assert "isn't a real upstream tag yet" in capsys.readouterr().out
+    assert "isn't a real upstream tag" in capsys.readouterr().out
+
+
+def test_stamp_says_an_empty_tag_list_has_two_causes(tmp_cwd, monkeypatch, capsys):
+    """`_remote_tags` runs under `warn=True`, so an unreachable remote and a repo nobody has tagged
+    return the same empty list — and both stamp an unpinned script. Naming one of them would be a
+    guess, so the message names both."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
+    selfinstall.stamp.body(MockContext(run=_ls_remote()))
+    text = (tmp_cwd / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
+    assert "@v1.2.3" not in text
+    out = capsys.readouterr().out
+    assert "nothing is tagged yet, or the remote was unreachable" in out
 
 
 def _tool_list(*lines: str) -> dict[str, Result]:
