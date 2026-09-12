@@ -76,14 +76,22 @@ into its own README and get it.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: what is the generator contract **for a consumer's own generator**? This is the
-one question the landed mechanism does not answer: it covers blocks rendered from _this package's_
-code, where the renderer ships alongside the chain that calls it. `power-user-linux-setup`'s tag
-table is rendered from a constant in its own `tasks/`, and nothing here can call it: `pre=` chains
-are composed in this repo, and a repo-tasks task cannot see the consumer's namespace. The candidates
-are unchanged — a well-known task name invoked as a subprocess, or a list in `repo-tasks.toml`,
-which is the consumer config schema that already exists. That repo is the test case, and it is now
-the only thing between the mechanism and the problem that prompted it.]
+~~What is the generator contract for a consumer's own generator?~~ **A list of commands in
+`repo-tasks.toml`'s `[docs] generators`**, run by `docs.generate` after its own blocks (`5585877`).
+
+Commands rather than the well-known task name the original question preferred, and the reasoning
+inverted on inspection: reaching a consumer's task means running `inv` as a subprocess whichever
+form is declared, because a task composed here cannot see the consumer's namespace. Once a
+subprocess is unavoidable, a task name is a command with a restriction and a question attached —
+does the task exist — while a command asks nothing and covers a generator that is not an invoke task
+at all, which is what `~/AGENTS.md`'s "ideally invoke if possible" already allows. Executing what
+the repo's own config says to execute is the trust level `tasks.py` has.
+
+**No check-half counterpart for a declared generator**, deliberately. A generator writes, so running
+it from the read-only half is a category error, and the enforcement it would provide already exists
+one layer down: a drift test asserting the rendered block matches the file runs in the unit tier,
+which `quality.check` includes. That is also the better check, because it fails naming the task to
+run — and `power-user-linux-setup` already has three of them.
 
 ~~Where exactly in the chain?~~ **First in `fix`**, and the pre-padding it was weighed against can
 indeed be deleted — the generator emits plain markdown and `dprint` formats it like anything else.
@@ -106,12 +114,14 @@ markers", which is the same property with nothing to declare.
 
 ~~Pair it with a `check`-side verification that fails on a diff~~ — done, same commit.
 
-**What is left is the half this repo cannot test on itself.** The mechanism was proved against a
-block rendered from this package's own code, so the ordering argument is settled but the consumer
-contract is not: `power-user-linux-setup`'s `_tag_table()` is rendered from a constant in that
-repo's own `tasks/`, and reaching it needs the open question above. Its pre-padding is still the
-measurable before/after — this repo's equivalent padding was never written, and a second `fix` run
-now changes nothing, so the ordering does what it was expected to.
+~~What is left is the half this repo cannot test on itself.~~ The contract landed too (`5585877`),
+so both halves exist here: blocks this package renders, and commands a consumer declares.
+
+**What is left is the adoption, and it belongs to the other repo.** Filed there as
+`2026-09-12-adopt-the-shared-docs-generator.md`, with its three generators, the two workarounds
+adoption would delete — `util.markdown_table`'s pre-padding and `_generated_content()`'s
+pre-wrapping — and the prose-normalization requirement that second one puts back on this mechanism.
+Nothing further is owed here until that session reports.
 
 ~~`power-user-linux-setup` currently has no automatic drift protection at all.~~ **Wrong when
 written, and checked 2026-09-12 while filing the adoption plan for that repo.** Three drift tests
