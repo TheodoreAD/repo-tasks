@@ -8,8 +8,9 @@ updated: 2026-09-12
 _All three halves are now fixed: the docstring that promised otherwise, the measurement — `status`
 reads uv as well and prints both numbers — and `stamp`, which keeps the active reading but says so
 and warns when it is behind. The filename records the behaviour that prompted the plan, and is kept
-rather than renamed because `selfinstall.py` cites it by path. What is left is one deferred network
-reading and one question about composite tasks, raised by the fix rather than by the defect._
+rather than renamed because `selfinstall.py` cites it by path. What is left is two deferred items
+the fix raised rather than the defect: the third version reading, which needs the network, and
+mirroring the tool-shadowing guard into `update`._
 
 ## Context
 
@@ -172,19 +173,50 @@ so `inv configure` answering `network` is readable without opening three modules
 has a consumer that is not a test. The reasoning is in
 [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Generation runs first".
 
-What is left is the deferred network reading above. `stamp`'s source question, and both measurement
-questions, are answered.
+What is left is the deferred network reading above, and the shadowing guard at the end of the
+section below. `stamp`'s source question, and both measurement questions, are answered.
 
-[DEFERRED: **the stamp template installs without `--python`, and the plan that noticed lives in a
-repo that cannot fix it.** `power-user-linux-setup`'s
-`plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` carries it as a deferred item whose own text
-says "belongs to `repo-tasks`' stamp template, not here": `bootstrap-repo-tasks.sh` stamps a bare
-`uv tool install`, while that repo's `bootstrap.sh` passes `--python "${UV_PYTHON_DEFAULT}"`, so the
-stamped script installs against whatever interpreter uv happens to pick. Harmless on this machine
-today, where uv's default and the pinned default agree.
+## Should the stamp template pin an interpreter? (2026-09-12)
 
-Recorded here 2026-09-12 because nothing in **this** repo pointed at it, which is the whole failure
-mode: the work belongs to the stamp template, the note sits in another repo's plan, and a session
-editing `stamp` — this one, that day — has no reason to open it. That same plan's item 3 (mirror the
-shadowing guard into `selfinstall.update`) is untouched by today's work for the same reason and is
-not discharged by it.]
+Recorded as deferred earlier the same day because nothing in **this** repo pointed at it — the work
+belongs to the stamp template, the note sat in another repo's plan, and a session editing `stamp`
+had no reason to open it. `power-user-linux-setup`'s
+`plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` carries it as an item whose own text says
+"belongs to `repo-tasks`' stamp template, not here": `bootstrap-repo-tasks.sh` stamps a bare
+`uv tool install` while that repo's `bootstrap.sh` passes `--python "${UV_PYTHON_DEFAULT}"`, "so the
+stamped script installs against whatever interpreter uv happens to pick".
+
+~~Does the template want `--python`?~~ **No, and the premise does not survive measurement** — that
+last clause is wrong. Settled by probing uv 0.11.19 with isolated `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`,
+so nothing on this machine moved:
+
+| probe                                                | what uv reported, and chose                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------------- |
+| the real stamped git-URL shape, `UV_PYTHON` unset    | `>=3.11` from `requires-python` metadata -> cpython 3.14.5       |
+| a package declaring `>=3.9,<3.10`, `UV_PYTHON` unset | `>=3.9, <3.10` from `requires-python` metadata -> cpython 3.9.25 |
+| the same package, `UV_PYTHON=3.14`                   | `3.14` from explicit request -> installed onto 3.14 regardless   |
+
+**The bare command is already bounded below by this package's own `requires-python`**, through a git
+URL included — uv fetches the target's static metadata before choosing an interpreter, then takes
+the newest installed one satisfying it. It cannot land on 3.10.
+
+**The two bootstrap scripts already agree on this machine, but not by the mechanism the item
+assumed.** `UV_PYTHON=3.14` is exported into every shell by `power-user-linux-setup`'s
+`[packages.uv-env]`, and `uv tool install --python` reads that env var — so both land on 3.14
+because of the variable, not because uv's unconstrained default happens to match.
+
+**And the third row is what settles it: an explicit request _overrides_ `requires-python` rather
+than narrowing it.** A package declaring `>=3.9,<3.10` installed onto 3.14 with no warning anywhere
+in the output. A version pinned into a template that every consumer regenerates would therefore
+silently ignore both that consumer's own floor and whatever its machine or CI had chosen — the one
+shape that is wrong for a shared artifact. Where a machine wants to state a choice, `UV_PYTHON` or a
+**global** `.python-version` is the place; a **local** `.python-version` is deliberately ignored for
+tool installs.
+
+Landed as a comment at `_INSTALL_CMD` in `selfinstall.py` (`6d30b1c`) rather than only here, because
+the question gets asked by whoever is editing that line.
+
+[DEFERRED: the other half of that plan's item, which the answer above does not touch — mirror the
+shadowing guard into `selfinstall.update`, so the human-facing update path cannot recreate a split
+where `invoke` and `repo-tasks` are both installed as uv tools and one shadows the other's `inv`.
+The two were found beside each other in the same bootstrap scripts and share nothing else.]
