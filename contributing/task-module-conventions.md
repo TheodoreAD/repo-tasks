@@ -194,12 +194,35 @@ recording a typo. It returns the task untouched, so nothing about invoke's dispa
 typing changes.
 
 `tests/unit/test_requirements.py` enforces it by _derivation_ rather than from a list someone
-maintains: it parses each module, collects the command strings each task builds, and maps their
-leading words onto requirements. A new task that runs `docker build` without declaring `DOCKER`
-fails there. It cannot see a command assembled in a module-level helper, or a library that reaches
-the network without a subprocess (`dist.list-versions` via urllib, the integration tiers via
-testcontainers) — those declare by hand, and the check only ever asserts that what it derives is
-covered, never that a declaration is superfluous.
+maintains: it parses each module, collects the command strings each task builds — **following the
+task into its own module's helpers, transitively** — and maps their leading words onto requirements.
+A new task that runs `docker build` without declaring `DOCKER` fails there. What it still cannot see
+is a cross-module helper, or a library that reaches the network without a subprocess
+(`dist.list-versions` via urllib, the integration tiers via testcontainers); those declare by hand,
+and the check only ever asserts that what it derives is covered, never that a declaration is
+superfluous.
+
+[PITFALL: the helper half was a documented limit for as long as it was a blind spot, and the wording
+is what kept it: "a task whose command is built in a module-level helper must declare by hand" reads
+as a decision, so nobody measured whether the hand-declaring was happening. `selfinstall.stamp`
+reached `git ls-remote` through `_remote_tags` and declared nothing for weeks, while `update`
+reached the same helper and was declared — one right by luck, and the check could not tell them
+apart. A limit stated as a mitigation still wants a count.]
+
+**A composite declares nothing, and that is not a claim to need nothing.** `inv configure` reaches
+the network twice, through `dev_env.setup` and `selfinstall.stamp`; `inv testing.all` needs Docker
+through the integration tier; `inv quality.precommit` genuinely needs neither. None of them says so,
+because a union restated on the composite is a second copy of a derivable fact — wrong the first
+time a step in the chain gains a requirement, and silent about it. `requirements.effective(task)`
+walks `pre` and answers instead, which is also how the gate's rule is checked from the declaration
+side rather than only from the command strings.
+
+[DECISION: computed, not restated, settled 2026-09-12 — and the reading surface is the part still
+missing rather than the rule. Nothing prints a task's requirements today: `effective` is consumed by
+tests, so a consumer wanting to know what `inv configure` needs still reads source. Generating that
+table into the docs is `plans/2026-09-01-docs-generation-in-precommit.md`'s shape of problem, and it
+is where the surface should come from rather than from a hand-written list that would drift the same
+way the unions would.]
 
 [PITFALL: the obvious mechanism, invoke's own `@task(klass=..., requires=...)`, costs the typing.
 invoke rejects unknown kwargs (`TypeError`), so custom metadata needs a `Task` subclass — and while
