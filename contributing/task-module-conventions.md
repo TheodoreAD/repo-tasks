@@ -217,12 +217,13 @@ time a step in the chain gains a requirement, and silent about it. `requirements
 walks `pre` and answers instead, which is also how the gate's rule is checked from the declaration
 side rather than only from the command strings.
 
-[DECISION: computed, not restated, settled 2026-09-12 — and the reading surface is the part still
-missing rather than the rule. Nothing prints a task's requirements today: `effective` is consumed by
-tests, so a consumer wanting to know what `inv configure` needs still reads source. Generating that
-table into the docs is `plans/2026-09-01-docs-generation-in-precommit.md`'s shape of problem, and it
-is where the surface should come from rather than from a hand-written list that would drift the same
-way the unions would.]
+[DECISION: computed, not restated, settled 2026-09-12. The reading surface follows the same rule
+rather than being a hand-written list that would drift the way the unions would: `README.md`'s "What
+a task needs beyond a checkout" table is **generated** from these declarations by
+`inv docs.generate`, and `inv docs.generate-check` fails the gate when it drifts — see
+[`quality-gate.md`](quality-gate.md), "Generation runs first". So the answer to "what does
+`inv configure` need" is read off a table nobody maintains, and `effective` has a consumer that is
+not a test.]
 
 [PITFALL: the obvious mechanism, invoke's own `@task(klass=..., requires=...)`, costs the typing.
 invoke rejects unknown kwargs (`TypeError`), so custom metadata needs a `Task` subclass — and while

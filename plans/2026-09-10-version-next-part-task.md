@@ -26,11 +26,14 @@ rewrites a file in every consumer repo.
 ## Open questions
 
 [NEEDS CLARIFICATION: where does the surface list live once a task reads it? Today it is prose in
-`versioning.md`, audited by hand. A task needs it as data — a constant in `version.py`, or a table
-generated into the doc from that constant, which is the shape
-[`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md) already
-argues for. Prose and code drifting apart is the failure that matters here, because the drift is
-silent and the answer stays plausible.]
+`versioning.md`, audited by hand. A task needs it as data — a constant in `version.py`, with the
+doc's list generated from it. **The mechanism for that half now exists**: `inv docs.generate`
+renders a block from this package's own code into a marked region and `inv docs.generate-check`
+fails the gate when it drifts, which is how `README.md`'s task-requirements table is kept honest
+([`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Generation runs first"). So
+the open part is only where the constant lives and what shape it takes, not how the doc follows it.
+Prose and code drifting apart is the failure that matters here, because the drift is silent and the
+answer stays plausible.]
 
 [NEEDS CLARIFICATION: what does it do about a surface entry that is a contract rather than a path —
 "module names are API", "`configure` staying unnested", the `repo-tasks.toml` schema? A path diff

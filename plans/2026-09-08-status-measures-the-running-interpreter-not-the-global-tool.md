@@ -165,12 +165,12 @@ The rule now has a check from the declaration side to match the one from the com
 step that declares a requirement by hand — a library-mediated network call, say, that has no command
 to derive from.
 
-[DEFERRED: **the reading surface, which is what the question was actually about.** Nothing prints a
-task's requirements: `effective` is consumed by tests, so a consumer wanting to know what
-`inv configure` needs still reads source across three modules. A generated table is the right shape,
-and it belongs to
-[`2026-09-01-docs-generation-in-precommit.md`](2026-09-01-docs-generation-in-precommit.md) rather
-than to a hand-written list here, which would drift exactly the way the unions would.]
+~~The reading surface, which is what the question was actually about.~~ **Built the same day**
+(`5ed82c5`): `README.md`'s "What a task needs beyond a checkout" table is generated from the
+declarations by `inv docs.generate`, and `inv docs.generate-check` fails the gate when it drifts —
+so `inv configure` answering `network` is readable without opening three modules, and `effective`
+has a consumer that is not a test. The reasoning is in
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Generation runs first".
 
-What is left is the deferred network reading above and the composite question. `stamp`'s source
-question, and both measurement questions, are answered.
+What is left is the deferred network reading above. `stamp`'s source question, and both measurement
+questions, are answered.
