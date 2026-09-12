@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-09-12
 ---
 
@@ -139,3 +139,38 @@ reads that as a difference — which is exactly the shape `power-user-linux-setu
 `_generated_content()` carries, and why that repo pre-wraps its prose at width 100 today. The first
 prose block is the change that has to make the comparison paragraph-aware; recorded now because it
 is cheap while this mechanism has one consumer.]
+
+## Migrated to
+
+Retired 2026-09-12, the day both halves landed and were pushed green.
+
+**[`../contributing/quality-gate.md`](../contributing/quality-gate.md)**, "Generation runs first,
+and only one half of it is checkable": why generation precedes the linters and formatters, why both
+halves compare with formatter-owned layout normalized away and what that normalization does not
+reach, and why a consumer's generator is a declared command with no check-half counterpart.
+
+**[`../contributing/task-module-conventions.md`](../contributing/task-module-conventions.md)**: that
+the requirements table is generated rather than maintained, which is what closed the reading-surface
+gap the composite decision opened.
+
+**[`../README.md`](../README.md)**: the consumer-facing half — the `repo-tasks.toml` key, a worked
+example, and the two constraints a declared generator carries.
+
+**The code carries the rest**, and that is deliberate rather than a gap: `docs.py`'s `_normalized`
+docstring holds the per-line limit and names the first change that has to lift it, and `generate`'s
+docstring holds the no-check-half argument at the place someone stands when they ask for one.
+
+**Filed for `power-user-linux-setup`** as `2026-09-12-adopt-the-shared-docs-generator.md` in the
+plans store: the adoption itself, its three generators, the two workarounds adoption deletes, and
+the prose-normalization requirement the second one puts back on this mechanism. That is the only
+live thread, and it belongs to that repo.
+
+Deliberately not migrated:
+
+- **The `~/AGENTS.md` reversal pitfall.** Pulling a file from outside the repo and generating one
+  from the repo's own code are distinguished in that file's own section, which is where a reader
+  arrives with the question; a second copy here would be the drift it warns about.
+- **The CI auto-commit history** — why the `git-auto-commit-action` job was deleted, and the user's
+  wording that replaced it. `~/AGENTS.md` owns that rule, and this plan was only ever its consumer.
+- **The claim that the other repo had no drift protection.** It was wrong, is corrected above, and
+  the correction is carried in the filed plan where the next session will read it.
