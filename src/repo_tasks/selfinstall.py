@@ -20,6 +20,14 @@ from .requirements import NETWORK, requires
 
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
 _STAMP_PATH = Path("bootstrap-repo-tasks.sh")
+# No `--python`, deliberately — `uv tool install` with no explicit request derives one from this
+# package's own `requires-python`. Measured on uv 0.11.19 against the stamped git-URL shape:
+# "Using Python request `>=3.11` from `requires-python` metadata", then the newest managed install
+# satisfying it. A machine states its own choice through `UV_PYTHON` (this one exports 3.14, from
+# power-user-linux-setup's `[packages.uv-env]`) or a *global* `.python-version`; a local one is
+# ignored for tool installs. Pinning a version into the template would take the one shape that is
+# wrong for an artifact every consumer regenerates: an explicit request *overrides* `requires-python`
+# rather than narrowing it, and installed a `>=3.9,<3.10` probe package onto 3.14 with no warning.
 _INSTALL_CMD = "uv tool install --force --with-executables-from invoke"
 # Reading the global install's version, which `importlib.metadata` structurally cannot do: it can
 # only answer for the interpreter running it. No new dependency — `update` already shells out to
