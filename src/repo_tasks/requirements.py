@@ -23,7 +23,7 @@ properly-typed decorator keeps both.]
 """
 
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar, cast
 
 from invoke import Task
 
@@ -66,3 +66,34 @@ def requires(*needs: str) -> Callable[[Task[Callable[P, R]]], Task[Callable[P, R
 def declared(module: str, name: str) -> frozenset[str]:
     """What `name` in `module` declared, or an empty set if it declared nothing."""
     return _REGISTRY.get(_key(module, name), frozenset())
+
+
+def effective(t: Task[Callable[P, R]]) -> frozenset[str]:
+    """Everything running this task can need: its own declaration plus every pre-task's, transitively.
+
+    **A composite declares nothing and is not thereby claiming to need nothing.** `inv configure`
+    reaches the network twice — `dev_env.setup` for `uv sync`, `selfinstall.stamp` for the upstream
+    tag list — and `inv quality.precommit` reaches nothing at all, and neither fact is written
+    anywhere: both are properties of the chain. Restating a union at the composite would be a second
+    copy of a derivable fact, wrong the first time a step in the chain gains a requirement and silent
+    about it, which is the same objection this package makes to any hand-maintained list.
+
+    So a composite is read, never written: this walks `pre` and answers. A `Call`-wrapped pre-task
+    (`call(build, tag=...)`) resolves to the task it wraps — invoke permits it and nothing here uses
+    it yet, but a union that silently skipped one would be worse than an error."""
+    seen: set[tuple[str, str]] = set()
+    found: set[str] = set()
+    # `object`, and one cast per entry: `Task.pre` is typed `list[Task[Any] | Call]`, and reading
+    # `.body` off an `Any`-parameterized task is exactly what `reportAny` is set to error on.
+    pending: list[object] = [t]
+    while pending:
+        # `call(task, ...)` wraps rather than subclasses; a plain Task has no `.task` and is itself.
+        entry = pending.pop()
+        current = cast(Task[Callable[..., object]], getattr(entry, "task", entry))
+        key = _key(current.body.__module__, current.body.__name__)
+        if key in seen:
+            continue
+        seen.add(key)
+        found |= _REGISTRY.get(key, frozenset())
+        pending.extend(cast(list[object], current.pre))
+    return frozenset(found)

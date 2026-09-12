@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from invoke import Context, Task
+from invoke import Context, Task, call, task
 
-from repo_tasks import quality, requirements
+from repo_tasks import configure, quality, requirements
 from repo_tasks.requirements import DOCKER, GH, NETWORK
 
 _SRC = Path("src/repo_tasks")
@@ -214,3 +214,49 @@ def test_declared_is_empty_for_a_task_that_declared_nothing():
 def test_declared_reports_what_a_task_asked_for():
     assert requirements.declared("repo_tasks.docker", "build") == frozenset({DOCKER})
     assert requirements.declared("repo_tasks.ci", "status") == frozenset({GH, NETWORK})
+
+
+def test_a_composite_answers_for_its_whole_chain():
+    """`configure` declares nothing and needs the network twice — through `dev_env.setup`'s `uv
+    sync` and `selfinstall.stamp`'s tag list. Reading the decorator on the composite says nothing
+    true; reading the chain does."""
+    assert requirements.declared("repo_tasks.configure", "configure") == frozenset()
+    assert NETWORK in requirements.effective(configure.configure)
+
+
+def test_the_gate_needs_nothing_by_declaration_either():
+    """The sibling of the derivation check above, from the other side. That one reads command
+    strings and would miss a requirement declared by hand on a gate step — a library-mediated
+    network call, say, which has no command to derive from. This reads the declarations."""
+    assert requirements.effective(quality.check) == frozenset()
+    assert requirements.effective(quality.precommit) == frozenset()
+
+
+def test_effective_covers_a_pre_task_wrapped_in_a_call():
+    """invoke permits `pre=[call(task, ...)]`, which wraps rather than subclasses `Task`. Nothing
+    here uses it yet, and a union that silently skipped one would read as "needs nothing"."""
+
+    @requirements.requires(DOCKER)
+    @task
+    def leaf(c: Context): ...
+
+    @task(pre=[call(leaf)])
+    def composite(c: Context): ...
+
+    assert requirements.effective(composite) == frozenset({DOCKER})
+
+
+def test_effective_terminates_on_a_cycle():
+    """`pre` chains are acyclic in practice and nothing validates that they are. A visited set makes
+    a cycle finite rather than a hung test run."""
+
+    @requirements.requires(NETWORK)
+    @task
+    def first(c: Context): ...
+
+    @task
+    def second(c: Context): ...
+
+    first.pre = [second]
+    second.pre = [first]
+    assert requirements.effective(first) == frozenset({NETWORK})
