@@ -138,6 +138,61 @@ auto-activate the venv too, no-ops if the repo has no `.envrc`) — `dev_env.py`
 it's pure orchestration of those three modules. `inv docs.build`/`docs.serve` assume `zensical` is
 installed — add it as a project `docs` dependency group, it isn't a dependency of this package.
 
+### What a task needs beyond a checkout
+
+Everything in `inv quality.precommit` runs offline, with no daemon and no authenticated CLI — that
+is what makes the gate the same command in every consumer. The tasks below are the ones that need
+something more, each declaring it at its own definition with `@requires(...)`. A composite declares
+nothing and inherits its chain's needs, so `inv configure` appears here on the strength of the two
+steps inside it rather than anything written on it.
+
+The table is generated from the declarations by `inv docs.generate`, which runs first in
+`quality.fix`; `inv docs.generate-check` fails the gate if it drifts. Do not edit it by hand.
+
+<!-- BEGIN GENERATED: task-requirements — run `inv docs.generate` -->
+
+| task                                  | needs           |
+| ------------------------------------- | --------------- |
+| `inv ci.check-actions`                | gh, network     |
+| `inv ci.status`                       | gh, network     |
+| `inv configure`                       | network         |
+| `inv deps.audit`                      | network         |
+| `inv deps.lock`                       | network         |
+| `inv dev-env.setup`                   | network         |
+| `inv dist.list-versions`              | network         |
+| `inv dist.publish`                    | network         |
+| `inv docker.build`                    | docker          |
+| `inv docker.check`                    | docker          |
+| `inv docker.login`                    | docker, network |
+| `inv docker.push`                     | docker          |
+| `inv docker.release`                  | docker          |
+| `inv gitflow.feature-finish`          | gh, network     |
+| `inv gitflow.hotfix-finalize`         | gh, network     |
+| `inv gitflow.hotfix-finish`           | gh, network     |
+| `inv gitflow.release-candidate`       | network         |
+| `inv gitflow.release-finalize`        | gh, network     |
+| `inv gitflow.release-finish`          | gh, network     |
+| `inv gitflow.support-hotfix-finalize` | gh, network     |
+| `inv gitflow.support-hotfix-finish`   | gh, network     |
+| `inv helm.login`                      | network         |
+| `inv helm.push`                       | network         |
+| `inv release.create`                  | gh, network     |
+| `inv release.push-tag`                | network         |
+| `inv repo-tasks.stamp`                | network         |
+| `inv repo-tasks.update`               | network         |
+| `inv test.all`                        | docker          |
+| `inv test.integration`                | docker          |
+| `inv test.regression`                 | docker          |
+| `inv test.smoke`                      | docker          |
+| `inv test.workflows`                  | docker          |
+| `inv trunkflow.cut`                   | network         |
+| `inv venv.create`                     | network         |
+| `inv venv.install-wheel`              | network         |
+| `inv venv.recreate`                   | network         |
+| `inv venv.sync`                       | network         |
+
+<!-- END GENERATED: task-requirements -->
+
 ### venv/deps: lock-respecting, CI/docker-aware
 
 `venv.sync` (and `venv.create`, its no-args first-time wrapper) always run `uv sync --locked` — this

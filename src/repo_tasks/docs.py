@@ -12,10 +12,12 @@ import unicodedata
 from collections.abc import Callable
 from difflib import get_close_matches
 from pathlib import Path
+from typing import cast
 
-from invoke import Context, Exit, task
+from invoke import Collection, Context, Exit, Task, task
 
 from .projects import tracked_files
+from .requirements import effective
 
 _SITE_DIR = Path("site")
 
@@ -242,6 +244,124 @@ def link_check(c: Context):
     for entry in broken:
         print(f"[docs.link-check] {entry}")
     raise Exit(f"[docs.link-check] {len(broken)} broken relative link(s)", code=1)
+
+
+# --- Generated blocks ------------------------------------------------------------------------
+#
+# A block is rendered from this package's own code into a marked region of a documentation file.
+# The markers are the opt-in: a file without them is skipped in silence, which is what makes the
+# generator safe in the shared `fix` chain — a consumer with nothing to generate pays a no-op
+# rather than being exempted. See contributing/task-module-conventions.md, "A composite declares
+# nothing", for the rule the first block exists to make readable.
+
+_DASH_RUN_RE = re.compile(r"-{3,}")
+
+_BLOCK_BEGIN = "<!-- BEGIN GENERATED: {name} — run `inv docs.generate` -->"
+_BLOCK_END = "<!-- END GENERATED: {name} -->"
+
+
+class _Root:
+    """Where the assembled root collection is left for the renderer to find.
+
+    A module that is *part* of the collection cannot import it: `__init__` imports this module in
+    order to build `ns`, so `from . import ns` at module scope is a cycle and inside a function is a
+    lint error (PLC0415). Registration inverts it — `__init__` hands the finished object over on the
+    line after it exists, which is also the only line that knows every module went in."""
+
+    collection: Collection | None = None
+
+
+def register_root(collection: Collection) -> None:
+    """Called once by `__init__`, with the root collection every generated block reads from."""
+    _Root.collection = collection
+
+
+def _lookup(root: Collection, name: str) -> Task[Callable[..., object]]:
+    """`Collection.__getitem__` is untyped, so one cast here keeps `Any` out of the rest — the same
+    one-cast-at-the-boundary shape `ci.py` uses for `gh`'s JSON."""
+    return cast(Task[Callable[..., object]], root[name])
+
+
+def _requirements_table() -> str:
+    """Every task needing something beyond a checkout, and what it needs."""
+    root = _Root.collection
+    if root is None:
+        raise Exit("[docs.generate] no root collection registered — is this package half-imported?", code=1)
+    rows = [(name, sorted(effective(_lookup(root, name)))) for name in sorted(root.task_names)]
+    lines = ["| task | needs |", "| --- | --- |"]
+    lines.extend(f"| `inv {name}` | {', '.join(needs)} |" for name, needs in rows if needs)
+    return "\n".join(lines)
+
+
+# name -> (file it lives in, how to render it). One entry today; the mechanism is the point.
+_BLOCKS: tuple[tuple[str, Path, Callable[[], str]], ...] = (
+    ("task-requirements", Path("README.md"), _requirements_table),
+)
+
+
+def _splice(text: str, name: str, body: str) -> str | None:
+    """`text` with the named block's contents replaced, or None if it carries no such block."""
+    begin, end = _BLOCK_BEGIN.format(name=name), _BLOCK_END.format(name=name)
+    if begin not in text or end not in text:
+        return None
+    head, _, rest = text.partition(begin)
+    _, _, tail = rest.partition(end)
+    return f"{head}{begin}\n\n{body}\n\n{end}{tail}"
+
+
+def _normalized(text: str) -> list[str]:
+    """Lines with formatter-owned layout collapsed, for comparing a rendering against a formatted
+    file: internal whitespace, and any run of three or more dashes.
+
+    dprint aligns markdown table pipes **and pads the delimiter row to the column width**, so a
+    freshly rendered table never matches the file byte-for-byte and a byte comparison would fail
+    forever. Pre-padding the rendering to dprint's own alignment is the other way round, and it is a
+    workaround somebody has to maintain in the renderer — the whole reason the generator runs
+    *before* the formatters is so it can emit plain markdown and let dprint own the layout. The
+    dashes are the half that whitespace normalization alone does not reach, and the half that was
+    found by running it."""
+    return [_DASH_RUN_RE.sub("---", " ".join(line.split())) for line in text.splitlines() if line.strip()]
+
+
+@task
+def generate(c: Context):
+    """Render this package's generated documentation blocks into the files that carry their markers.
+
+    Runs first in `quality.fix`, ahead of the linters and formatters, so what it writes is formatted
+    by the same pass that formats everything else rather than having to match the formatter's output
+    by hand. A file with no markers — every consumer repo, today — is skipped silently."""
+    for name, path, render in _BLOCKS:
+        if not path.exists():
+            continue
+        current = path.read_text(encoding="utf-8")
+        spliced = _splice(current, name, render())
+        # Compared the same way `generate-check` compares, and for the sharper reason: a byte
+        # comparison rewrites the block on every run, because what is on disk has been through
+        # dprint and what was just rendered has not. The formatter then re-aligns it, and the file
+        # shows as modified after every `inv quality.fix` forever — the oscillation this ordering
+        # exists to remove, reintroduced by the generator instead of by the renderer's padding.
+        if spliced is not None and _normalized(spliced) != _normalized(current):
+            _ = path.write_text(spliced, encoding="utf-8")
+            print(f"[docs.generate] regenerated {name} in {path}")
+
+
+@task(name="generate-check")
+def generate_check(c: Context):
+    """Fail if a generated block is out of date. Read-only, offline, no temp files.
+
+    This is the half that makes the generator enforceable: without it a contributor who skips the
+    gate ships drift, which is what the deleted CI auto-commit job used to paper over. It compares
+    with table alignment normalized away, so the formatter and the renderer cannot disagree forever
+    over whitespace neither of them is really claiming."""
+    stale = [
+        f"{name} in {path}"
+        for name, path, render in _BLOCKS
+        if path.exists()
+        and (spliced := _splice(path.read_text(encoding="utf-8"), name, render())) is not None
+        and _normalized(spliced) != _normalized(path.read_text(encoding="utf-8"))
+    ]
+    if stale:
+        raise Exit(f"[docs.generate-check] out of date: {'; '.join(stale)} — run `inv docs.generate`", code=1)
 
 
 @task

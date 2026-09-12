@@ -64,3 +64,10 @@ ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")
 # hand-builds its own root Collection calls `runner.configure` on that object itself, or stays on
 # stock invoke with nothing saying so. See runner.py and contributing/quality-gate.md.
 runner.configure(ns)
+
+# The same shape, for the same reason: `docs.generate` renders a table of every task and what it
+# needs, and a module inside the collection cannot import the collection. Handed over here, on the
+# first line where it is complete. A consumer hand-building its own root Collection registers that
+# object itself if it carries a generated block — without the call, generation says so rather than
+# rendering a table of half a namespace.
+docs.register_root(ns)

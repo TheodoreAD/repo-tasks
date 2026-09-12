@@ -275,3 +275,88 @@ def test_link_check_noops_without_markdown(tmp_cwd):
     # Same safe-to-run-unconditionally contract as shell_check and workflow_check.
     c = MockContext(run=Result(stdout="", exited=0))
     docs.link_check.body(c)
+
+
+def _block(body: str, name: str = "demo") -> str:
+    """A file carrying one generated block, the way a real doc page does."""
+    begin, end = docs._BLOCK_BEGIN.format(name=name), docs._BLOCK_END.format(name=name)
+    return f"prose above\n\n{begin}\n\n{body}\n\n{end}\n\nprose below\n"
+
+
+def _one_block(tmp_cwd, body: str, render):
+    """Point the block table at a throwaway file, so no test writes the real README."""
+    path = tmp_cwd / "page.md"
+    path.write_text(_block(body), encoding="utf-8")
+    return path, (("demo", path, render),)
+
+
+def test_generate_writes_the_rendered_body_between_the_markers(c, tmp_cwd, monkeypatch, capsys):
+    path, blocks = _one_block(tmp_cwd, "stale", lambda: "| a | b |")
+    monkeypatch.setattr(docs, "_BLOCKS", blocks)
+    docs.generate.body(c)
+    text = path.read_text(encoding="utf-8")
+    assert "| a | b |" in text
+    assert "stale" not in text
+    # Prose on both sides of the block is untouched -- only what the markers enclose is owned.
+    assert text.startswith("prose above")
+    assert text.rstrip().endswith("prose below")
+    assert "regenerated demo" in capsys.readouterr().out
+
+
+def test_generate_skips_a_file_without_markers(c, tmp_cwd, monkeypatch, capsys):
+    """The markers are the opt-in, which is what makes this safe in the shared `fix` chain: a
+    consumer repo with nothing to generate must no-op rather than be exempted."""
+    path = tmp_cwd / "page.md"
+    path.write_text("just prose\n", encoding="utf-8")
+    monkeypatch.setattr(docs, "_BLOCKS", (("demo", path, lambda: "| a | b |"),))
+    docs.generate.body(c)
+    assert path.read_text(encoding="utf-8") == "just prose\n"
+    assert capsys.readouterr().out == ""
+
+
+def test_generate_leaves_a_formatted_block_alone(c, tmp_cwd, monkeypatch, capsys):
+    """The oscillation this ordering exists to prevent, from the generator's side. What is on disk
+    has been through dprint; what the renderer produces has not. A byte comparison would rewrite the
+    block on every run, the formatter would re-align it, and the file would show as modified after
+    every `inv quality.fix` forever."""
+    formatted = "| task    | needs   |\n| ------- | ------- |\n| `inv a` | network |"
+    rendered = "| task | needs |\n| --- | --- |\n| `inv a` | network |"
+    path, blocks = _one_block(tmp_cwd, formatted, lambda: rendered)
+    monkeypatch.setattr(docs, "_BLOCKS", blocks)
+    before = path.read_text(encoding="utf-8")
+    docs.generate.body(c)
+    assert path.read_text(encoding="utf-8") == before
+    assert capsys.readouterr().out == ""
+
+
+def test_generate_check_passes_on_a_formatted_block(c, tmp_cwd, monkeypatch):
+    formatted = "| task    | needs   |\n| ------- | ------- |\n| `inv a` | network |"
+    rendered = "| task | needs |\n| --- | --- |\n| `inv a` | network |"
+    _, blocks = _one_block(tmp_cwd, formatted, lambda: rendered)
+    monkeypatch.setattr(docs, "_BLOCKS", blocks)
+    docs.generate_check.body(c)
+
+
+def test_generate_check_stops_on_a_stale_block(c, tmp_cwd, monkeypatch):
+    _, blocks = _one_block(tmp_cwd, "| `inv a` | network |", lambda: "| `inv a` | docker |")
+    monkeypatch.setattr(docs, "_BLOCKS", blocks)
+    with pytest.raises(Exit) as exc_info:
+        docs.generate_check.body(c)
+    assert exc_info.value.code == 1
+    assert "run `inv docs.generate`" in str(exc_info.value)
+
+
+def test_the_requirements_table_reports_a_composite_from_its_chain():
+    """The table's whole reason for existing: `configure` declares nothing and needs the network
+    through two steps inside it, and `quality.precommit` needs nothing at all."""
+    table = docs._requirements_table()
+    assert "| `inv configure` | network |" in table
+    assert "quality.precommit" not in table
+    assert "| `inv test.integration` | docker |" in table
+
+
+def test_the_requirements_table_says_so_when_no_root_was_registered(monkeypatch):
+    monkeypatch.setattr(docs._Root, "collection", None)
+    with pytest.raises(Exit) as exc_info:
+        docs._requirements_table()
+    assert "no root collection registered" in str(exc_info.value)

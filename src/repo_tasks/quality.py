@@ -23,6 +23,8 @@ from .deps import check as deps_check
 # Aliased for the same reason as deps' check: `build` alone in a gate's pre-chain says nothing
 # about what is being built.
 from .docs import build as docs_build
+from .docs import generate as docs_generate
+from .docs import generate_check as docs_generate_check
 from .docs import link_check
 from .projects import tracked_files
 from .runner import verdict
@@ -203,9 +205,16 @@ def dockerfile_check(c: Context):
         c.run(f"hadolint {' '.join(files)}", echo=True)
 
 
-@task(pre=[lint_apply, format_apply, shell_format_apply])
+@task(pre=[docs_generate, lint_apply, format_apply, shell_format_apply])
 def fix(c: Context):
-    """Fix everything auto-fixable: ruff --fix, ruff format, dprint fmt, shfmt -w."""
+    """Fix everything auto-fixable: generate the docs blocks, then ruff --fix, ruff format,
+    dprint fmt, shfmt -w.
+
+    Generation runs **first**, and the order is the decision rather than an arrangement. A generator
+    that runs after the formatters has to emit output already in the formatter's own style — the
+    alternative being a file the two rewrite in turn forever — and that pre-padding is a workaround
+    somebody has to maintain in the renderer, in a repo where the formatter is configurable. Running
+    it first makes generated markdown ordinary markdown: dprint formats it like anything else."""
 
 
 # The read-only gate, in order. One list so `precommit` can inline it: nesting `check` itself would
@@ -222,6 +231,7 @@ _CHECKS = (
     workflow_check,
     dockerfile_check,
     link_check,
+    docs_generate_check,
     deps_check,
     untested_modules,
     unit,
