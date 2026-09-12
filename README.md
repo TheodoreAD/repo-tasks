@@ -149,6 +149,22 @@ steps inside it rather than anything written on it.
 The table is generated from the declarations by `inv docs.generate`, which runs first in
 `quality.fix`; `inv docs.generate-check` fails the gate if it drifts. Do not edit it by hand.
 
+**A consumer repo declares its own generators** in `repo-tasks.toml`, and `docs.generate` runs them
+after its own blocks — first in the chain, so the formatters format what was just written instead of
+the generator having to match the formatter's output:
+
+```toml
+[docs]
+generators = ["inv devcontainer.render-docs", "inv screenshot.render-docs"]
+```
+
+Commands rather than task names, because a task composed in this package cannot see a consumer's
+invoke namespace, so calling one means running `inv` as a subprocess either way. Each must be
+deterministic and offline, like every step of the gate. There is no check-half counterpart: a
+generator writes, so running it from the read-only half is a category error — assert the rendered
+block matches the file in a unit test instead, which `quality.check` already runs and which fails
+with a message naming the task.
+
 <!-- BEGIN GENERATED: task-requirements — run `inv docs.generate` -->
 
 | task                                  | needs           |

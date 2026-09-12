@@ -389,6 +389,31 @@ largely measures how much mocking was written — [`test-tiers.md`](test-tiers.m
 `dist.py` bugs that survived full unit coverage. A threshold on that number is metric-gaming waiting
 to happen. "Which module has no tests at all" is the question with a true answer.]
 
+## Generation runs first, and only one half of it is checkable
+
+`docs.generate` is the first step of `fix`, and `docs.generate-check` is a step of `check`. The
+ordering is the decision: a generator that runs _after_ the formatters has to emit output already in
+the formatter's style, and that padding is a workaround maintained in the renderer forever. Running
+it first makes generated markdown ordinary markdown.
+
+[DECISION: **both halves compare with formatter-owned layout normalized away** — whitespace, and
+runs of three or more dashes. A byte comparison fails in both directions: the check half fails
+forever, because what is on disk has been through dprint and what was rendered has not, and the
+generate half rewrites the block on every run, which dprint then re-aligns, so the file shows as
+modified after every `inv quality.fix`. Whitespace alone was not enough — dprint pads a table's
+delimiter row to the column width, which is a difference in the dashes themselves. The limit worth
+knowing is that this is per line, so a block whose body is prose the formatter re-wraps is not
+covered; every block today is a table.]
+
+[DECISION: **a consumer's own generators are declared as commands in `repo-tasks.toml`'s
+`[docs] generators`, and get no check-half counterpart.** Commands rather than task names because a
+task composed here cannot see the consumer's invoke namespace — `pre=` chains are built in this
+package — so reaching one means a subprocess either way, and taking the whole command covers a
+generator that is not an invoke task at all. No check counterpart because a generator _writes_, so
+running it from the read-only half is a category error, and the enforcement already exists one layer
+down: a drift test asserting the rendered block matches the file runs in the unit tier, which this
+gate includes. That test is also the better check, since it names the task to run.]
+
 ## Standalone, by rule 1
 
 **`deps.audit` (`uv audit`, OSV-backed).** The result changes when the OSV database changes, not
