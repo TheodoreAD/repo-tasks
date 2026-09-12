@@ -446,3 +446,49 @@ So the flavours, corrected — and it is the flavour rather than the count that 
 Filed for that repo as `2026-09-10-setup-uv-pins-two-majors-behind.md` rather than swept from here,
 since the reading of v10's cache change has to be done against its workflows, the Windows job
 included.
+
+## The lock-pinning consumer is swept to `v0.3.0` (2026-09-10)
+
+Merged in from `2026-09-10-power-user-linux-setup-swept-to-v0-3-0.md`, filed into the store by the
+session that did the work there and absorbed here 2026-09-12 — the name to search for with
+`plans.py archive` if the original filing is wanted. Merged rather than kept beside this plan
+because it reports on this plan's own subject and says so: its recommended direction is "advance
+`2026-08-25-consumer-transitions.md` on the strength of this".
+
+**All four items from the 2026-09-08 measurement are closed**, in four commits on that repo's
+`master`, pushed: `14d7796` bumped the pin `0.2.0` (`7bb880b0`) → `0.3.0` (`46d28604`) with
+`docs/tasks.md`; `846b6c7` pulled `ruff.toml`, `dprint.json` and `pytest.ini`; `96df342` took
+`hadolint-py!=2.15.1.2` and its lock effect; `31aacd4` landed that repo's own sweep plan. Verified
+there with `inv configs.diff` reporting up to date, `inv quality.precommit` PASS at 16 steps, and
+`inv docs.link-check` silent.
+
+**The pitfall above is confirmed rather than merely argued.** `configs.diff` named exactly the items
+it predicted, in that order, with the `hadolint-py` line arriving as next-steps output rather than
+as a file diff — nothing missing, nothing extra. The sweep cannot start from a hand-maintained list,
+and `configs.diff` **is** the list.
+
+**The link-check prediction is dead in both directions.** It was falsified from outside, by running
+the global `v0.3.0` `link_check` against that tree; run from inside afterwards, with the strict
+version resolved from that repo's own lock, `inv docs.link-check` still reports nothing.
+
+[PITFALL: **a generated docs artifact is not separable from the pin bump**, which breaks the
+gated-commit split this plan's sweep assumes. That consumer regenerates a task index from the live
+namespace; `v0.3.0` reworded a `configs.diff` docstring, so its `test_catalog` fails on the pin
+commit alone. The bump and the regeneration have to land together. The symptom is what makes this
+worth recording — a test failing on a commit that touched only a lock file reads as a broken bump
+rather than as a missing regeneration. Likely specific to that consumer, since it is the one that
+builds its own collection and so the one with a namespace-derived artifact.]
+
+**The `configs.require_tool` `[UNVERIFIED:]` above is untouched by this sweep**, and is not closed
+by association: none of the four items is a gate binary, so that run could not have fired the
+preflight from a consumer's own CI.
+
+[NEEDS CLARIFICATION: does [`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md)
+want the generated-artifact clause? For: the sweep doc is what a session follows, and the failure it
+prevents looks like a bad bump. Against: no other consumer builds its own collection, so it would be
+dead text for two of the three. Carried from the filed plan rather than decided in the merge.]
+
+[NEEDS CLARIFICATION: does the flavour table above want a fourth column for whether a consumer
+regenerates anything from the namespace? It is the same information as "builds its own collection",
+which the table implies without stating — and the pitfall above is what makes the distinction cost
+something.]
