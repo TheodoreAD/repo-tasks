@@ -14,19 +14,81 @@ def _ls_remote(*refs: str) -> dict[str, Result]:
     return {_LS_REMOTE_CMD: Result(stdout=stdout, exited=0)}
 
 
+def _tool_list(*lines: str) -> dict[str, Result]:
+    """`uv tool list` output: one `<name> v<version>` line per tool, its executables under it as
+    `- <name>`."""
+    return {selfinstall._TOOL_LIST_CMD: Result(stdout="".join(f"{line}\n" for line in lines), exited=0)}
+
+
+_REPO_TASKS_ALONE = ("repo-tasks v1.4.2", "- inv", "- invoke", "- repo-tasks")
+
+
 def test_update_installs_latest_tag_when_tags_exist():
     install_cmd = f"{selfinstall._INSTALL_CMD} 'repo-tasks @ git+{selfinstall._REPO_URL}@v1.4.2'"
-    c = MockContext(run={**_ls_remote("v1.4.2", "v1.4.1"), install_cmd: Result(exited=0)})
+    runs = {**_ls_remote("v1.4.2", "v1.4.1"), **_tool_list(*_REPO_TASKS_ALONE), install_cmd: Result(exited=0)}
+    c = MockContext(run=runs)
     selfinstall.update.body(c)
     c.run.assert_any_call(install_cmd, echo=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_update_falls_back_to_default_branch_when_no_tags_exist(capsys):
     install_cmd = f"{selfinstall._INSTALL_CMD} 'repo-tasks @ git+{selfinstall._REPO_URL}'"
-    c = MockContext(run={**_ls_remote(), install_cmd: Result(exited=0)})
+    c = MockContext(run={**_ls_remote(), **_tool_list(*_REPO_TASKS_ALONE), install_cmd: Result(exited=0)})
     selfinstall.update.body(c)
     c.run.assert_any_call(install_cmd, echo=True)  # pyright: ignore[reportAttributeAccessIssue]
     assert "no tagged release found yet" in capsys.readouterr().out
+
+
+def test_update_reports_a_separately_installed_invoke_tool(capsys):
+    """The machine state that breaks every family repo at once: two uv tools both shipping `inv`,
+    with uv marking neither as shadowed."""
+    install_cmd = f"{selfinstall._INSTALL_CMD} 'repo-tasks @ git+{selfinstall._REPO_URL}@v1.4.2'"
+    listing = _tool_list(*_REPO_TASKS_ALONE, "invoke v3.0.3", "- inv", "- invoke")
+    c = MockContext(run={**_ls_remote("v1.4.2"), **listing, install_cmd: Result(exited=0)})
+    selfinstall.update.body(c)
+    out = capsys.readouterr().out
+    assert "invoke 3.0.3 is also installed as a uv tool of its own" in out
+    # Reported, never removed -- `uv tool uninstall` is the human's to run, and only as a next step.
+    assert "uv tool uninstall invoke" in out
+    for call in c.run.call_args_list:  # pyright: ignore[reportAttributeAccessIssue]
+        assert "uninstall" not in call.args[0]
+
+
+def test_update_does_not_read_repo_tasks_own_invoke_executable_as_a_second_tool(capsys):
+    """`repo-tasks` ships `inv` and `invoke` itself, via `--with-executables-from invoke`. Those
+    lines are what a conflict looks like from the outside, and they are the ordinary case."""
+    install_cmd = f"{selfinstall._INSTALL_CMD} 'repo-tasks @ git+{selfinstall._REPO_URL}@v1.4.2'"
+    runs = {**_ls_remote("v1.4.2"), **_tool_list(*_REPO_TASKS_ALONE), install_cmd: Result(exited=0)}
+    selfinstall.update.body(MockContext(run=runs))
+    assert "also installed as a uv tool" not in capsys.readouterr().out
+
+
+def test_update_says_nothing_about_shadowing_when_uv_cannot_list_tools(capsys):
+    """The install already succeeded, so a listing that fails answers nothing either way — and
+    inventing a warning from it would be worse than staying quiet."""
+    install_cmd = f"{selfinstall._INSTALL_CMD} 'repo-tasks @ git+{selfinstall._REPO_URL}@v1.4.2'"
+    runs = {
+        **_ls_remote("v1.4.2"),
+        selfinstall._TOOL_LIST_CMD: Result(stdout="", exited=127),
+        install_cmd: Result(exited=0),
+    }
+    selfinstall.update.body(MockContext(run=runs))
+    assert "also installed as a uv tool" not in capsys.readouterr().out
+
+
+def test_installed_tools_does_not_read_an_executable_line_as_a_tool():
+    """The parse has to tell a tool heading from the executables listed under it, and an executable
+    whose name starts with `v` is what a looser one gets wrong: `- vhs` reads as the tool `-` at
+    version `hs`."""
+    c = MockContext(run=_tool_list("charm-tools v1.0.0", "- vhs", "- freeze"))
+    assert selfinstall._installed_tools(c) == {"charm-tools": "1.0.0"}
+
+
+def test_installed_tools_separates_uv_failing_from_uv_having_nothing():
+    """None and an empty dict mean different things: `_report_a_shadowing_invoke_tool` has to stay
+    quiet on the first and is entitled to an answer on the second."""
+    assert selfinstall._installed_tools(MockContext(run={selfinstall._TOOL_LIST_CMD: Result(exited=127)})) is None
+    assert selfinstall._installed_tools(MockContext(run=_tool_list())) == {}
 
 
 def test_version_prints_installed_version(c, monkeypatch, capsys):
@@ -81,11 +143,6 @@ def test_stamp_says_an_empty_tag_list_has_two_causes(tmp_cwd, monkeypatch, capsy
     assert "@v1.2.3" not in text
     out = capsys.readouterr().out
     assert "nothing is tagged yet, or the remote was unreachable" in out
-
-
-def _tool_list(*lines: str) -> dict[str, Result]:
-    """`uv tool list` output: one `<name> v<version>` line per tool, executables indented under it."""
-    return {selfinstall._TOOL_LIST_CMD: Result(stdout="".join(f"{line}\n" for line in lines), exited=0)}
 
 
 def test_status_reports_the_global_install_alongside_the_active_one(tmp_cwd, monkeypatch, capsys):

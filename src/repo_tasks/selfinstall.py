@@ -16,6 +16,7 @@ from pathlib import Path
 
 from invoke import Context, task
 
+from .nextsteps import next_steps
 from .requirements import NETWORK, requires
 
 _REPO_URL = "https://github.com/TheodoreAD/repo-tasks"
@@ -78,12 +79,74 @@ def _stamped_version() -> str | None:
     return match.group(1) if match else None
 
 
+def _installed_tools(c: Context) -> dict[str, str] | None:
+    """Every `uv tool` install on this machine, name -> version, or None when uv cannot answer.
+
+    Asked of uv rather than read off `~/.local/share/uv/tools`, which is only uv's default:
+    `uv tool list` honours `UV_TOOL_DIR` and a hardcoded path does not. It is the human-readable
+    listing because as of uv 0.11.19 there is no other one — the command takes `--show-paths`,
+    `--show-version-specifiers`, `--show-with`, `--show-extras`, `--show-python` and `--outdated`,
+    and offers no machine-readable mode to ask for instead.
+
+    None means uv could not answer — not on PATH, or a non-zero exit. An empty dict is a live uv
+    with no tools installed, and the two mean different things to a caller.
+    """
+    result = c.run(_TOOL_LIST_CMD, hide=True, warn=True)
+    if not result.ok:
+        return None
+    tools: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        # `uv tool list` prints `repo-tasks v0.3.0`, then each of its executables as `- inv`. The
+        # first character has to be alphanumeric or an executable whose name begins with a `v`
+        # parses as a tool: `- vhs` would otherwise read as the tool `-` at version `hs`.
+        name, _, rest = line.partition(" ")
+        if name[:1].isalnum() and rest.startswith("v"):
+            tools[name] = rest[1:].strip()
+    return tools
+
+
+def _report_a_shadowing_invoke_tool(c: Context) -> None:
+    """Say so when `invoke` is installed as a uv tool of its own beside this one, and stop there.
+
+    **It reports; it does not uninstall the other tool and does not refuse to install.** Removing
+    it would be a mutation of machine state outside this package's scope, against the first rule in
+    `contributing/task-module-conventions.md` — a task surfaces a problem rather than papering over
+    one — and refusing would leave the single command that moves the global install unable to move
+    it. Which of the two survives is the human's call: something else on the machine may want bare
+    `invoke`, and this package cannot see what.
+
+    Both tools ship `inv` and `invoke`. uv links whichever was `--force`-installed last and marks
+    neither as shadowed, so the losing side is invisible in `uv tool list`. What makes it worth a
+    paragraph of output is that the resulting failure is mislocalised: every repo in this family
+    has a `tasks.py` that is only `from repo_tasks import ns`, so bare `invoke` winning the symlink
+    breaks all of them at once, with a traceback pointing at each repo rather than at the machine.
+
+    `power-user-linux-setup`'s `plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` found it live
+    and owns the other two paths that can recreate the split.
+    """
+    tools = _installed_tools(c)
+    if tools is None or "invoke" not in tools:
+        return
+    print(
+        f"[repo-tasks.update] invoke {tools['invoke']} is also installed as a uv tool of its own. Both it "
+        "and repo-tasks ship inv and invoke, and whichever was installed last owns uv's bin symlinks — "
+        "uv marks neither as shadowed. repo-tasks holds them now, having just been installed; a later "
+        "reinstall of standalone invoke takes them back, and every repo whose tasks.py reads "
+        "'from repo_tasks import ns' then fails to import, pointing at itself rather than at the machine."
+    )
+    next_steps("uv tool uninstall invoke   # or drop repo-tasks instead, if something here needs bare invoke")
+
+
 @requires(NETWORK)
 @task
 def update(c: Context):
     """Move the global daily-driver repo-tasks uv tool install forward to the latest tagged
     release (falls back to the default branch with a warning if no release has been tagged
-    yet)."""
+    yet).
+
+    Reports afterwards if `invoke` is also installed as a uv tool of its own, which is the machine
+    state that breaks every repo in this family at once — see `_report_a_shadowing_invoke_tool` for
+    why this says so rather than fixing it."""
     tag = _latest_tag(c)
     if tag:
         target = f"repo-tasks @ git+{_REPO_URL}@{tag}"
@@ -91,10 +154,11 @@ def update(c: Context):
         target = f"repo-tasks @ git+{_REPO_URL}"
         print("[repo-tasks.update] no tagged release found yet — installing from the default branch")
     c.run(f"{_INSTALL_CMD} '{target}'", echo=True)
+    _report_a_shadowing_invoke_tool(c)
 
 
 def _global_version(c: Context) -> str | None:
-    """The version of the global `uv tool` install, or None when uv cannot answer.
+    """The version of this package's own global `uv tool` install, or None when uv cannot answer.
 
     Read from uv rather than from this process, which is the whole point: `_installed_version` can
     only ever report the interpreter executing it, and in a repo carrying its own `repo-tasks` that
@@ -102,15 +166,8 @@ def _global_version(c: Context) -> str | None:
     tool" — neither is an error, since a consumer taking this package as a project dependency
     legitimately has no global install at all.
     """
-    result = c.run(_TOOL_LIST_CMD, hide=True, warn=True)
-    if not result.ok:
-        return None
-    for line in result.stdout.splitlines():
-        # `uv tool list` prints `repo-tasks v0.3.0` then its executables, each indented.
-        name, _, rest = line.partition(" ")
-        if name == "repo-tasks" and rest.startswith("v"):
-            return rest[1:].strip()
-    return None
+    tools = _installed_tools(c)
+    return None if tools is None else tools.get("repo-tasks")
 
 
 @task
