@@ -113,6 +113,19 @@ repo's own `tasks/`, and reaching it needs the open question above. Its pre-padd
 measurable before/after — this repo's equivalent padding was never written, and a second `fix` run
 now changes nothing, so the ordering does what it was expected to.
 
-[DEFERRED: `power-user-linux-setup` currently has no automatic drift protection at all, between the
-CI job being deleted and this landing. A unit test asserting the rendered block matches the file
-would cover it in the meantime, in that repo, at no cost to this one.]
+~~`power-user-linux-setup` currently has no automatic drift protection at all.~~ **Wrong when
+written, and checked 2026-09-12 while filing the adoption plan for that repo.** Three drift tests
+already assert each generated block matches its source there —
+`tests/unit/test_devcontainer.py:246`, `tests/unit/test_screenshot.py:53`,
+`tests/unit/test_catalog.py` — and one of them is what caught a block that had been stale in git the
+whole time, on its first execution, the same day the CI job was deleted. Nothing is owed in the
+meantime, which changes what adoption is for over there: deleting two workarounds rather than
+restoring a missing check.
+
+[PITFALL: **the comparison is per line, so it does not cover prose the formatter re-wraps.** Every
+block here is a table, whose alignment `dprint` owns and `_normalized` collapses. A block whose body
+is a _paragraph_ changes its line breaks under `dprint`'s `lineWidth`, and a line-by-line comparison
+reads that as a difference — which is exactly the shape `power-user-linux-setup`'s
+`_generated_content()` carries, and why that repo pre-wraps its prose at width 100 today. The first
+prose block is the change that has to make the comparison paragraph-aware; recorded now because it
+is cheap while this mechanism has one consumer.]
