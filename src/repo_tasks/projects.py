@@ -116,6 +116,26 @@ def develop_branch(root: Path = _CWD) -> str:
     return _branch_setting("develop", _DEFAULT_DEVELOP, root)
 
 
+def docs_generators(root: Path = _CWD) -> list[str]:
+    """Commands this repo declares for regenerating its own documentation — `repo-tasks.toml`'s
+    `[docs] generators`, empty when the file or the key is absent.
+
+    **Commands rather than task names, and the difference is the point.** A repo-tasks task cannot
+    see the consumer's invoke namespace — `pre=` chains are composed in this package, and nothing
+    hands it the consumer's root collection — so calling a consumer's task means running `inv` as a
+    subprocess either way. Taking the whole command covers the `~/AGENTS.md` rule's "ideally invoke
+    if possible" rather than only its common case, and asks nothing about whether a named task
+    exists. It executes what the repo's own config says to execute, which is the trust level
+    `tasks.py` already has.
+
+    A declared generator must be **deterministic and offline**, by the same rule every gate step
+    follows: it runs inside `quality.fix`, and `inv quality.precommit` is the command that has to
+    work on a plane."""
+    data = _load_toml(root / _REPO_TASKS_TOML) if (root / _REPO_TASKS_TOML).exists() else {}
+    docs = cast(dict[str, object], data.get("docs", {}))
+    return [str(command) for command in cast(list[object], docs.get("generators", []))]
+
+
 def python_floor(root: Path = _CWD) -> str | None:
     """The `major.minor` a project declares as its lowest supported Python, or None when it declares
     no `requires-python` at all.

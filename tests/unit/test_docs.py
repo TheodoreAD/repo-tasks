@@ -360,3 +360,21 @@ def test_the_requirements_table_says_so_when_no_root_was_registered(monkeypatch)
     with pytest.raises(Exit) as exc_info:
         docs._requirements_table()
     assert "no root collection registered" in str(exc_info.value)
+
+
+def test_generate_runs_the_repos_own_declared_generators(tmp_cwd, monkeypatch, capsys):
+    """The consumer half of the contract: a repo's own generator lives in its own namespace, which
+    a task composed in this package cannot see, so it is declared as a command and run as one."""
+    monkeypatch.setattr(docs, "_BLOCKS", ())
+    monkeypatch.setattr(docs, "docs_generators", lambda: ["inv devcontainer.render-docs"])
+    c = MockContext(run={"inv devcontainer.render-docs": Result(exited=0)})
+    docs.generate.body(c)
+    c.run.assert_any_call("inv devcontainer.render-docs", echo=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_generate_runs_nothing_when_no_generator_is_declared(c, tmp_cwd, monkeypatch, capsys):
+    # The ordinary case in every consumer, and in this repo: no config, no commands, no output.
+    monkeypatch.setattr(docs, "_BLOCKS", ())
+    monkeypatch.setattr(docs, "docs_generators", lambda: [])
+    docs.generate.body(c)
+    assert capsys.readouterr().out == ""

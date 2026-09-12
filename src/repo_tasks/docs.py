@@ -16,7 +16,7 @@ from typing import cast
 
 from invoke import Collection, Context, Exit, Task, task
 
-from .projects import tracked_files
+from .projects import docs_generators, tracked_files
 from .requirements import effective
 
 _SITE_DIR = Path("site")
@@ -335,7 +335,17 @@ def generate(c: Context):
 
     Runs first in `quality.fix`, ahead of the linters and formatters, so what it writes is formatted
     by the same pass that formats everything else rather than having to match the formatter's output
-    by hand. A file with no markers — every consumer repo, today — is skipped silently."""
+    by hand. A file with no markers — every consumer repo, today — is skipped silently.
+
+    **Then the repo's own generators**, if it declares any in `repo-tasks.toml`'s `[docs]
+    generators`. That is how a consumer's generator gets the same ordering: this package renders
+    what it owns, the consumer's commands render what they own, and the formatters run after both.
+
+    There is deliberately no check-half counterpart for a declared generator. A consumer's generator
+    *writes* — that is what it is for — so running it from the read-only half is a category error,
+    and the enforcement it would provide already exists one layer down: a drift test asserting the
+    rendered block matches the file runs in the unit tier, which `quality.check` includes. It is also
+    the better check, because it fails with a message naming the task to run."""
     for name, path, render in _BLOCKS:
         if not path.exists():
             continue
@@ -349,6 +359,8 @@ def generate(c: Context):
         if spliced is not None and _normalized(spliced) != _normalized(current):
             _ = path.write_text(spliced, encoding="utf-8")
             print(f"[docs.generate] regenerated {name} in {path}")
+    for command in docs_generators():
+        c.run(command, echo=True)
 
 
 @task(name="generate-check")

@@ -310,3 +310,23 @@ def test_current_branch_reads_the_checkouts_own_head():
     c = MockContext(run=Result(stdout="release/1.2.0\n", exited=0))
     assert projects.current_branch(c) == "release/1.2.0"
     c.run.assert_called_once_with("git rev-parse --abbrev-ref HEAD", hide=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_docs_generators_reads_the_declared_commands(tmp_path):
+    (tmp_path / "repo-tasks.toml").write_text(
+        '[docs]\ngenerators = ["inv devcontainer.render-docs", "inv screenshot.render-docs"]\n',
+        encoding="utf-8",
+    )
+    assert projects.docs_generators(tmp_path) == ["inv devcontainer.render-docs", "inv screenshot.render-docs"]
+
+
+def test_docs_generators_is_empty_without_config(tmp_path):
+    # Every consumer that generates nothing, and this repo: no file at all.
+    assert projects.docs_generators(tmp_path) == []
+
+
+def test_docs_generators_is_empty_when_the_config_declares_none(tmp_path):
+    # A repo-tasks.toml that exists for some other reason -- docker images, branch names -- says
+    # nothing about docs, and must not be read as declaring an empty generator it then runs.
+    (tmp_path / "repo-tasks.toml").write_text('[branches]\ntrunk = "master"\n', encoding="utf-8")
+    assert projects.docs_generators(tmp_path) == []
