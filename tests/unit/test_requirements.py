@@ -5,12 +5,18 @@ strings each task builds, and maps their leading words onto requirements — so 
 `docker build` without declaring DOCKER fails here, which is the case a hand-maintained list of
 "tasks that need things" would silently miss.
 
-Two limits, both deliberate. It only sees string literals inside the task's own body, so a task
-whose command is built in a module-level helper — or that reaches the network through a library
-rather than a subprocess, like `dist.list-versions` and the container fixtures — must declare its
-requirements by hand; the check asserts that what it derives is *covered*, never that a declaration
-is unnecessary. And a gate step is held to the stronger rule: `quality.check`'s chain must derive no
-requirements at all, since the whole point of that chain is running offline in any consumer.
+**The scan follows a task into its module's own helpers**, transitively, because that is where the
+commands actually live in the modules that have grown one. `selfinstall.stamp` reached the network
+through `_remote_tags`, which runs `git ls-remote`, and went undeclared for as long as the
+derivation stopped at the task body — while `update`, which reaches the same helper, happened to be
+declared by hand. One of the two was right by luck, and nothing could tell which.
+
+One limit remains, deliberately: a task reaching the network through a *library* rather than a
+subprocess — `dist.list-versions`, the container fixtures — has no command string to read and must
+declare by hand. The check asserts that what it derives is *covered*, never that a declaration is
+unnecessary. And a gate step is held to the stronger rule: `quality.check`'s chain must derive no
+requirements at all, helpers included, since the whole point of that chain is running offline in any
+consumer.
 """
 
 import ast
@@ -68,12 +74,36 @@ def _literals(function: ast.FunctionDef) -> list[str]:
     return found
 
 
-def _derived(function: ast.FunctionDef) -> frozenset[str]:
+def _called_helpers(function: ast.FunctionDef, helpers: dict[str, ast.FunctionDef]) -> list[ast.FunctionDef]:
+    """The module's own functions this one calls by bare name — `_remote_tags(c)`, not `c.run(...)`.
+
+    Only same-module calls resolve, which is the whole scope: a cross-module helper is somebody
+    else's task's business, and following imports would mean resolving them."""
+    return [
+        helpers[node.func.id]
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in helpers
+    ]
+
+
+def _derived(function: ast.FunctionDef, helpers: dict[str, ast.FunctionDef]) -> frozenset[str]:
+    """What this task's commands need, following its module's helpers transitively.
+
+    A visited set rather than a depth limit: mutual recursion between two helpers would otherwise
+    hang the test suite rather than fail it."""
     needed: set[str] = set()
-    for literal in _literals(function):
-        matches = [prefix for prefix in _COMMAND_REQUIREMENTS if literal.startswith(prefix)]
-        if matches:
-            needed |= _COMMAND_REQUIREMENTS[max(matches, key=len)]
+    seen: set[str] = set()
+    pending = [function]
+    while pending:
+        current = pending.pop()
+        if current.name in seen:
+            continue
+        seen.add(current.name)
+        for literal in _literals(current):
+            matches = [prefix for prefix in _COMMAND_REQUIREMENTS if literal.startswith(prefix)]
+            if matches:
+                needed |= _COMMAND_REQUIREMENTS[max(matches, key=len)]
+        pending.extend(_called_helpers(current, helpers))
     return frozenset(needed)
 
 
@@ -85,15 +115,17 @@ def _is_task(function: ast.FunctionDef) -> bool:
     return False
 
 
-def _tasks() -> list[tuple[str, ast.FunctionDef]]:
-    found: list[tuple[str, ast.FunctionDef]] = []
+def _tasks() -> list[tuple[str, ast.FunctionDef, dict[str, ast.FunctionDef]]]:
+    """Every task in the package, each carried with its own module's helper functions.
+
+    The helpers travel with the task because the derivation needs them, and a module is the unit
+    that resolves a bare name."""
+    found: list[tuple[str, ast.FunctionDef, dict[str, ast.FunctionDef]]] = []
     for path in sorted(_SRC.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        found.extend(
-            (f"repo_tasks.{path.stem}", node)
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef) and _is_task(node)
-        )
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+        helpers = {node.name: node for node in functions if not _is_task(node)}
+        found.extend((f"repo_tasks.{path.stem}", node, helpers) for node in functions if _is_task(node))
     return found
 
 
@@ -116,12 +148,22 @@ def _gate_step_key(step: object) -> tuple[str, str]:
 
 _GATE_STEPS = {_gate_step_key(step) for step in quality.check.pre}
 
-_GATE_TASKS = [(module, function) for module, function in _TASKS if (module, function.name) in _GATE_STEPS]
+_GATE_TASKS = [
+    (module, function, helpers) for module, function, helpers in _TASKS if (module, function.name) in _GATE_STEPS
+]
 
 
 def _test_id(value: object) -> str:
-    """Name each parametrized case after the task, so a failure reads `... [docker_build]`."""
-    return value.name if isinstance(value, ast.FunctionDef) else str(value)
+    """Name each parametrized case after the task, so a failure reads `... [docker_build]`.
+
+    The helper map is collapsed to a word: it is an input to the derivation and says nothing about
+    which case failed, while its repr is several kilobytes of dumped AST in every id and every
+    failure line."""
+    if isinstance(value, ast.FunctionDef):
+        return value.name
+    if isinstance(value, dict):
+        return "helpers"
+    return str(value)
 
 
 def test_the_scan_finds_every_task():
@@ -130,9 +172,11 @@ def test_the_scan_finds_every_task():
     assert len(_TASKS) > 50
 
 
-@pytest.mark.parametrize(("module", "function"), _TASKS, ids=_test_id)
-def test_task_declares_what_its_commands_need(module: str, function: ast.FunctionDef):
-    derived = _derived(function)
+@pytest.mark.parametrize(("module", "function", "helpers"), _TASKS, ids=_test_id)
+def test_task_declares_what_its_commands_need(
+    module: str, function: ast.FunctionDef, helpers: dict[str, ast.FunctionDef]
+):
+    derived = _derived(function, helpers)
     declared = requirements.declared(module, function.name)
     missing = derived - declared
     assert not missing, (
@@ -147,11 +191,12 @@ def test_the_gate_chain_was_actually_found():
     assert len(_GATE_TASKS) >= 5
 
 
-@pytest.mark.parametrize(("module", "function"), _GATE_TASKS, ids=_test_id)
-def test_gate_steps_need_nothing_external(module: str, function: ast.FunctionDef):
-    assert not _derived(function), (
+@pytest.mark.parametrize(("module", "function", "helpers"), _GATE_TASKS, ids=_test_id)
+def test_gate_steps_need_nothing_external(module: str, function: ast.FunctionDef, helpers: dict[str, ast.FunctionDef]):
+    derived = _derived(function, helpers)
+    assert not derived, (
         f"{module}.{function.name} is in quality.check's chain and runs a command needing "
-        f"{sorted(_derived(function))} — the gate must stay runnable offline in every consumer"
+        f"{sorted(derived)} — the gate must stay runnable offline in every consumer"
     )
 
 
