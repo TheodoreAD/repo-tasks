@@ -84,6 +84,20 @@ it: a consumer that hand-builds its own root `Collection` instead of importing `
 environment is set — [`quality-gate.md`](quality-gate.md), "Turning it on in a consumer".
 `rg -n 'runner.configure' tasks/` answers it in one call.
 
+**Where a consumer regenerates anything from the live namespace, the bump and the regeneration are
+one commit.** The gate already does the regenerating — `docs.generate` is the first step of `fix`,
+so `inv quality.precommit` above rewrites those blocks as part of the sweep — and the only decision
+left is how the result is committed. `rg -n '^\[docs\]' repo-tasks.toml` says whether this consumer
+has any; two of the four repos in the family do.
+
+[PITFALL: **splitting them makes the pin commit fail its own tests, and the failure names the wrong
+cause.** Hit 2026-09-10 sweeping the lock-pinning consumer: it renders a task index from the live
+namespace, `v0.3.0` had reworded a `configs.diff` docstring, and its `test_catalog` therefore failed
+on the commit that touched nothing but `uv.lock`. A test failing on a lock-only commit reads as a
+broken bump — the one explanation that sends you to re-resolve a dependency that is fine. The sweep
+cannot be split into separately-gated commits at all in such a repo, and that is a property of the
+repo rather than a mistake in the split.]
+
 [PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
 _constraint_ is a hand edit.** It is additive by contract — never touches an entry already present —
 which is what makes it safe to run at any time, and that same property means a `hadolint-py` that
