@@ -826,8 +826,27 @@ So the unswept set is **four, not three**: `scaffoldapy`, `ingesta`, `invoke-stu
 `agent-skills`. Every table above that says three is counting what had been measured rather than
 what is behind.
 
-[DEFERRED: file `agent-skills` a sweep plan the way `ingesta` and `invoke-stubs` got one. Its scope
-needs no decision — it has been a recorded consumer since 2026-09-10, and the scope question put to
-the user covered only the two that were not recorded — but nothing in that repo says what it is
-behind on, and it already carries a filed plan of its own for the `setup-uv` pins two majors behind.
-Both want doing in one session there.]
+**Filed for `agent-skills` 2026-09-13**, the way `ingesta` and `invoke-stubs` were, and it asks to
+be done in the same session as that repo's existing `2026-09-10-setup-uv-pins-two-majors-behind.md`
+— both touch its CI, and two sessions would mean two runs neither of which says what it changed.
+
+Measuring it for the filing produced the third occurrence of the `c514bd9` `pythonVersion` finding,
+and with three the shape is no longer anecdote:
+
+| repo                     | where the above-floor syntax is            | severity                   |
+| ------------------------ | ------------------------------------------ | -------------------------- |
+| `power-user-linux-setup` | two test modules                           | local, fixed 2026-09-05    |
+| `ingesta`                | four modules, **two shipped in the wheel** | a declared-floor violation |
+| `agent-skills`           | one test module                            | local                      |
+
+All three declare `>=3.11`, develop on a 3.14 venv, and carry no `pythonVersion` in
+`pyrightconfig.json` — so in every one of them the type checker has been agreeing with the test
+suite about an interpreter neither was asked to check. That is three of the five consumers, which
+makes `c514bd9` the highest-yield thing in this plan rather than one item among many: it is the only
+change here that finds a defect rather than a difference.
+
+[PITFALL: **the absent guard is the expensive one, and it is invisible by construction.** Nothing in
+any of the three was failing. A suite run on 3.14 and a type check run on 3.14 agree perfectly, and
+a green gate is exactly what a repo with no floor check looks like. The reason this took three
+consumers and five weeks to see is that each occurrence reads as that repo's own small oversight
+until they are put side by side.]
