@@ -185,6 +185,76 @@ def _bare_name(spec: str) -> str:
     return match.group(0).lower() if match else spec.lower()
 
 
+def _own_project_name() -> str | None:
+    """This project's own `[project] name`, normalised the way a dependency spec's bare name is —
+    or None where there is no pyproject.toml, no `[project]` table, or no name in it.
+
+    Read from the file rather than from `_derive_project_name`, which answers a different question:
+    that one derives a name for a pyproject.toml that does not exist yet, from the git remote. Here
+    the file exists and has already named itself, and the git remote can disagree with it."""
+    pyproject_path = Path("pyproject.toml")
+    if not pyproject_path.exists():
+        return None
+    project = cast(dict[str, object], tomllib.loads(pyproject_path.read_text(encoding="utf-8")).get("project", {}))
+    name = project.get("name")
+    return _bare_name(name) if isinstance(name, str) else None
+
+
+def _self_referential_dep() -> str | None:
+    """The `repo-tasks-quality` entry naming the project this is running in, if there is one.
+
+    The manifest lists `invoke-stubs`, and that package's own repository is a consumer of this one —
+    so `configs.diff` run there reported its dev group missing `invoke-stubs` and the next-steps
+    block prescribed `configs.ensure-deps`, which would splice a dependency on that repo's own git
+    remote into its `dependency-groups.dev`. Not hypothetical: that repo's pyproject.toml records
+    the entry being removed by hand each time, with a comment explaining that taking the published
+    build as a dev dependency would shadow the working tree under test with whatever `main` last
+    released.
+
+    Derived by comparing names rather than carrying an exclusion list, because a list would be a
+    second place to remember something — the same argument `_quality_deps` makes for sourcing the
+    manifest from this repo's own pyproject.toml instead of a hand-kept copy. Any future manifest
+    entry whose repo consumes this one is covered without an edit.
+
+    This repo is unaffected and always was: it solves the same problem a different way, with
+    `dev = [{ include-group = "repo-tasks-quality" }]`, so the manifest never names it. The case was
+    understood one layer down — `_declared_dev_specs`' docstring records exactly that shape — and
+    unhandled one layer up until 2026-09-13. See plans/2026-08-25-consumer-transitions.md."""
+    own = _own_project_name()
+    if own is None:
+        return None
+    return next((dep for dep in _quality_deps() if _bare_name(dep) == own), None)
+
+
+def _applicable_quality_deps() -> list[str]:
+    """`repo-tasks-quality` minus any entry naming this project itself — the list that actually
+    applies here, and what both `ensure_deps` and the drift report work from.
+
+    `_quality_deps` stays the unfiltered manifest: it is the source of truth this repo authors and
+    tests against, and the two are only ever different in a consumer that is itself an entry."""
+    excluded = _self_referential_dep()
+    return [dep for dep in _quality_deps() if dep != excluded]
+
+
+def _report_self_exclusion(excluded: str | None) -> None:
+    """Say when an entry was skipped, rather than letting it look absent from the manifest.
+
+    Silence would be the worse failure of the two this fixes. Before, the report named a missing
+    entry and prescribed a command that must not be run; a silent skip would instead leave a reader
+    wondering whether the manifest still carries the entry at all, in the one repo whose maintainer
+    needs to know that it does.
+
+    Takes the entry rather than re-deriving it, the same shape as `_report_unconstrained`, because
+    `ensure_deps` bootstrapping a repo from nothing has no pyproject.toml to derive it from and has
+    to pass the name it just derived from the git remote."""
+    if excluded is None:
+        return
+    print(
+        f"[configs] skipping the repo-tasks-quality entry {_bare_name(excluded)!r}: this project is "
+        "that package, and depending on its published build would shadow the working tree under test"
+    )
+
+
 def _version_clauses(spec: str) -> frozenset[str]:
     """The version clauses of a dependency spec, whitespace-normalised — `{"!=2.15.1.2"}` for
     `hadolint-py != 2.15.1.2`, and empty for a bare `hadolint-py`.
@@ -237,7 +307,7 @@ def _missing_quality_deps() -> list[str]:
     makes an additive change here a breaking change there. `ensure_deps` is one-shot and nothing
     re-runs it, so a consumer's group is a snapshot from whenever it was last bootstrapped while
     the gate reading it is live (see plans/2026-08-25-consumer-transitions.md)."""
-    canonical = _quality_deps()
+    canonical = _applicable_quality_deps()
     pyproject_path = Path("pyproject.toml")
     declared = _declared_dev_names(pyproject_path) if pyproject_path.exists() else set[str]()
     return [_bare_name(dep) for dep in canonical if _bare_name(dep) not in declared]
@@ -262,7 +332,7 @@ def _unconstrained_quality_deps() -> list[str]:
         return []
     declared = _declared_dev_specs(pyproject_path)
     drifted: list[str] = []
-    for dep in _quality_deps():
+    for dep in _applicable_quality_deps():
         required = _version_clauses(dep)
         carried = declared.get(_bare_name(dep))
         if required and carried is not None and not required <= carried:
@@ -419,6 +489,7 @@ def diff(c: Context, source: str | None = None):
     nobody: `hadolint-py` gained `!=2.15.1.2` because that release's macOS wheel is a corrupt zip,
     and every consumer already declaring a bare `hadolint-py` was told it was up to date."""
     changed = _diff_config_files(source)
+    _report_self_exclusion(_self_referential_dep())
     missing = _missing_quality_deps()
     unconstrained = _unconstrained_quality_deps()
     if missing:
@@ -457,13 +528,22 @@ def ensure_deps(c: Context):
     only: never touches an entry already present (by bare package name, ignoring version), so
     existing lock files and CI runs stay stable. Never adds `repo-tasks`/`invoke` themselves —
     those only ever belong in repo-tasks' own main dependencies; a project that wants them anyway
-    is free to add them by hand. Run `inv deps.lock` and review/commit the diff afterward — this
-    task never touches uv.lock itself."""
-    canonical = _quality_deps()
+    is free to add them by hand. Also never adds the manifest entry naming the project it is running
+    in, which would make a package depend on its own published build: see `_self_referential_dep`.
+    Run `inv deps.lock` and review/commit the diff afterward — this task never touches uv.lock
+    itself."""
+    canonical = _applicable_quality_deps()
     pyproject_path = Path("pyproject.toml")
 
     if not pyproject_path.exists():
         name = _derive_project_name(c)
+        # With no pyproject.toml there was no `[project] name` for `_applicable_quality_deps` to
+        # compare against, so the self-reference has not been checked yet — the name just derived
+        # from the git remote is the only thing that can answer it for a repo bootstrapped from
+        # nothing, which is exactly the state a manifest entry's own repo starts in.
+        self_entry = next((dep for dep in canonical if _bare_name(dep) == _bare_name(name)), None)
+        _report_self_exclusion(self_entry)
+        canonical = [dep for dep in canonical if dep != self_entry]
         deps = "\n".join(f'  "{dep}",' for dep in canonical)
         pyproject_path.write_text(_DUMMY_PYPROJECT_TEMPLATE.format(name=name, deps=deps), encoding="utf-8")
         print(f"[configs.ensure-deps] created pyproject.toml (project name: {name!r})")
@@ -496,6 +576,7 @@ def ensure_deps(c: Context):
             "[configs.ensure-deps] no `dependency-groups.dev` array found in pyproject.toml — add one by hand first"
         )
 
+    _report_self_exclusion(_self_referential_dep())
     existing_specs: list[str] = re.findall(r'"([^"]+)"', match.group("items"))
     present = {_bare_name(s) for s in existing_specs}
     missing = [dep for dep in canonical if _bare_name(dep) not in present]

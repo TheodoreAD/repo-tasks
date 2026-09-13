@@ -466,3 +466,72 @@ def test_version_clauses_ignores_extras_and_markers():
     assert configs._version_clauses("pkg[extra]>=1.0") == frozenset({">=1.0"})
     assert configs._version_clauses('pkg>=1.0; python_version < "3.12"') == frozenset({">=1.0"})
     assert configs._version_clauses("pkg>=1.0,!=1.2") == frozenset({">=1.0", "!=1.2"})
+
+
+# ---------------------------------------------------------------------------
+# a consumer that is itself a manifest entry
+# ---------------------------------------------------------------------------
+
+_SELF = "invoke-stubs @ git+https://github.com/TheodoreAD/invoke-stubs"
+
+
+def test_the_entry_naming_this_project_is_not_reported_missing(tmp_path, monkeypatch):
+    """The finding this exists for, reproduced. `configs.diff` run in invoke-stubs reported its dev
+    group missing `invoke-stubs` and prescribed `configs.ensure-deps`, which would have spliced a
+    dependency on that repo's own git remote into it."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "invoke-stubs"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = ["ruff"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["ruff", _SELF])
+    assert configs._missing_quality_deps() == []
+    assert configs._self_referential_dep() == _SELF
+
+
+def test_another_project_still_gets_the_entry(tmp_path, monkeypatch):
+    """The exclusion must be about identity, not about the entry. Every other consumer still needs
+    it, and a filter that dropped it everywhere would be a silent regression in eight repos."""
+    _consumer_pyproject(tmp_path, '"ruff"')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["ruff", _SELF])
+    assert configs._missing_quality_deps() == ["invoke-stubs"]
+    assert configs._self_referential_dep() is None
+
+
+def test_ensure_deps_never_splices_the_entry_naming_this_project(tmp_cwd, capsys):
+    (tmp_cwd / "pyproject.toml").write_text(
+        '[project]\nname = "invoke-stubs"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = [\n  "ruff",\n]\n',
+        encoding="utf-8",
+    )
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+    dev_group = text.split("[dependency-groups]", 1)[1]  # `[project] name` is the package, not a dependency on it
+    assert "invoke-stubs" not in dev_group, "would make the package depend on its own published build"
+    assert "skipping the repo-tasks-quality entry 'invoke-stubs'" in capsys.readouterr().out
+
+
+def test_ensure_deps_bootstrapping_from_nothing_also_skips_it(tmp_cwd):
+    """The one path where there is no `[project] name` to compare against yet, so the check runs on
+    the name derived from the git remote instead — and it is exactly the state a manifest entry's
+    own repo would be bootstrapped in."""
+    c = MockContext(run=Result(stdout="git@github.com:TheodoreAD/invoke-stubs.git\n", exited=0))
+    configs.ensure_deps.body(c)
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'name = "invoke-stubs"' in text
+    dev_group = text.split("[dependency-groups]", 1)[1]
+    assert "invoke-stubs" not in dev_group, "only its own [project] name, never a dependency on itself"
+
+
+def test_a_project_with_no_name_is_left_alone(tmp_path, monkeypatch):
+    """No `[project] name` means no identity to compare, and guessing one would be worse than
+    reporting the entry: a consumer told about an entry it does not need loses a minute, and one
+    silently denied an entry it does need fails its gate with exit 127."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[dependency-groups]\ndev = ["ruff"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configs, "_quality_deps", lambda: ["ruff", _SELF])
+    assert configs._own_project_name() is None
+    assert configs._missing_quality_deps() == ["invoke-stubs"]
