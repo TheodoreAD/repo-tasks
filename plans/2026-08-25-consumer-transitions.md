@@ -732,3 +732,48 @@ for report-mode wiring, and the presence of a `.github/workflows/security.yml` c
 greppable from outside the target tree and neither needs a decision to report. The other four are
 readings and stay manual. Worth settling only once the loop exists, since it is an addition to it
 rather than a change of shape.]
+
+## Filing the two new consumers narrowed the complement list (2026-09-13)
+
+Both now have plans in the store — `ingesta` two, `invoke-stubs` one — carrying their measured drift
+and the scope decision above, since neither may be written to from here. Doing that turned up four
+things that belong in this file rather than in theirs.
+
+**Report-mode wiring is not a six-repo item. It is a two-repo item.** `ingesta` and `invoke-stubs`
+both take `repo_tasks`' own `ns` and call `add_collection` on it rather than hand-building a root
+`Collection`, and `repo_tasks/__init__.py:66` already calls `runner.configure(ns)` on that object —
+so both are wired by construction and neither needs the call. The item only bites a consumer that
+builds its own root collection: `power-user-linux-setup`, which is done, and the repos `scaffoldapy`
+**generates**, which is where the open question already sits, filed there. The complement list
+overstated this, and it is the entry the list most emphatically flags as unreadable from outside, so
+shrinking it is worth more than the line it costs.
+
+**The `ensure_deps` self-reference already has an answer, and it is written down in the consumer.**
+The pitfall above wants "either an exclusion in `ensure_deps` or a documented 'not here'".
+`invoke-stubs`' own `pyproject.toml` has carried the second since before this was noticed here: the
+`[dependency-groups]` comment records the circularity — taking the published build as a dev
+dependency shadows the working tree under test — and states that the entry is removed by hand and
+that "ensure-deps is additive and will re-add it on the next run". So the consumer side is settled
+and the producer side is not, which is the worse half: `configs.diff` there prints a next-steps
+block actively prescribing the damaging command, and only a reader who opens that comment first
+knows to ignore it.
+
+[DEFERRED: the producer-side fix — `ensure_deps` skipping a consumer that is itself a
+`repo-tasks-quality` entry, or `diff` not reporting it. Small and concrete, and it removes an
+attention tax paid on every future sweep of that repo rather than once. Until it lands, the
+configs-only scope decided above is load-bearing rather than cautious.]
+
+**The `c514bd9` `pythonVersion` prediction has a second confirmation waiting, and it is sharper than
+the first.** `ingesta` has no `pythonVersion` in its `pyrightconfig.json`, declares
+`requires-python = ">=3.11"`, develops on a 3.14 venv, and imports `typing.override` — 3.12+, PEP
+698 — in four modules, two of them shipped in the wheel. Verified on a stripped 3.11 rather than
+recalled. `power-user-linux-setup`'s occurrence on 2026-09-05 was two **test** modules; this is a
+declared-floor violation in **published** code, which the sweep's `configs.pull` will surface as a
+type-check failure and which exists whether or not anyone sweeps. Filed there as its own plan rather
+than buried in that repo's sweep plan, precisely so it does not wait on a sweep.
+
+**And `invoke-stubs` has no `.github/` at all** — no CI, no workflows, while carrying a `zizmor.yml`
+with nothing to lint. Every other consumer's sweep is validated by a green run afterwards; there the
+local gate is the whole of the evidence. That is a fifth flavour distinction the table above does
+not express, and it means the security-workflow complement item cannot be done there without first
+deciding whether that repo has CI at all.
