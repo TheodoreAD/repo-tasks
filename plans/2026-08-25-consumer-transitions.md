@@ -565,8 +565,44 @@ count. `ingesta` and `power-user-linux-setup` both matched on comments first. It
 and a repo wiring its tasks from some other file would still be missed; the honest form of this
 question is a search plus a reading, not a one-liner, which is the whole of the pitfall above.
 
-[DEFERRED: sweep `ingesta` and `invoke-stubs`, or decide deliberately that they are out of scope.
-Nothing here has ever measured either — `configs.diff` has not been run against them, so "what they
-are behind on" is unknown rather than small. `invoke-stubs` is the one to look at first: it lags
-task code as well as configs, which is `power-user-linux-setup`'s flavour, and that is the flavour
-where the 2026-09-10 sweep found the one real finding of the whole exercise.]
+### What the three unswept consumers are behind on (measured 2026-09-13, read-only)
+
+Measured rather than deferred, because it is one command three times. Each run is the **installed
+`v0.3.0` tool's** own `configs.diff` against that repo's tree, from a subprocess that chdirs into it
+— no write, no pull, nothing in any working tree touched, and the same tool version for all three so
+the answers are comparable.
+
+| consumer       | config files behind                       | dev group                                                                  |
+| -------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| `scaffoldapy`  | `ruff.toml`, `dprint.json`, `pytest.ini`  | `hadolint-py` unconstrained                                                |
+| `ingesta`      | those three **plus `pyrightconfig.json`** | **missing `pytest-socket`, `pytest-timeout`**; `hadolint-py` unconstrained |
+| `invoke-stubs` | `ruff.toml`, `pytest.ini`                 | **missing `invoke-stubs`** — see the pitfall below                         |
+
+**`scaffoldapy` is unchanged from the 2026-09-08 measurement**, item for item, so the table in its
+filed sweep plan is still current five days on and that plan wants no re-scoping.
+
+**`ingesta` is the worst of the three, and has never been named anywhere.** A fourth config file
+behind, and a dev group missing two manifest entries outright rather than merely unconstrained —
+which is the `ae54087` drift this plan has tracked since 2026-08-29, sitting unaddressed in a repo
+the tracking never covered.
+
+[PITFALL: **the manifest cannot be spliced into a consumer that is itself one of its entries, and
+`configs.diff` is right now telling `invoke-stubs` to add itself.** `repo-tasks-quality` lists
+`invoke-stubs @ git+https://github.com/TheodoreAD/invoke-stubs`, so the dev-group half reports it
+missing there and the next-steps block prescribes `configs.ensure-deps` — which would splice a
+dependency on its own git remote into that repo's `dependency-groups.dev`. Its `pyproject.toml`
+records that its quality group was "put in place by `repo-tasks configs.ensure-deps` rather than
+hand-listed", so that is the live path and not a hypothetical.
+
+This repo never hits it because it solves the same problem a different way: `dev` here is
+`[{ include-group = "repo-tasks-quality" }]`, which is the shape `configs.diff`'s own docstring
+already records `_DEV_ARRAY_RE` as reading like a declaration of nothing. The case is understood one
+layer down and unhandled one layer up. A consumer that is itself a manifest entry needs either an
+exclusion in `ensure_deps` or a documented "not here", and **the sweep must not run `ensure-deps`
+against `invoke-stubs` until that is decided.**]
+
+[DEFERRED: whether `ingesta` and `invoke-stubs` are in the sweep's scope at all — the user's call,
+which the measurement above is meant to inform rather than presume. What it settles is that
+"unknown" has stopped being an argument either way: both are consumers by every test this plan
+applies, and `ingesta` is drifting on precisely the items the batched sweep exists for. Nothing has
+been written to either tree.]
