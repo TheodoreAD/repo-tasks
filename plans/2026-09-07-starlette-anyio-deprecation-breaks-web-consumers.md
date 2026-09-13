@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-08
+updated: 2026-09-13
 source_repo: github.com-personal/scaffoldapy
 source_session: 7a3f34e6-b0c7-4532-8c89-ec43239414e7.jsonl
 source_moment: 2026-09-07T20:45:00Z
@@ -138,12 +138,35 @@ built to be minimal is a probe that measures the wrong thing.]
 The third check is the one that matters and is why the entry is spelled the way it is: silencing the
 class would have passed the first two identically.
 
-[UNVERIFIED: the original repro, in the repo that found it. This plan carries `source_repo`, so it
-is not done until `scaffoldapy`'s `web_service` end-to-end combination goes green. **Nothing is
-blocking it as of 2026-09-08** — the entry is pushed, released in `v0.3.0`, and present in the
-installed global tool that repo renders against, so the one remaining step is `inv test.integration`
-there. Filed for that repo as `2026-09-08-sweep-to-repo-tasks-v0-3-0.md`, which carries this
-verification alongside the rest of its sweep.
+~~[UNVERIFIED: the original repro, in the repo that found it.~~ **Verified 2026-09-13, and from here
+rather than there.** `scaffoldapy`'s `main` (`b2690c6`) was cloned into a sandbox, this repo's
+`main` was installed as the global `uv tool` into a throwaway `HOME`, and its whole end-to-end tier
+ran: **10 of 10 combinations passed in 88.53s**, `web_service-no-fetch` — the one that was red on
+2026-09-07 — included. That was the local replica of the consumer canary, landed the same day as
+`.github/workflows/canary.yml`; see
+[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), "The canary landed".
+
+Two things about the shape of that verification are worth keeping, because the obvious version of it
+would have been weaker:
+
+- **A clone, not that repo's working tree.** The tier renders from the checkout it stands in, and
+  that repo's tree may carry uncommitted work; its `main` is what its CI runs and what every other
+  consumer of the template will get.
+- **The global tool installed from this checkout, not `inv repo-tasks.update`.** The struck note
+  below was right that nothing was blocking as of 2026-09-08, but running the tier against the
+  installed tool answers a question about a version. Installing the ref under test answers the one
+  this plan is actually asking.
 
 The entry previously read "Held deliberately: the push is the user's call and was declined for now",
-which stopped being true when the commit was pushed and stayed on the page afterwards.]
+which stopped being true when the commit was pushed and stayed on the page afterwards.
+
+[PITFALL: **the consumer's own CI still says red, and will until something pushes there.** Run
+`34163701978` on `b2690c6`, 2026-09-07, is its latest and it failed on exactly this collection
+error; the fix landed here hours later and that repo has had no push since. So its badge is stale
+rather than wrong, and a session reading it as live evidence would re-investigate a bug that no
+longer exists. That six-day blind window is the whole argument for the canary.]
+
+Still open here, and untouched by any of the above: the `[NEEDS CLARIFICATION:]` about whether a
+deliberately temporary ignore should leave behind something that notices when its condition expires,
+rather than a comment nothing re-reads. That is what keeps this plan open now that the repro is
+closed.

@@ -89,12 +89,14 @@ repo-tasks commit.]
   The task half is resolved too, 2026-09-13 — as a read-only reporter, and against a different
   variable than the condition stated here. See "The sweep becomes a reporter task" at the end of
   this file.]
-- [NEEDS CLARIFICATION: should `scaffoldapy`'s e2e be this repo's canary — run before merging a
-  change to `repo-tasks-quality`, `configs/`, or any `quality.*` composite? Locally that is
-  `inv repo-tasks.update` from this checkout (or a `uv tool install` of the working tree) followed
-  by `inv test.integration` in `scaffoldapy`. In CI it would be a cross-repo job: check out
-  `scaffoldapy`, bootstrap repo-tasks from the PR's ref instead of `main`, run its integration tier.
-  ~2 min, and it would have caught both incidents before merge.]
+- [DECISION: **yes, and on every push rather than only on a change to those three things. Landed
+  2026-09-13, `fa3ea44`, as `.github/workflows/canary.yml`.** The shape is the one sketched here —
+  check out `scaffoldapy` beside this repo, install the checkout as the global tool, run its
+  integration tier — with one thing decided against the sketch: no paths filter. A filter is a
+  hand-kept list of what matters, which is the exact artifact this file spent three weeks proving
+  wrong about its own subject twice over, and the job costs ~2 min. The trigger question the sketch
+  did not ask is the one that turned out to matter; see "The canary landed" at the end of this
+  file.]
 
 ## Recommended direction
 
@@ -107,9 +109,11 @@ Rough, in order of payoff per effort:
    becomes a task~~ — ~~decided 2026-09-13: the measuring half becomes a read-only reporter, the
    acting half stays manual~~ — **landed the same day, `3b71584`/`0eacd82`/`899b316`, as
    `inv consumers.diff`.** The acting half stays manual, as decided.
-4. The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it ships.
+4. ~~The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it
+   ships~~ — landed 2026-09-13, `fa3ea44`. See "The canary landed" at the end of this file.
 5. Tagging a release is a policy decision that changes what all of the above defends against; take
-   it when the release flow is exercised for real, not as part of this plan.
+   it when the release flow is exercised for real, not as part of this plan. **The only item left in
+   this list, and the only one that was ever a policy question rather than a mechanism.**
 
 ## Verification (2026-08-26)
 
@@ -850,3 +854,65 @@ any of the three was failing. A suite run on 3.14 and a type check run on 3.14 a
 a green gate is exactly what a repo with no floor check looks like. The reason this took three
 consumers and five weeks to see is that each occurrence reads as that repo's own small oversight
 until they are put side by side.]
+
+## The canary landed (2026-09-13)
+
+`fa3ea44` — `.github/workflows/canary.yml`, plus the one test connecting it to the `[[consumer]]`
+declaration. `19676c5` writes the design into `contributing/quality-gate.md` and one paragraph into
+`contributing/consumer-sweep.md`. Item 4 is closed and item 5 is the only one left.
+
+**The mechanism already existed and nobody had noticed.** `scaffoldapy`'s own CI installs repo-tasks
+`main` unpinned at run time, so it has been a canary for this repo since the day it was written.
+What it lacked was a trigger: it fires on pushes to `scaffoldapy`, and the pushes that can break it
+happen here. The canary changes exactly that one variable — same tier, same consumer, this repo's
+schedule — plus the line that makes it evidence about the ref rather than about `main`:
+`uv tool install --force --with-executables-from invoke ./repo-tasks`, in place of the consumer's
+`bootstrap-repo-tasks.sh`, which would install what is already shipped.
+
+**Its first result arrived before it ran once in CI, and is the thing that justifies it.**
+`scaffoldapy`'s `main` is `b2690c6`; its only CI run is `34163701978`, 2026-09-07, **red**, on the
+starlette/`anyio` collection error. `487c9c8` fixed that here hours later. So for six days the
+consumer's badge said broken while this repo's fix said fixed, and nothing anywhere ran to decide
+between them — which is not a stale badge as a cosmetic problem, but the family's only test of what
+a generated repo does sitting in a state nobody could read.
+
+### Verified as a sandboxed replica, before the workflow was written
+
+Not in `scaffoldapy`'s own checkout, which would have measured the globally installed tool and
+answered a question about a version. A fresh `git clone --depth 1` of that repo's `main`, this
+checkout installed as the global tool into a throwaway `HOME` with only `UV_CACHE_DIR` and
+`UV_PYTHON_INSTALL_DIR` pinned back to the real ones, then its `inv dev-env.setup` and
+`inv test.integration`:
+
+**10 of 10 combinations passed, 88.53s.** Nothing in the real tool install, the real `HOME`, or that
+consumer's working tree was touched. The recipe is in `contributing/quality-gate.md` as the pitfall
+about reproducing the job, since the naive version of it measures the wrong thing silently.
+
+That answers
+[`2026-09-07-starlette-anyio-deprecation-breaks-web-consumers.md`](2026-09-07-starlette-anyio-deprecation-breaks-web-consumers.md)'s
+last open item as a side effect: `web_service-no-fetch` is the combination that was red on
+2026-09-07, and it is green against this ref.
+
+[PITFALL: **the gap was never the mechanism, and this is the third time in three days.** The
+reporter's first run found `agent-skills` four files behind in a repo recorded as a consumer three
+days earlier — membership known, drift unmeasured. This file spent three weeks deriving a list of
+repos that nothing then measured. And here the check itself already existed, wired to the wrong
+event. Each time the missing thing was **something that runs**, and each time the work that felt
+like progress was refining a description instead.]
+
+[PITFALL: **the canary is one consumer of five, and of that one only the generated half.** It pulls
+no config, reads no dev group, and says nothing about `power-user-linux-setup`, `agent-skills`,
+`ingesta` or `invoke-stubs`. As of today `inv consumers.diff` reports three of those behind and the
+canary is expected green; that is the normal state, not a contradiction. The two answer different
+questions and neither is the sweep, which stays manual and stays a session in the consumer's own
+repo.]
+
+[UNVERIFIED: **the canary has never run in CI**, only as the local replica above. The differences it
+cannot rule out are the ones a runner has and a dev machine does not — a cold uv cache, whichever
+interpreter uv picks there, and `actions/checkout` cloning the consumer at depth 1, which this file
+already records as a condition a consumer's own tests can see. The first push carrying it is the
+test of the test.]
+
+[UNVERIFIED: the `configs.require_tool` preflight still has never fired from a consumer's own CI,
+and the canary does not close that either — it would fire only on a family-wide manifest change
+adding a gate binary, and there has been none since it landed. Unchanged from every section above.]
