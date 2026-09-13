@@ -639,3 +639,25 @@ which the measurement above is meant to inform rather than presume. What it sett
 "unknown" has stopped being an argument either way: both are consumers by every test this plan
 applies, and `ingesta` is drifting on precisely the items the batched sweep exists for. Nothing has
 been written to either tree.]
+
+**And the sweep-as-a-task question has had its condition met without anyone noticing.** The open
+question near the top of this file parks it on a stated condition — "the list is small enough today
+that a checklist in `contributing/` is the whole mechanism; a task that runs the sweep against local
+checkouts earns its keep only once those repos are regenerated onto the template" — written when the
+list was two. It is five, three of them unswept, two of them never measured until today, and the
+growth came from repos that were already consumers rather than from anything being regenerated. So
+the condition was written against the wrong variable: what makes a checklist stop working is the
+count and the number of flavours, and both moved while the trigger everyone was watching did not.
+
+The measuring half also turns out to be trivial, which is the other input that question was waiting
+on. Reading one consumer takes a subprocess that puts the installed package on `sys.path`, chdirs
+into that repo and calls `configs.diff` — read-only, no pull, nothing in the target tree touched.
+Three consumers were measured that way in about a minute. What a task would add over the throwaway
+script is the loop, a comparable-by-construction tool version, and a report; what it would still not
+do is the acting, since sweeping a consumer means running its tasks in its tree.
+
+[NEEDS CLARIFICATION: so the question is no longer "is the list big enough" but "is read-only
+measurement across every consumer worth a task, given the acting stays manual". Note the shape it
+would take is a **reporter**, which is the same detector-over-editor answer `ci.check-actions` and
+`configs.diff` already landed on — and that a reporter is exactly what would have caught `ingesta`
+and `invoke-stubs` drifting for weeks with nothing looking at them.]
