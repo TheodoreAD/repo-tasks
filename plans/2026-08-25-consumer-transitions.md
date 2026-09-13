@@ -104,9 +104,9 @@ Rough, in order of payoff per effort:
    2026-08-26, `99f26a8`.
 2. ~~Dev-group drift in `configs.diff`~~ — landed 2026-08-26, `e169837`.
 3. ~~Write the consumer sweep down in `contributing/`~~ — landed 2026-08-26, `d47b37a`. ~~Whether it
-   becomes a task~~ — decided 2026-09-13: the measuring half becomes a read-only reporter, the
-   acting half stays manual. Not yet written; the shape and the one constraint that matters are at
-   the end of this file.
+   becomes a task~~ — ~~decided 2026-09-13: the measuring half becomes a read-only reporter, the
+   acting half stays manual~~ — **landed the same day, `3b71584`/`0eacd82`/`899b316`, as
+   `inv consumers.diff`.** The acting half stays manual, as decided.
 4. The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it ships.
 5. Tagging a release is a policy decision that changes what all of the above defends against; take
    it when the release flow is exercised for real, not as part of this plan.
@@ -727,11 +727,17 @@ And the first row is the other half of the case. A correct count went stale in t
 watching, which no improvement in method would have caught; only re-running catches that. The
 reporter is re-running.
 
-[DEFERRED: where the declaration lives. `repo-tasks.toml` is the obvious candidate, since it already
-carries per-repo configuration this package reads, but a list of _other_ repos' checkout paths is
-machine-local in a way nothing else in that file is — it would be wrong in CI and wrong on a second
-machine. The alternative is a user-level file outside the repo, which costs the task a discovery
-step. Decide it when the task is written; nothing above turns on it.]
+[DECISION: **`repo-tasks.toml`, as `[[consumer]]` entries, and the machine-local half is not in
+it.** Resolved 2026-09-13 with the task. The objection this deferral raised was real and dissolved
+once the question was split: the consumer **names** are durable, reviewable and the half that keeps
+going stale, so they belong in version control; the **checkout prefix** is machine-local and now
+comes from `$REPO_TASKS_PROJECTS_ROOT`, defaulting to this repo's parent directory, which needs no
+configuration at all while the family is checked out side by side. An entry may still name an
+explicit `path` for a checkout that sits elsewhere.
+
+The file's header widened with it — from "non-python artifacts this repo ships" to "what this repo's
+tasks need to know about this repo" — because consumers are not an artifact this repo ships and the
+old sentence would have made the entries read as a category error.]
 
 [DEFERRED: whether the reporter reads anything `configs.diff` cannot. The complement list earlier in
 this file names six such items, and at least two are mechanical — `rg -n 'runner.configure' tasks/`
@@ -796,3 +802,32 @@ with nothing to lint. Every other consumer's sweep is validated by a green run a
 local gate is the whole of the evidence. That is a fifth flavour distinction the table above does
 not express, and it means the security-workflow complement item cannot be done there without first
 deciding whether that repo has CI at all.
+
+## The reporter landed, and its first run found a sixth thing (2026-09-13)
+
+`inv consumers.diff` — `3b71584` the module and its tests, `0eacd82` the five declared entries,
+`899b316` the sweep doc, which still said the consumer set was two and defined one by the path shape
+that has been wrong three times. The declaration question is answered in place above.
+
+**Its first run found `agent-skills` four config files and two manifest entries behind** —
+`ruff.toml`, `pyrightconfig.json`, `dprint.json`, `pytest.ini`, plus `pytest-socket` and
+`pytest-timeout` missing and `hadolint-py` unconstrained. Item for item, that is `ingesta`'s
+condition, the worst of the three measured by hand earlier the same day.
+
+That is the argument for the task making itself on the day it landed, and it is worth being precise
+about what it proves. `agent-skills` was not an unknown consumer: it was recorded as one on
+2026-09-10, in the section above that corrected the count to three. Its **drift** was simply never
+measured, because measuring meant deciding to go and look, and nobody did for three days. The
+membership problem and the measurement problem are different problems, and deriving the list — the
+answer this file spent three weeks converging on — would not have touched the second one. Only
+something that runs does.
+
+So the unswept set is **four, not three**: `scaffoldapy`, `ingesta`, `invoke-stubs` and now
+`agent-skills`. Every table above that says three is counting what had been measured rather than
+what is behind.
+
+[DEFERRED: file `agent-skills` a sweep plan the way `ingesta` and `invoke-stubs` got one. Its scope
+needs no decision — it has been a recorded consumer since 2026-09-10, and the scope question put to
+the user covered only the two that were not recorded — but nothing in that repo says what it is
+behind on, and it already carries a filed plan of its own for the `setup-uv` pins two majors behind.
+Both want doing in one session there.]
