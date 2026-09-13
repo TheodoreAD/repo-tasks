@@ -907,11 +907,19 @@ canary is expected green; that is the normal state, not a contradiction. The two
 questions and neither is the sweep, which stays manual and stays a session in the consumer's own
 repo.]
 
-[UNVERIFIED: **the canary has never run in CI**, only as the local replica above. The differences it
-cannot rule out are the ones a runner has and a dev machine does not — a cold uv cache, whichever
-interpreter uv picks there, and `actions/checkout` cloning the consumer at depth 1, which this file
-already records as a condition a consumer's own tests can see. The first push carrying it is the
-test of the test.]
+~~[UNVERIFIED: the canary has never run in CI, only as the local replica above.~~ **Ran on the push
+that carried it, 2026-09-13: run `34763585402`, green, job 1m51s, 10/10 in 89.12s.** Every
+difference the replica could not rule out is answered, and one of them turned out to be the
+interesting one:
+
+- **The interpreter.** The replica ran on 3.14.5; the runner picked **3.12.3** — the same version
+  the red 2026-09-07 run used. So the green is not an artifact of a newer interpreter, which the
+  local run alone could not have said.
+- **The cold uv cache** costs the job, not the tier: 89.12s against the replica's 88.53s on a warm
+  cache, with the difference in setup.
+- **`actions/checkout` at depth 1** is inert for the consumer, whose own e2e clones nothing — it is
+  `scaffoldapy`'s _own_ tests that can see clone depth, and those are its unit tier, which this job
+  does not run.]
 
 [UNVERIFIED: the `configs.require_tool` preflight still has never fired from a consumer's own CI,
 and the canary does not close that either — it would fire only on a family-wide manifest change
