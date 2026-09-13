@@ -21,26 +21,53 @@ consumer side, hours later, by reading a red CI run:
 
 ## What counts as a consumer
 
-A repo whose `tasks.py` does `from repo_tasks import ns`, or that carries a
-`bootstrap-repo-tasks.sh`. Measured 2026-08-25 across `~/projects/github.com-personal`, there are
-exactly two:
+**A repo that resolves `repo_tasks` at all**, however it does that — not a repo with a particular
+file in a particular place.
 
-| repo                     | what it consumes                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `power-user-linux-setup` | the task collection and the shipped configs, in its own tree                                           |
-| `scaffoldapy`            | the same, **plus** it bakes the configs into every repo it generates — see the two-gates pitfall below |
+[PITFALL: **do not define this by a path shape, and do not trust a one-liner that does.** The set
+was counted three times in three weeks — two, three, six — and each answer came from a shape
+somebody expected: `from repo_tasks` at the top of a `tasks.py`, then a `bootstrap-repo-tasks.sh`.
+The 2026-09-10 correction is the sharp case, because the one-liner it prescribed _to stop this
+recurring_ is what hid the next two: it cannot see a `tasks/` package, and it cannot see an import
+made lazily inside a function, and three of the six are one of those. See
+`plans/2026-08-25-consumer-transitions.md`.]
 
-The five `*-polite-mcp` repos and `product-research-pipeline` are **not** consumers (no
-`from repo_tasks`, no bootstrap script, no workflow running the gate). They predate the template and
-are its migration backlog, not a sweep target.
+So the list is **declared**, as `[[consumer]]` entries in this repo's `repo-tasks.toml`, and read by
+one command:
 
-The list is short enough that this file is the whole mechanism. A task that runs the sweep against
-local checkouts earns its keep once those repos are regenerated onto the template, not before.
+```shell
+inv consumers.diff          # what every declared consumer is behind on — reads only, writes nothing
+```
+
+| consumer                 | how it consumes                    | what lags                                       |
+| ------------------------ | ---------------------------------- | ----------------------------------------------- |
+| `power-user-linux-setup` | pinned in its own `uv.lock`        | task code **and** configs                       |
+| `scaffoldapy`            | the global `uv tool` install       | configs only — **plus every repo it generates** |
+| `agent-skills`           | the global `uv tool` install       | configs only                                    |
+| `ingesta`                | the global `uv tool` install       | configs only                                    |
+| `invoke-stubs`           | `repo-tasks` as its own dependency | task code **and** configs                       |
+
+The `*-polite-mcp` repos and `product-research-pipeline` are not consumers — they predate the
+template and are its migration backlog, not a sweep target.
+
+**Adding one is an edit to `repo-tasks.toml`; finding one to add is a search plus a reading**, which
+is the honest form of the question and is why no command does it. A declared name with no checkout
+is reported as `NOT FOUND` rather than skipped, so a stale entry is loud.
+
+[PITFALL: **the reporter measures, it does not sweep.** `consumers.diff` tells you which repos are
+behind and on what; acting on that means running that repo's own tasks in its own tree, which is the
+per-consumer loop below and a session in that repo. Nothing here writes into a consumer.]
 
 ## When to sweep
 
 After changing any of: the `repo-tasks-quality` manifest in `pyproject.toml`, anything under
 `src/repo_tasks/configs/`, or a `quality.*` / `test.*` step that shells out to a binary.
+
+`inv consumers.diff` answers **which** of them need it, and it is worth running whether or not you
+changed one of those — a consumer can be behind because of somebody else's change, or because
+nothing has swept it in weeks. That is not a hypothetical: its first run, 2026-09-13, found
+`agent-skills` four config files and two manifest entries behind, in a repo recorded as a consumer
+three days earlier whose drift nobody had ever measured.
 
 ## The sweep
 
@@ -73,6 +100,12 @@ which of the four steps between it and the gate this particular consumer actuall
 none, when the change was to task code rather than to the manifest or the shipped configs. Run the
 gate regardless; that is what says the new tool works here. `ensure-deps` is additive and idempotent
 — it never touches an entry already present — so running it when nothing is missing costs nothing.
+
+One consumer is also a `repo-tasks-quality` entry (`invoke-stubs`), and since 2026-09-13 both
+`configs.diff` and `ensure-deps` skip the entry naming the project they are running in, printing
+why. Nothing to do by hand there any more — but a consumer still running an older `repo-tasks` will
+be told to splice that package into its own dev group, so if the skip line is absent, the pin bump
+above has not landed yet and that one next step must be ignored.
 
 In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `inv test.integration`
 (~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
