@@ -203,9 +203,20 @@ tests the second, and it is the only thing in the family that does. Any "consume
 has to name which of the two it ran, and against which repo-tasks commit — its e2e is evidence about
 the global tool it rendered with (`inv repo-tasks.version`), not about `main`.]
 
+## One consumer is checked on every push here
+
+`.github/workflows/canary.yml` runs `scaffoldapy`'s e2e tier against a global `repo-tasks` installed
+from the ref being pushed, so the half of the sweep that tests **what gets generated** happens
+without anyone deciding to run it. Its design and the two ways to misread it are in
+[`quality-gate.md`](quality-gate.md), "The consumer canary runs as its own workflow too".
+
+[PITFALL: **it replaces no step in this file.** One consumer of five, and of that one only the
+generated-repo half — it never pulls a config, never touches a dev group, and knows nothing about
+the four consumers whose snapshots have drifted. A green canary beside four consumers behind is the
+normal state.]
+
 ## Still open
 
-Whether `scaffoldapy`'s e2e becomes a pre-merge canary here (locally, or as a cross-repo CI job
-bootstrapping repo-tasks from the PR's ref), and whether tagging a release — which would pin
-consumers and turn each of these into a deliberate per-consumer update — is the better answer than
-any of the above. Both in `plans/2026-08-25-consumer-transitions.md`.
+Whether tagging a release — which would pin consumers and turn each of these into a deliberate
+per-consumer update — is the better answer than any of the above.
+`plans/2026-08-25-consumer-transitions.md`.

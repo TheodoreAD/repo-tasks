@@ -582,6 +582,56 @@ whole dev group to shell out to one uv subcommand, and would restrict the workfl
 `repo-tasks`. The cost of the raw command is that the string lives in two places;
 `test_deps.py::test_audit_command_matches_the_reusable_workflow` fails if they diverge.]
 
+### The consumer canary runs as its own workflow too
+
+`canary.yml` checks out `scaffoldapy` beside this repo, installs **this checkout** as the global
+`repo-tasks` uv tool, and runs that consumer's `inv test.integration` — the tier that renders every
+template combination for real and asserts each generated repo's own `inv quality.check` exits 0. On
+push to `main`, on pull requests, and on manual dispatch; unscheduled, per the decision two sections
+up.
+
+It is the only thing here that asks what a change does to a repo this package **generates**, rather
+than to a repo that merely uses it, and the only check that can fail before the change reaches one.
+
+[DECISION: **install from the checkout, not from `bootstrap-repo-tasks.sh`.** That script installs
+`main`, which is what is already shipped — running it would produce a green canary for a broken
+push. `uv tool install --force --with-executables-from invoke ./repo-tasks` is the whole mechanism,
+and it works because a generated repo deliberately declares neither `repo-tasks` nor `invoke`: every
+`inv` in that tier, copier's own `_tasks` included, resolves from the global tool. Swapping the
+global tool is therefore swapping the thing under test, with nothing in the consumer to change.]
+
+[DECISION: its own workflow, for the reason the dependency audit gives above — GitHub gives each
+workflow its own check run, so `CI ✓` beside `Canary ✗` already reads as "this repo is fine, what it
+does to a consumer is not". `pull_request` is in the trigger list even though this repo pushes
+straight to `main` and reviews no PRs: it costs nothing and is what makes it a pre-merge gate the
+day a PR is used, which is how the plan asked for it.]
+
+[DECISION: `scaffoldapy`'s default branch, not a pinned ref. The question the job asks is "does this
+change break the consumer as it stands today", and a pin answers it about a consumer that no longer
+exists. The cost is that the canary can go red for a reason that is not this repo's — accepted, and
+the log says which side failed.]
+
+**Why it earns a whole workflow for one consumer.** That consumer's CI already installs `main`
+unpinned, so it has always been a canary — on _its_ push schedule. Measured 2026-09-13: its `main`
+(`b2690c6`) last ran CI on 2026-09-07, red, on the starlette/`anyio` collection error this repo
+fixed hours later in `487c9c8`. Six days in which the consumer's badge said broken, the fix said
+fixed, and nothing ran to decide between them. The gap is never the mechanism, always the trigger.
+
+[PITFALL: **the canary is not the sweep, and passing it is not "consumers verified".** It covers one
+of five consumers, and of that one it covers the half `inv quality.precommit` there cannot — what
+gets generated. It says nothing about the four consumers whose pulled configs and dev groups have
+drifted, which is `inv consumers.diff`'s subject and [`consumer-sweep.md`](consumer-sweep.md)'s.
+Green here and four consumers behind is the normal state, not a contradiction.]
+
+[PITFALL: **a local run of the consumer's tier is not this job**, and the difference is the one that
+matters. Run in that repo's own checkout it measures the **globally installed** tool — whatever
+`inv repo-tasks.update` last fetched — so it is evidence about a version, not about the ref in your
+hands. Reproduce the job instead: clone the consumer somewhere disposable, point `HOME` at a
+throwaway directory with `UV_CACHE_DIR` and `UV_PYTHON_INSTALL_DIR` pinned back to the real ones,
+and `uv tool install` this working tree there. That is how the job was verified before it was
+written — 10/10 combinations, 88s — and it touches neither the real tool install nor the consumer's
+tree.]
+
 ## What the gate's shipped configs commit every consumer to
 
 `pytest.ini`, `ruff.toml`, and `zizmor.yml` exist twice: the root copy governs this repo and
