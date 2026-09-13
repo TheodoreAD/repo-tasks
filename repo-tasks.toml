@@ -1,10 +1,32 @@
-# Non-python artifacts this repo ships. Python projects are not listed here — `uv`'s own
-# [tool.uv.workspace] in pyproject.toml is their source of truth (see contributing/ and
-# src/repo_tasks/projects.py).
+# What this repo's tasks need to know about this repo, where no other file already says it. Python
+# projects are not listed here — `uv`'s own [tool.uv.workspace] in pyproject.toml is their source of
+# truth (see contributing/ and src/repo_tasks/projects.py).
 #
-# The one entry pair below is this repo's dogfood sample: a docker image and the helm chart that
-# wraps it, sharing `group = "sample-service"` with the workspace member of the same name, so one
-# `inv version.bump --group sample-service` moves all three together.
+# The [[docker]]/[[helm]] pair below is this repo's dogfood sample: a docker image and the helm chart
+# that wraps it, sharing `group = "sample-service"` with the workspace member of the same name, so
+# one `inv version.bump --group sample-service` moves all three together.
+#
+# The [[consumer]] entries are repo-tasks-only and no other repo carries them: they are the repos
+# that resolve `repo_tasks`, read by `inv consumers.diff` to report what each is behind on. Declared
+# rather than derived, because three attempts to derive this list each encoded a path shape some
+# real consumer did not have — see plans/2026-08-25-consumer-transitions.md. Names only; where the
+# checkouts live is machine-local and comes from $REPO_TASKS_PROJECTS_ROOT, defaulting to this
+# repo's parent directory.
+
+[[consumer]]
+name = "power-user-linux-setup"
+
+[[consumer]]
+name = "scaffoldapy"
+
+[[consumer]]
+name = "agent-skills"
+
+[[consumer]]
+name = "ingesta"
+
+[[consumer]]
+name = "invoke-stubs"
 
 [[docker]]
 name = "sample-service"
