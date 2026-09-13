@@ -86,7 +86,9 @@ repo-tasks commit.]
   enough today that a checklist in `contributing/` is the whole mechanism; a task that runs the
   sweep against local checkouts earns its keep only once those repos are regenerated onto the
   template. Written down in `contributing/consumer-sweep.md`, landed `d47b37a`; resolved 2026-08-26.
-  Whether it becomes a task stays open, on the condition stated above.]
+  The task half is resolved too, 2026-09-13 — as a read-only reporter, and against a different
+  variable than the condition stated here. See "The sweep becomes a reporter task" at the end of
+  this file.]
 - [NEEDS CLARIFICATION: should `scaffoldapy`'s e2e be this repo's canary — run before merging a
   change to `repo-tasks-quality`, `configs/`, or any `quality.*` composite? Locally that is
   `inv repo-tasks.update` from this checkout (or a `uv tool install` of the working tree) followed
@@ -101,8 +103,10 @@ Rough, in order of payoff per effort:
 1. ~~Preflight-with-fix in the gate steps that shell out to a group-installed tool~~ — landed
    2026-08-26, `99f26a8`.
 2. ~~Dev-group drift in `configs.diff`~~ — landed 2026-08-26, `e169837`.
-3. ~~Write the consumer sweep down in `contributing/`~~ — landed 2026-08-26, `d47b37a`. Whether it
-   becomes a task is still open.
+3. ~~Write the consumer sweep down in `contributing/`~~ — landed 2026-08-26, `d47b37a`. ~~Whether it
+   becomes a task~~ — decided 2026-09-13: the measuring half becomes a read-only reporter, the
+   acting half stays manual. Not yet written; the shape and the one constraint that matters are at
+   the end of this file.
 4. The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it ships.
 5. Tagging a release is a policy decision that changes what all of the above defends against; take
    it when the release flow is exercised for real, not as part of this plan.
@@ -643,11 +647,19 @@ layer down and unhandled one layer up. A consumer that is itself a manifest entr
 exclusion in `ensure_deps` or a documented "not here", and **the sweep must not run `ensure-deps`
 against `invoke-stubs` until that is decided.**]
 
-[DEFERRED: whether `ingesta` and `invoke-stubs` are in the sweep's scope at all — the user's call,
-which the measurement above is meant to inform rather than presume. What it settles is that
-"unknown" has stopped being an argument either way: both are consumers by every test this plan
-applies, and `ingesta` is drifting on precisely the items the batched sweep exists for. Nothing has
-been written to either tree.]
+[DECISION: **both are in scope, and they enter it differently. Resolved 2026-09-13.** "Unknown" had
+already stopped being an argument either way — both are consumers by every test this plan applies,
+and `ingesta` is drifting on precisely the items the batched sweep exists for.
+
+- **`ingesta` takes the full sweep**, as the worst drifted of the three and the only one behind on a
+  manifest entry outright rather than merely unconstrained.
+- **`invoke-stubs` takes `configs.pull` + `deps.lock` + gate, and not `configs.ensure-deps`**, which
+  stays blocked until the self-reference in the pitfall above has an answer. That is a coherent
+  state rather than a half-done one, and the pitfall is why: the two files it is behind on are
+  shipped configs like any other consumer's, and the dev-group half is the only part the
+  self-reference touches. Splitting there splits along the actual seam.
+
+Nothing has been written to either tree yet.]
 
 **And the sweep-as-a-task question has had its condition met without anyone noticing.** The open
 question near the top of this file parks it on a stated condition — "the list is small enough today
@@ -665,8 +677,58 @@ Three consumers were measured that way in about a minute. What a task would add 
 script is the loop, a comparable-by-construction tool version, and a report; what it would still not
 do is the acting, since sweeping a consumer means running its tasks in its tree.
 
-[NEEDS CLARIFICATION: so the question is no longer "is the list big enough" but "is read-only
-measurement across every consumer worth a task, given the acting stays manual". Note the shape it
-would take is a **reporter**, which is the same detector-over-editor answer `ci.check-actions` and
-`configs.diff` already landed on — and that a reporter is exactly what would have caught `ingesta`
-and `invoke-stubs` drifting for weeks with nothing looking at them.]
+[DECISION: **yes — the measuring half becomes a read-only reporter, the acting half stays manual.
+Resolved 2026-09-13.** The question had already stopped being "is the list big enough" and become
+"is read-only measurement across every consumer worth a task, given the acting stays manual", and
+the answer is the same detector-over-editor one `ci.check-actions` and `configs.diff` already landed
+on. The shape and the one constraint that decides whether it works are in the section below.]
+
+## The sweep becomes a reporter task (2026-09-13)
+
+Decided alongside the scope question above, and the two answers are one answer: the reporter exists
+because the scope question had to be asked at all.
+
+**What it does.** One loop over the consumers, each measured the way the three were measured today —
+a subprocess that puts the installed package on `sys.path`, chdirs into that repo and calls
+`configs.diff` — plus a report. Read-only by construction: no `pull`, no `ensure-deps`, no write
+into any target tree. The acting stays manual, because sweeping a consumer means running its tasks
+in its tree, which is a session in that repo rather than a task run from here. What the task adds
+over today's throwaway script is the loop, a comparable-by-construction tool version, and something
+that can be run without being written first.
+
+**What it must not do, and this is the whole of the design.** The consumer list is **declared
+configuration** — checkout paths written down — and never a search over path shapes. Three
+membership answers in three weeks, and each was a shape standing in for the real test:
+
+| date       | answer | derived from                                | what the shape could not see                  |
+| ---------- | ------ | ------------------------------------------- | --------------------------------------------- |
+| 2026-08-25 | two    | `from repo_tasks` in `tasks.py`             | nothing yet — correct, then stale in 2 days   |
+| 2026-09-10 | three  | the same one-liner, prescribed as _the fix_ | a `tasks/` package; a lazy in-function import |
+| 2026-09-13 | six    | a string match plus a **reading** of it     | still a shape, as that section admits         |
+
+The third row is not a fourth shape to encode. That section says so itself — "the honest form of
+this question is a search plus a reading, not a one-liner" — and a task cannot do the reading. A
+reporter that derives its own list therefore inherits the exact defect it was built to catch, and
+inherits it in the worst form, because a reporter that misses a consumer reports success.
+
+Declaring the list moves that failure from silent to loud. A consumer nobody added is **absent**
+from the report rather than silently excluded from a green one, and a stale path errors instead of
+matching nothing. The search keeps the job it always had — how a human finds a consumer to add — and
+the declaration is what the task reads.
+
+And the first row is the other half of the case. A correct count went stale in two days with nothing
+watching, which no improvement in method would have caught; only re-running catches that. The
+reporter is re-running.
+
+[DEFERRED: where the declaration lives. `repo-tasks.toml` is the obvious candidate, since it already
+carries per-repo configuration this package reads, but a list of _other_ repos' checkout paths is
+machine-local in a way nothing else in that file is — it would be wrong in CI and wrong on a second
+machine. The alternative is a user-level file outside the repo, which costs the task a discovery
+step. Decide it when the task is written; nothing above turns on it.]
+
+[DEFERRED: whether the reporter reads anything `configs.diff` cannot. The complement list earlier in
+this file names six such items, and at least two are mechanical — `rg -n 'runner.configure' tasks/`
+for report-mode wiring, and the presence of a `.github/workflows/security.yml` caller. Both are
+greppable from outside the target tree and neither needs a decision to report. The other four are
+readings and stay manual. Worth settling only once the loop exists, since it is an addition to it
+rather than a change of shape.]
