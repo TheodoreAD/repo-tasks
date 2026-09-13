@@ -223,3 +223,46 @@ same depth and no further:
 `pythonVersion` and flags floor-violating syntax live. It follows from the value being in the config
 file rather than on a command line, which is the documented difference between routes A and B, but
 nothing here has watched an editor do it.]
+
+## Route C happened anyway, two weeks after being rejected (2026-09-13)
+
+The rule was restated by the user, unprompted, in the same words as 2026-08-29. Checking what
+actually enforces it here turned up the one place this repo was not on its floor — and it is the
+place none of the three routes was looking at.
+
+**Everything committed was already correct**: `requires-python`, the classifiers, `.python-version`
+(`9d4bd01`), the derived `pythonVersion`, ruff inferring 3.11 with no `target-version`, and a CI
+unit matrix starting at 3.11. **The `.venv` was on 3.14.5.**
+
+Not this repo's doing. `power-user-linux-setup`'s `[packages.uv-env]` exports `UV_PYTHON="3.14"` in
+every shell, and uv ranks an environment variable as an explicit interpreter request **above**
+`.python-version` — which `venv.pin`'s own docstring already records as a pitfall, measured on uv
+0.11.19. So the pin this repo added was overridden from the day it landed, and nothing said so
+except `inv venv.check`, which nothing runs.
+
+[PITFALL: **the pin is not a weak defence here, it is not a defence at all.** A repo with
+`.python-version` and a repo without are in the same state while that variable is exported. Measured
+across the personal account the same day: seven of nine repos develop above their declared floor,
+this repo was one of them, and it is the only one that had a pin. Filed for that repo as
+`2026-09-13-uv-python-defeats-every-library-floor.md`, with the table — it cannot be fixed from
+here, since the variable and the setting that generates it are both theirs.]
+
+**So route C is now this repo's actual state, by `inv venv.recreate` rather than by decision**, and
+it costs nothing it was predicted to cost: the full gate passes on 3.11.15, 691 tests, 0 type
+errors. That is worth recording precisely because the route was rejected on a cost — "dev runs the
+floor rather than the newest" — which turns out to be the whole of it, and which this repo pays
+happily given it type-checks at the floor already. It does not reopen the decision: B is what makes
+the _editor_ and CI agree, and a venv is not a config file. C is a per-repo habit that B does not
+replace.
+
+[PITFALL: it also does not stay fixed. Nothing here outranks the variable except `venv.recreate`'s
+own explicit `--python`, so a bare `uv run` or `uv sync` in this tree rebuilds the venv at 3.14
+silently — that is the `uv run` destroying-the-venv finding, and it is the reason the filed plan
+argues the machine-level fix comes before the per-repo one.]
+
+**The declared half is now pinned by a test** rather than by six files quietly agreeing:
+`test_source_conventions.py`'s
+`test_every_declaration_of_the_python_floor_agrees_on_the_library_tier` asserts 3.11 against
+`requires-python`, the classifiers, `.python-version` and the CI matrix, as a literal rather than a
+consistency check — four files agreeing on 3.12 is the move the rule exists to stop. Verified by
+moving the constant and watching all four fail. It cannot see the venv, and says so.
