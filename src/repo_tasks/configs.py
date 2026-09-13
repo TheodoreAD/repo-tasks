@@ -27,6 +27,7 @@ import tempfile
 import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import cast
@@ -433,25 +434,71 @@ def pull(c: Context, source: str | None = None):
             print(f"[configs.pull] {name} pulled")
 
 
-def _diff_config_files(source: str | None) -> bool:
-    changed = False
+def drifted_config_files(source: str | None) -> list[tuple[str, str, str]]:
+    """Every shipped config file whose content differs from what `pull` would write here, as
+    (name, current text, pulled text). Reads the tree it is standing in and writes nothing.
+
+    Split out of `_diff_config_files` 2026-09-13 so `consumers.diff` can ask which files drifted
+    without printing a unified diff of each: across five consumers that is the difference between a
+    report and a wall of text. Public because it is the one thing another module in this package
+    needs from here, and private-by-underscore siblings around it are the ones that are not."""
     with _staged_source(source) as src_dir:
+        drift: list[tuple[str, str, str]] = []
         for name in _CONFIG_FILES:
             src_text = _derive_for_project(name, (src_dir / name).read_text(encoding="utf-8"), Path())
             dst_path = Path(name)
             dst_text = dst_path.read_text(encoding="utf-8") if dst_path.exists() else ""
-            if src_text == dst_text:
-                continue
-            changed = True
-            print(f"[configs.diff] {name} differs:")
-            lines = difflib.unified_diff(
-                dst_text.splitlines(keepends=True),
-                src_text.splitlines(keepends=True),
-                fromfile=f"{name} (current)",
-                tofile=f"{name} (pulled)",
-            )
-            print("".join(lines))
-    return changed
+            if src_text != dst_text:
+                drift.append((name, dst_text, src_text))
+        return drift
+
+
+@dataclass(frozen=True)
+class Drift:
+    """What one repo has fallen behind the shipped configs and the manifest on.
+
+    The four things `diff` already reported, as data rather than as printed lines, so a caller
+    measuring several repos can lay them side by side. `diff` keeps printing; this is what it prints
+    *about*."""
+
+    config_files: list[str]
+    missing_deps: list[str]
+    unconstrained_deps: list[str]
+    skipped_self: str | None
+
+    @property
+    def clean(self) -> bool:
+        return not (self.config_files or self.missing_deps or self.unconstrained_deps)
+
+
+def drift_summary(source: str | None = None) -> Drift:
+    """Everything `configs.diff` reports about the tree this is standing in, without printing any of
+    it. Reads only — no pull, no ensure-deps, nothing written anywhere.
+
+    Added 2026-09-13 for `consumers.diff`, which needs the same four answers for five repos and a
+    report rather than one repo and a wall of unified diffs. Here rather than in that module because
+    this is where what "behind" means is defined, and a second definition would be the hand-kept
+    second list this package keeps arguing against."""
+    return Drift(
+        config_files=[name for name, _current, _pulled in drifted_config_files(source)],
+        missing_deps=_missing_quality_deps(),
+        unconstrained_deps=_unconstrained_quality_deps(),
+        skipped_self=_self_referential_dep(),
+    )
+
+
+def _diff_config_files(source: str | None) -> bool:
+    drift = drifted_config_files(source)
+    for name, dst_text, src_text in drift:
+        print(f"[configs.diff] {name} differs:")
+        lines = difflib.unified_diff(
+            dst_text.splitlines(keepends=True),
+            src_text.splitlines(keepends=True),
+            fromfile=f"{name} (current)",
+            tofile=f"{name} (pulled)",
+        )
+        print("".join(lines))
+    return bool(drift)
 
 
 def _report_unconstrained(drifted: list[str]) -> None:

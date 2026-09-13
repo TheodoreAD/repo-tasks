@@ -5,6 +5,7 @@ zero-config Dockerfile-at-root fallback for the common single-image case. Every 
 (docker.py, dist.py, helm.py, version.py) calls into here instead of hardcoding "the repo
 root"."""
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass
@@ -70,6 +71,22 @@ class HelmChart:
     path: Path
     registry: str | None
     group: str
+
+
+@dataclass(frozen=True)
+class Consumer:
+    """A repo that resolves `repo_tasks` — declared in this repo's `repo-tasks.toml`, never derived.
+
+    `missing` rather than an exception at discovery time, so one absent checkout does not stop the
+    other four being measured; the reporter turns it into a named failure instead of a silent skip,
+    which is the whole distinction the declared list exists to preserve."""
+
+    name: str
+    path: Path
+
+    @property
+    def missing(self) -> bool:
+        return not self.path.is_dir()
 
 
 def _load_toml(path: Path) -> dict[str, object]:
@@ -305,3 +322,45 @@ def discover_helm_charts(c: Context) -> list[HelmChart]:
         )
         for entry in entries
     ]
+
+
+def projects_root() -> Path:
+    """Where this repo's sibling checkouts live — `$REPO_TASKS_PROJECTS_ROOT`, else the parent of
+    the repo this is running in.
+
+    Machine-local by nature, which is exactly why it is *not* in `repo-tasks.toml`: the consumer
+    **names** are durable and belong in version control where a wrong one can be reviewed, and the
+    path prefix is neither. Splitting them keeps the reviewable half reviewable and leaves the half
+    that differs per machine with a default that needs no configuration at all, since this family is
+    checked out side by side.
+
+    Resolving *where* a declared repo lives from a path shape is not the thing
+    plans/2026-08-25-consumer-transitions.md forbids — deriving *which repos are consumers* from one
+    is, and that stays declared. The difference is that a wrong answer here is loud: a name whose
+    directory is absent is reported as missing, never skipped."""
+    override = os.environ.get("REPO_TASKS_PROJECTS_ROOT")
+    return Path(override).expanduser() if override else Path.cwd().parent
+
+
+def discover_consumers() -> list[Consumer]:
+    """Every repo declared as a consumer of this package, from `repo-tasks.toml`'s `[[consumer]]`
+    entries. Empty in any repo that declares none, which is every repo but this one.
+
+    `path` is optional per entry and defaults to `projects_root() / name`; give it only for a
+    checkout that does not sit beside the others, where it is taken as absolute if it is and
+    relative to the root otherwise.
+
+    Declared rather than derived on purpose, and the reason is measured rather than theoretical:
+    three successive attempts to *derive* this list — 2026-08-25, 2026-09-10, 2026-09-13 — each
+    encoded a path shape that some real consumer did not have, and the 2026-09-10 one-liner
+    prescribed as the fix for the first is what hid the next two. A list that misses a consumer
+    produces a report that says success."""
+    entries = cast(list[dict[str, str]], _load_repo_tasks_toml().get("consumer", []))
+    root = projects_root()
+    consumers: list[Consumer] = []
+    for entry in entries:
+        name = _field(entry, "name", "consumer")
+        declared = entry.get("path")
+        path = root / name if declared is None else Path(declared).expanduser()
+        consumers.append(Consumer(name=name, path=path if path.is_absolute() else root / path))
+    return consumers

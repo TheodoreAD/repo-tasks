@@ -11,6 +11,7 @@ from . import (
     ci,
     configs,
     configure,
+    consumers,
     dev_env,
     direnv,
     dist,
@@ -53,6 +54,11 @@ ns.add_collection(Collection.from_module(dist), name="dist")
 ns.add_collection(Collection.from_module(docker), name="docker")
 ns.add_collection(Collection.from_module(helm), name="helm")
 ns.add_collection(Collection.from_module(configs), name="configs")
+# Nested like the rest, so it ships to every consumer rather than only to this repo. Harmless
+# there and deliberate: a consumer declares no `[[consumer]]` entries, so the task says it has
+# nothing to measure and exits 0 — the same shape as every other task here that no-ops cleanly
+# when the artifact kind it owns is absent.
+ns.add_collection(Collection.from_module(consumers), name="consumers")
 ns.add_collection(Collection.from_module(selfinstall), name="repo_tasks")
 
 # Report mode, and nothing at all when it is off: with REPO_TASKS_RUN_REPORT unset this package
