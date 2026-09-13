@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-12
+updated: 2026-09-13
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -415,6 +415,11 @@ both lag; `scaffoldapy` lags on configs only.]
 
 ## The consumer set is three, not two (2026-09-10)
 
+**Superseded 2026-09-13: it is six, and the one-command check this section ends on is what held it
+at three.** The flavour reasoning below still holds and the rows in its table are still right about
+the repos they name; the membership is not. See "The consumer set is six" at the end of this file
+before using either.
+
 Carried here from the retired `2026-08-28-node20-action-deprecation.md`, which had deferred "worth
 checking whether `scaffoldapy` and `agent-skills` publish the `ci` namespace either" after finding
 that `power-user-linux-setup` did not.
@@ -508,3 +513,60 @@ and the premise that it duplicates "builds its own collection" is wrong, which i
 checking rather than reasoning about. `repo-tasks` imports its own `ns` and regenerates;
 `scaffoldapy` builds its own collection only in the repos it generates, and regenerates nothing
 itself. Two of the four rows differ from what the implication would have predicted.
+
+## The consumer set is six (2026-09-13)
+
+The section above ends on a recipe — "the whole consumer set is
+`rg -l 'from repo_tasks' <projects root>/*/*/tasks.py`, which takes one command" — written in the
+same breath as a pitfall about checking the file rather than the memory of the file. Run today, that
+command is wrong in both directions at once.
+
+**It misses a consumer the same section tabulates two paragraphs later.** `power-user-linux-setup`
+has no `tasks.py`; it has a `tasks/` package, and its `from repo_tasks import ...` sits _inside a
+function_ in `tasks/__init__.py`, deliberately, so that a missing tool degrades one command instead
+of every command. A glob ending in `tasks.py` cannot see either shape, and a search for a top-level
+`from repo_tasks` would not see the second one anywhere.
+
+**And it finds two repos nobody has recorded as consumers at all.** Neither is trivia: each carries
+the shipped `ruff.toml`, `pytest.ini`, `pyrightconfig.json` and `dprint.json`, so each drifts in
+exactly the way this plan exists to catch.
+
+| consumer       | how it consumes                    | what lags                 | named in this plan? |
+| -------------- | ---------------------------------- | ------------------------- | ------------------- |
+| `ingesta`      | the global `uv tool` install       | configs only              | never               |
+| `invoke-stubs` | `repo-tasks` as its own dependency | task code **and** configs | never               |
+
+`ingesta` carries a stamped `bootstrap-repo-tasks.sh` too, so it answers every test this plan uses.
+
+`invoke-stubs` is a third flavour rather than a second copy of `power-user-linux-setup`'s, and its
+own `pyproject.toml` says why it is allowed to be: the family's standing objection to depending on
+`repo-tasks` is that the dependency brings `invoke` with it and a second `inv` on PATH shadows the
+global tool with one that cannot import `repo_tasks` — which does not apply where `repo_tasks` is in
+that project's own environment. That is the same shadowing
+[`2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md`](2026-09-08-status-measures-the-running-interpreter-not-the-global-tool.md)
+made `repo-tasks.update` report, seen from the one side that is entitled to it.
+
+So the batched sweep, scoped as it is everywhere above, would have covered **two of the five**
+non-self consumers.
+
+[PITFALL: **this is the third membership count in three weeks and the first two were both wrong, and
+each answer came from a shape somebody expected rather than from what makes a repo a consumer.** Two
+on 2026-08-25, three on 2026-09-10, six today. The 2026-09-10 correction is the sharpest case,
+because the one-liner it prescribed to stop the problem recurring is what hid the next two: it
+encodes "a consumer has a `tasks.py` with a top-level `from repo_tasks`", and three of the six do
+not. A repo consumes this package if it resolves `repo_tasks` at all, and no path shape is entitled
+to stand in for that.]
+
+Measured with `rg -l 'repo_tasks' <projects root> --glob '**/tasks.py' --glob '**/tasks/*.py'`,
+which returns all six plus `scaffoldapy`'s template. Two things about it are deliberate and worth
+carrying: it matches the **string** rather than a `from` import, which is what reaches the lazy one,
+and it therefore returns comments and prose too — so it is a list to read rather than a list to
+count. `ingesta` and `power-user-linux-setup` both matched on comments first. It is still a shape,
+and a repo wiring its tasks from some other file would still be missed; the honest form of this
+question is a search plus a reading, not a one-liner, which is the whole of the pitfall above.
+
+[DEFERRED: sweep `ingesta` and `invoke-stubs`, or decide deliberately that they are out of scope.
+Nothing here has ever measured either — `configs.diff` has not been run against them, so "what they
+are behind on" is unknown rather than small. `invoke-stubs` is the one to look at first: it lags
+task code as well as configs, which is `power-user-linux-setup`'s flavour, and that is the flavour
+where the 2026-09-10 sweep found the one real finding of the whole exercise.]
