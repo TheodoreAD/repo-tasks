@@ -105,7 +105,11 @@ defensive noise, which is why it did not come back when the casts went.]
 shape consumers already use for `repo-tasks` itself — rather than a subdirectory here or a PyPI
 release. Keeps `repo-tasks` single-purpose; a push to that repo's `main` is a release, so its
 `version` bumps on every stub change. `ensure_deps` splices the entry into consumers unchanged
-(`_bare_name` reads `invoke-stubs` off the `@ git+` spec).]
+(`_bare_name` reads `invoke-stubs` off the `@ git+` spec) — with one exception, added 2026-09-13:
+never into `invoke-stubs`' own repository, which is itself a consumer of this package and would
+otherwise be told to depend on its own published build, shadowing the working tree under test. See
+`configs._self_referential_dep`, which derives that from the project's own name rather than from a
+list, so a future manifest entry whose repo consumes this one needs no edit.]
 
 [PITFALL: a `stubPath` stub for one submodule does not reach `from invoke import task`. That path
 goes through the inline `invoke/__init__.py`, whose own `from .tasks import task` resolves to the

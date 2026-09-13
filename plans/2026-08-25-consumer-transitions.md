@@ -645,7 +645,14 @@ This repo never hits it because it solves the same problem a different way: `dev
 already records `_DEV_ARRAY_RE` as reading like a declaration of nothing. The case is understood one
 layer down and unhandled one layer up. A consumer that is itself a manifest entry needs either an
 exclusion in `ensure_deps` or a documented "not here", and **the sweep must not run `ensure-deps`
-against `invoke-stubs` until that is decided.**]
+against `invoke-stubs` until that is decided.**
+
+**Closed 2026-09-13, `6f44aec`** — as the exclusion, in `ensure_deps` and in the report both. It
+turned out both answers already existed: the "not here" was written in that consumer's own
+`pyproject.toml` all along, and the exclusion is what carries it back to the tool so nobody has to
+find that comment first. The warning above is history rather than a live constraint; the reason to
+keep reading it is that it names the one shape where `configs.diff`'s next-steps block prescribed
+damage, which is worth remembering whenever that block grows a new step.]
 
 [DECISION: **both are in scope, and they enter it differently. Resolved 2026-09-13.** "Unknown" had
 already stopped being an argument either way — both are consumers by every test this plan applies,
@@ -758,10 +765,22 @@ and the producer side is not, which is the worse half: `configs.diff` there prin
 block actively prescribing the damaging command, and only a reader who opens that comment first
 knows to ignore it.
 
-[DEFERRED: the producer-side fix — `ensure_deps` skipping a consumer that is itself a
-`repo-tasks-quality` entry, or `diff` not reporting it. Small and concrete, and it removes an
-attention tax paid on every future sweep of that repo rather than once. Until it lands, the
-configs-only scope decided above is load-bearing rather than cautious.]
+[DECISION: **the producer-side fix landed 2026-09-13, `6f44aec`** — `ensure_deps` and the drift
+report both skip the manifest entry naming the project they are running in, and say so rather than
+skipping silently. Derived by comparing that entry's bare name against the project's own
+`[project] name`, never a hand-kept exclusion list, so a future manifest entry whose repo consumes
+this one is covered with no edit. The create-from-nothing branch gets its own check against the
+git-remote-derived name, since a repo bootstrapped from nothing has no `[project] name` yet — which
+is exactly the state a manifest entry's own repo would start in.
+
+Verified with the working tree against the real consumer, not only through tests: `invoke-stubs`'
+report loses the missing-entry line and the `configs.ensure-deps` next step, keeping `ruff.toml` and
+`pytest.ini`; `ingesta` is unchanged, which is what makes it an exclusion about identity rather than
+about the entry; this repo still reports up to date. `contributing/type-checking.md` carries the
+clause, since that is where the git-sourced entry was decided.
+
+**The configs-only scope decided above still stands**, and is now a smaller claim: it was
+load-bearing while the tool prescribed the damaging command, and is ordinary caution now.]
 
 **The `c514bd9` `pythonVersion` prediction has a second confirmation waiting, and it is sharper than
 the first.** `ingesta` has no `pythonVersion` in its `pyrightconfig.json`, declares
