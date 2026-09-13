@@ -4,7 +4,10 @@ The behaviour worth pinning is mostly about what it refuses to do: derive its ow
 skip a declared consumer silently, or write anything into a tree it is only reading.
 """
 
+import re
+import tomllib
 from pathlib import Path
+from typing import cast
 
 import pytest
 from invoke import MockContext
@@ -165,6 +168,34 @@ def test_one_consumer_being_clean_does_not_hide_another_being_behind(tmp_cwd, mo
     out = capsys.readouterr().out
     assert "alpha: up to date" in out
     assert "beta: config files behind: pytest.ini" in out
+
+
+def test_the_canary_workflow_checks_out_a_declared_consumer():
+    """The reporter measures every consumer and runs none of them; `.github/workflows/canary.yml` is
+    the other half — it runs one consumer's own tier against the ref being pushed, because that
+    consumer's e2e is the only thing in the family testing what a generated repo does.
+
+    Nothing connects the two files at run time, and they spell the same repo differently: the
+    workflow needs a GitHub `owner/repo`, `repo-tasks.toml` declares a bare name. So dropping or
+    renaming the `[[consumer]]` entry would leave the canary checking out a repo this package no
+    longer counts as a consumer, with both files still passing everything else."""
+    # Anchored to this file rather than to cwd, like test_deps.py's workflow check: the tier's
+    # `tmp_cwd` fixture means cwd is a scratch directory, and these are the repo's own two files.
+    repo_root = Path(__file__).parents[2]
+    with (repo_root / "repo-tasks.toml").open("rb") as f:
+        parsed = cast(dict[str, object], tomllib.load(f))
+    declared = {entry["name"] for entry in cast(list[dict[str, object]], parsed.get("consumer", []))}
+
+    workflow = (repo_root / ".github/workflows/canary.yml").read_text(encoding="utf-8")
+    checked_out = cast(list[str], re.findall(r"^\s*repository:\s*(\S+)\s*$", workflow, re.MULTILINE))
+
+    assert checked_out, "canary.yml checks out no second repository, so it canaries nothing"
+    for repo in checked_out:
+        assert repo.rsplit("/", 1)[-1] in declared, (
+            f"canary.yml checks out {repo}, which repo-tasks.toml declares no [[consumer]] entry "
+            f"for. Declare it, or point the canary at a repo that is one — a canary run against a "
+            f"repo nobody calls a consumer proves nothing about the consumers."
+        )
 
 
 def test_measuring_restores_the_working_directory(tmp_cwd, monkeypatch):

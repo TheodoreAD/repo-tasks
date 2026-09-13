@@ -1,0 +1,75 @@
+name: Canary
+
+# What this repo does to a consumer, asked from this repo instead of from the consumer's.
+#
+# `scaffoldapy`'s e2e tier renders every template combination for real and runs each generated
+# repo's own `inv quality.check` — the only thing in the family that tests what a generated repo
+# does, rather than what some repo's own tree does. It already exercises repo-tasks `main`, because
+# `bootstrap-repo-tasks.sh` is unpinned and its CI installs whatever `main` is at run time. The gap
+# is *when*: it runs on pushes to `scaffoldapy`, and this repo's pushes are not those. Its `main`
+# (`b2690c6`) last ran CI on 2026-09-07 and that run is red, on the starlette/anyio collection error
+# this repo fixed hours later in `487c9c8` — so for six days the consumer's own badge said broken,
+# the fix said fixed, and nothing anywhere ran to decide between them.
+#
+# So this is the same test on this repo's schedule, with one thing changed: the global tool is
+# installed from *this checkout* rather than from `main`, which is what makes the run evidence about
+# the ref being pushed. See plans/2026-08-25-consumer-transitions.md, item 4.
+#
+# Its own workflow rather than a job in ci.yml, for the reason security.yml gives for the same
+# choice: GitHub reports each workflow as its own check run, so `CI ✓` next to `Canary ✗` already
+# reads as "this repo is fine, what it does to a consumer is not", with nothing further to
+# configure. Failure is therefore not automatically this repo's fault — `scaffoldapy`'s own `main`
+# can be red on its own, and the log says which.
+#
+# Unscheduled, like everything else here — contributing/quality-gate.md, "Nothing here runs on a
+# schedule, and that is the decision". `workflow_dispatch` is how it gets run without a push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaffoldapy:
+    runs-on: ubuntu-latest
+    # The e2e tier is ten real renders — `uv sync`, `inv configure` and a full `inv quality.check`
+    # each. It measured 91s of test time on the consumer's own runner; the rest is checkout, uv and
+    # ten cold dependency resolutions.
+    timeout-minutes: 20
+    steps:
+      # persist-credentials: false everywhere in this repo, same reasoning as ci.yml. Both
+      # checkouts take a path so neither lands on top of the other; the default working directory
+      # stays the parent of both.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          path: repo-tasks
+      - uses: actions/checkout@v7
+        with:
+          repository: TheodoreAD/scaffoldapy
+          persist-credentials: false
+          path: scaffoldapy
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      # The whole point of the job is this line. Everything the tier shells out to — copier.yml's
+      # own _tasks, and the bare `inv quality.check` each generated repo is measured by — resolves
+      # from the *globally* installed repo-tasks, because a generated repo deliberately carries no
+      # repo-tasks or invoke dependency of its own. Installing the checkout there is what swaps the
+      # thing under test. Running scaffoldapy's `./bootstrap-repo-tasks.sh` instead would install
+      # `main` and measure what is already shipped.
+      - run: uv tool install --force --with-executables-from invoke ./repo-tasks
+
+      # scaffoldapy's own CI runs exactly these two, in this order, after that bootstrap.
+      # `dev-env.setup` is what puts its .venv/bin on PATH for the step after it, via venv.py's
+      # GITHUB_PATH registration.
+      - run: inv dev-env.setup
+        working-directory: scaffoldapy
+      - run: inv test.integration
+        working-directory: scaffoldapy
