@@ -582,13 +582,22 @@ made `repo-tasks.update` report, seen from the one side that is entitled to it.
 So the batched sweep, scoped as it is everywhere above, would have covered **two of the five**
 non-self consumers.
 
-[PITFALL: **this is the third membership count in three weeks and the first two were both wrong, and
-each answer came from a shape somebody expected rather than from what makes a repo a consumer.** Two
-on 2026-08-25, three on 2026-09-10, six today. The 2026-09-10 correction is the sharpest case,
-because the one-liner it prescribed to stop the problem recurring is what hid the next two: it
-encodes "a consumer has a `tasks.py` with a top-level `from repo_tasks`", and three of the six do
-not. A repo consumes this package if it resolves `repo_tasks` at all, and no path shape is entitled
-to stand in for that.]
+[PITFALL: **this is the third membership count in three weeks and each answer came from a shape
+somebody expected rather than from what makes a repo a consumer.** Two on 2026-08-25, three on
+2026-09-10, six today.
+
+Corrected 2026-09-13: this said "the first two were both wrong", and the first one was not. The
+2026-08-25 count of two was **right when it was taken** — `agent-skills` added `tasks.py` and
+`bootstrap-repo-tasks.sh` in `9e49f39` on 2026-08-27, two days later — so it went stale rather than
+being mismeasured. Only its restatement was wrong, which is the claim the section above already pins
+on the node20 plan's 2026-09-09 wording. The distinction is not pedantry, because it is a different
+failure with a different fix: a wrong method wants a better method, and a correct measurement nobody
+re-ran wants **re-running**, which no improvement in method supplies.
+
+The 2026-09-10 correction is the sharpest case, because the one-liner it prescribed to stop the
+problem recurring is what hid the next two: it encodes "a consumer has a `tasks.py` with a top-level
+`from repo_tasks`", and three of the six do not. A repo consumes this package if it resolves
+`repo_tasks` at all, and no path shape is entitled to stand in for that.]
 
 Measured with `rg -l 'repo_tasks' <projects root> --glob '**/tasks.py' --glob '**/tasks/*.py'`,
 which returns all six plus `scaffoldapy`'s template. Two things about it are deliberate and worth
