@@ -208,8 +208,36 @@ batched sweep's first half ran" at the end of this file; `scaffoldapy` still owe
 is the half that matters most, since its e2e tier is the only thing testing what it generates.
 Record which way each prediction went — the `[UNVERIFIED:]` above is still waiting on a preflight
 that has never fired from a consumer's own CI, and none of the changes below will make it fire,
-since none is a gate binary. What the sweep has to cover, kept here rather than in a session handoff
-so it survives the session that wrote it:
+since none is a gate binary.
+
+**Read the list below as history rather than as scope, since 2026-09-13.** The measurement at the
+end of this file settled that `configs.diff` against the installed tool **is** the list for anything
+it can see — every shipped config file, every manifest entry — and that a hand-kept list is wrong
+about those by construction rather than by neglect. What is still scope is the complement: the items
+no diff can report, because they are not a file it compares or an entry it reads.
+
+The complement, in full:
+
+- **Report-mode wiring.** `rg -n 'runner.configure' tasks/` — a consumer building its own root
+  `Collection` needs the call, and without it produces output byte-identical to a wired consumer
+  with the variable unset, so there is nothing to read it off.
+- **The security-workflow caller.** An addition to a consumer rather than a `configs.pull`, so
+  nothing compares it. `scaffoldapy` has since landed one and its template ships one to every repo
+  it generates (measured 2026-09-13); `agent-skills`, `ingesta` and `invoke-stubs` have none.
+- **The packaged-`tests/` `__init__.py` decision.** `configs.pull` writes both config halves; it
+  cannot decide whether that repo wants the files, and the plan that owns this says the decision
+  must stay deliberate rather than implied by the pull.
+- **`venv.check` / `venv.recreate`.** A per-repo judgement about developing on the declared floor
+  rather than the newest interpreter. No diff has an opinion about it, and it will report a mismatch
+  in every consumer on first run.
+- **Whether a derived value is _right_.** `configs.pull` now writes `pythonVersion` and `anyio_mode`
+  per consumer, so "byte-identical across the family" stopped being the test; that the derived
+  version matches what that repo declares, and that its type check still passes there, is a reading.
+- **Task-code lag in a consumer that pins `repo-tasks` in its own lock** — invisible to any diff of
+  config files. Two consumers: `power-user-linux-setup` and `invoke-stubs`.
+
+Everything below is kept for its reasoning — what each change was for and what it predicted, with
+several bullets withdrawn in place — and none of it is a checklist to work through:
 
 - `ae54087` — `pytest-socket`/`pytest-cov` added to the `repo-tasks-quality` manifest.
 - `8f384d7` — `ignore:unclosed file:ResourceWarning` in the shipped `pytest.ini`.
@@ -305,14 +333,19 @@ so it survives the session that wrote it:
   `plans/2026-09-05-pipefail-in-the-agent-shell.md` owns along with the baseline to compare
   against.]
 
-[PITFALL: **this list is the sweep's only definition of scope, and nothing adds to it.** Every entry
-above was written by the session that landed the change, which works exactly as long as every such
-session remembers — and two did not: `7fc0b23` and `487c9c8` were both found by a later audit
-reading the source, four days and same-day respectively, and `7fc0b23` is a gate step that can turn
-a consumer red. A missing entry is invisible in the worst way, because the list looks complete and
-the sweep that runs from it reports success. Until something derives the list, treat "diff the
-shipped configs and the gate steps against the last swept commit" as a step of the sweep itself
-rather than trusting what is written here.]
+[PITFALL: **this list was the sweep's only definition of scope, and nothing added to it — which is
+why it is no longer the definition of anything.** Every entry was written by the session that landed
+the change, which works exactly as long as every such session remembers, and two did not: `7fc0b23`
+and `487c9c8` were both found by a later audit reading the source, four days and same-day
+respectively, and `7fc0b23` is a gate step that can turn a consumer red. A missing entry is
+invisible in the worst way, because the list looks complete and the sweep that runs from it reports
+success.
+
+Retained because the mechanism recurred at a level the fix did not reach. The answer to a missing
+_item_ was "derive the items" — `configs.diff` — and that holds; the list of **repos** stayed
+hand-kept and was wrong twice more, most recently on 2026-09-13, for exactly the reason stated here.
+Deriving one list did not make the other one safe, and the correction that closed the first is the
+same shape as the claim that broke the second.]
 
 ## The batched sweep's first half ran (2026-09-05): `power-user-linux-setup`
 
