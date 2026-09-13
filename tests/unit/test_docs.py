@@ -314,6 +314,23 @@ def test_generate_skips_a_file_without_markers(c, tmp_cwd, monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_this_repo_still_carries_the_markers_every_block_targets(repo_root):
+    """The counterpart to the skip above, and the reason that skip needs one.
+
+    `_splice` returning None is how a consumer with nothing to generate no-ops, and in *this* repo
+    the same silence means the rendering stopped tracking the declarations: `generate` writes
+    nothing, `generate-check` finds nothing stale, and the gate stays green while the table sits
+    frozen at whatever it last said. Every other test here points `_BLOCKS` at a throwaway file so
+    none of them writes the real README — which is right, and leaves the real targets checked by
+    nothing at all."""
+    for name, path, _ in docs._BLOCKS:
+        target = repo_root / path
+        assert target.exists(), f"{path} is a generated-block target and is not there"
+        text = target.read_text(encoding="utf-8")
+        assert docs._BLOCK_BEGIN.format(name=name) in text, f"{path} has lost the {name} begin marker"
+        assert docs._BLOCK_END.format(name=name) in text, f"{path} has lost the {name} end marker"
+
+
 def test_generate_leaves_a_formatted_block_alone(c, tmp_cwd, monkeypatch, capsys):
     """The oscillation this ordering exists to prevent, from the generator's side. What is on disk
     has been through dprint; what the renderer produces has not. A byte comparison would rewrite the
