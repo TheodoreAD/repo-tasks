@@ -112,11 +112,17 @@ def _ci_matrix_floor() -> str:
 def test_every_declaration_of_the_python_floor_agrees_on_the_library_tier(source: str, read: Callable[[], str]):
     """3.11, in four files, none of which can see the others.
 
-    The household rule, stated 2026-08-29 and restated 2026-09-13: 3.11 is the floor for this
+    The household rule, stated 2026-08-29 and restated twice since: 3.11 is the floor for this
     package, for libraries, and for anything someone else installs into their own environment;
-    applications start on 3.14. The axis is who controls the interpreter, and this package is
-    squarely in the first tier — every consumer resolves it into a venv this repo cannot see, so
-    raising the floor here is a breaking change on a machine nobody here will hear about.
+    applications start on 3.14. The axis is what stands between the code and the interpreter, and
+    for this package it is somebody else's resolver.
+
+    The reason it is library tier rather than local tooling is the one worth keeping, settled by the
+    user 2026-09-18: it can be reached as a user-wide `uv tool` install *and* be resolved into a
+    project's own venv — `invoke-stubs` and `power-user-linux-setup` both take it as a dependency —
+    so compatibility has to hold for the second case even though the first is the usual one. A repo
+    that is usually a tool but can be a dependency is a dependency. Raising the floor here is a
+    breaking change on a machine nobody here will hear about.
 
     A literal rather than a consistency check against `requires-python`, deliberately. A test that
     only asked the four to agree would pass on a coordinated move to 3.12, which is precisely the

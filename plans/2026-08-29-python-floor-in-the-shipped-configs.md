@@ -266,3 +266,42 @@ argues the machine-level fix comes before the per-repo one.]
 `requires-python`, the classifiers, `.python-version` and the CI matrix, as a literal rather than a
 consistency check — four files agreeing on 3.12 is the move the rule exists to stop. Verified by
 moving the constant and watching all four fail. It cannot see the venv, and says so.
+
+## The tier question is settled, and this plan is no longer where it lives (2026-09-18)
+
+The user settled the whole family's categories. **The rules live in
+`scaffoldapy/plans/2026-09-18-python-version-tier-rules.md`** (in the store until that repo absorbs
+it), because which tier a project is in is a generation-time answer that fans out to
+`requires-python`, `.python-version`, the CI matrix and the first sync. That is the same split this
+plan already made on 2026-08-30 — "leave the tier question itself to `scaffoldapy`" — now with the
+answer filled in rather than deferred.
+
+[DECISION: **`repo-tasks` is library tier, and the reason is sharper than "consumers pull configs
+from it".** Resolved by the user 2026-09-18: it can be reached as a user-wide `uv tool` install
+**and** be resolved into a project's own venv, which `invoke-stubs` and `power-user-linux-setup`
+both do. A repo that is usually a tool but can be a dependency is a dependency, so the floor has to
+hold for the venv case however rarely it is the one in use. That is why this repo is 3.11 while
+`scaffoldapy` and `power-user-linux-setup` are 3.14 — nothing resolves either of those into anyone's
+environment.]
+
+The one genuinely new category the exercise produced is the one this plan could not have seen, since
+it is about artifacts rather than configs: **a repo whose shipped artifacts run on an interpreter it
+does not choose develops at those artifacts' floor.** `agent-skills` is that case — its skill
+scripts are run by a consumer's ambient `python3` with no resolver anywhere in the path, so its dev
+venv being the floor is what makes its ordinary test run the check. Filed there as
+`2026-09-18-python-floor-for-shipped-skill-scripts.md`, along with the finding that two of its
+twelve scripts already die below 3.11 on an unguarded `import tomllib` and say nothing about why.
+
+[DECISION: **PEP 723 plus `uv run` was considered for those scripts and rejected on the
+requirement**, not on the mechanics — skills must work with no uv and no special setup. Recorded
+here because the measurement behind it is this repo's kind of finding and would otherwise be lost:
+`UV_PYTHON` overrides a script's own `requires-python` exactly as it overrides a project's, so even
+that mechanism would not have bound on this machine. uv prints
+`warning: The requested interpreter resolved to Python 3.14.5, which is incompatible with the
+script's Python requirement`
+and proceeds.]
+
+[DEFERRED: retire this plan once the rules file is absorbed into `scaffoldapy` and the
+`[UNVERIFIED:]` about the editor half is either checked or dropped. The reasoning about routes A/B/C
+is the part worth keeping and has no home yet outside this file; the tier question it kept deferring
+is answered elsewhere now, and two files describing one rule is how the rule drifts.]
