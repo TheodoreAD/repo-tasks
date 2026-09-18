@@ -924,3 +924,7 @@ interesting one:
 [UNVERIFIED: the `configs.require_tool` preflight still has never fired from a consumer's own CI,
 and the canary does not close that either — it would fire only on a family-wide manifest change
 adding a gate binary, and there has been none since it landed. Unchanged from every section above.]
+
+## Attachments
+
+- `canary-replica.sh` — committed, 2 KB, attached 2026-09-18
