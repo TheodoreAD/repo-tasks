@@ -131,6 +131,16 @@ broken bump — the one explanation that sends you to re-resolve a dependency th
 cannot be split into separately-gated commits at all in such a repo, and that is a property of the
 repo rather than a mistake in the split.]
 
+[PITFALL: **`ensure-deps` corrupts a consumer whose `dev` group names an extra before its last
+entry.** Its array regex stops at the first `]`, which in `"pkg[extra]"` is inside the string, so it
+reads the group as declaring nothing, reports every manifest entry as added, and splices all of them
+into the middle of that string — leaving a `pyproject.toml` that no longer parses as TOML. Hit live
+in `ingesta` on 2026-09-13. `configs.diff` reads the same list with tomllib and is right, so the
+tell is the two commands disagreeing in one run: `diff` naming two missing entries and `ensure-deps`
+printing "added" for all fourteen. Of the five declared consumers only `ingesta` is exposed today
+(measured 2026-09-18), and its hand-repair left the exposure in place. Check before running the step
+there; `plans/2026-09-13-ensure-deps-splices-into-an-extras-bracket.md` owns the fix.]
+
 [PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
 _constraint_ is a hand edit.** It is additive by contract — never touches an entry already present —
 which is what makes it safe to run at any time, and that same property means a `hadolint-py` that
@@ -176,6 +186,13 @@ It is not a config refresh. Measured 2026-08-27, sweeping one release that added
   billing: it found a defect in **repo-tasks itself** (`untested-modules` demanding a `test_init.py`
   for a docstring-only `__init__.py`, which every generated repo has). Fixing it meant a second push
   here and a second `inv repo-tasks.update` mid-sweep. Expect that round trip.
+- **Where the sweep starts by raising that consumer's floor, budget for a lint red rather than a
+  type-check red.** The shipped `ruff.toml` carries no `target-version` and reads the floor from
+  `requires-python`, so the edit that settles the floor question also turns on the syntax-upgrade
+  rules at the new floor: `ingesta` raising `>=3.11` to `>=3.14` on 2026-09-13 took two `UP047` hits
+  on generics still written with a `TypeVar`, a `UP043`, and a formatter change dropping the
+  parentheses from a multi-exception `except`. The derived `pythonVersion` that everyone expects to
+  fail never got the chance — the floor moved up to meet the code instead.
 
 [PITFALL: a green consumer gate on this machine is not a green CI run there, and
 `filterwarnings =
