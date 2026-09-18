@@ -828,7 +828,8 @@ something that runs does.
 
 So the unswept set is **four, not three**: `scaffoldapy`, `ingesta`, `invoke-stubs` and now
 `agent-skills`. Every table above that says three is counting what had been measured rather than
-what is behind.
+what is behind. **Three again since `ingesta` was swept later the same day** — see "`ingesta` is
+swept" at the end of this file.
 
 **Filed for `agent-skills` 2026-09-13**, the way `ingesta` and `invoke-stubs` were, and it asks to
 be done in the same session as that repo's existing `2026-09-10-setup-uv-pins-two-majors-behind.md`
@@ -924,6 +925,93 @@ interesting one:
 [UNVERIFIED: the `configs.require_tool` preflight still has never fired from a consumer's own CI,
 and the canary does not close that either — it would fire only on a family-wide manifest change
 adding a gate binary, and there has been none since it landed. Unchanged from every section above.]
+
+## `ingesta` is swept (2026-09-13) — the first consumer swept by somebody else
+
+Merged in from `2026-09-13-ingesta-sweep-scored.md`, filed into the store from that consumer's own
+session (`21c18768-649d-4753-9dca-e23e5b9555d3.jsonl`) and absorbed here 2026-09-18 — the name to
+search for with `plans.py archive` if the original filing is wanted. Merged rather than kept beside
+this plan because it reports on this plan's own subject: which consumer is swept, and how the
+predictions this file has been accumulating for three weeks actually scored. The per-repo record is
+in `ingesta`'s own history at `0762ad6`
+(`git show 0762ad6:plans/2026-09-13-repo-tasks-consumer-sweep.md`), retired there the same day.
+
+**The order held.** That repo's sweep plan made the floor question its item 1 and nothing below it
+could pass a gate first; the floor was settled before the pull, as `requires-python = ">=3.14"` over
+importing `override` from `typing_extensions` (`e81a054`), by the rule that applications start on
+3.14.
+
+### Which way each prediction went
+
+| prediction                                          | result                                                         |
+| --------------------------------------------------- | -------------------------------------------------------------- |
+| both halves of `configs.diff` fire                  | **held** — four files, two missing entries, `hadolint-py` bare |
+| CI stays green through the pull                     | **held** — CI and Security passed on `c81b810`                 |
+| `pytest-socket`, `pytest-timeout` inert             | **held** — 1178 tests before and after                         |
+| local gate red on the type check at the pull        | **did not happen** — the floor had moved to 3.14 first         |
+| `venv.check` mismatch on first run                  | **did not happen** — the venv is 3.14, now the floor           |
+| `requires-python` present, so the ruff pull is safe | **held**                                                       |
+
+Six for six on the CI half, which is the half this plan exists for: the green-CI prediction has now
+held on both consumers that have been swept since `configs.diff` grew its dev-group half, and for
+the same stated reason both times — none of the drifted items is a binary a gate step shells out to.
+
+### The floor-raise interaction, which nothing had predicted
+
+**Raising the floor to satisfy item 1 is what turned the gate red, and it turned it red on lint
+rather than on the type check.** The pulled `ruff.toml` reads the floor from `requires-python`
+(`949607c` deleted `target-version`), so the same edit that settles the floor question also switches
+on ruff's syntax-upgrade rules at that new floor: `UP047` flagged two generic functions still
+written with a `TypeVar` — the two whose comments cited the old 3.11 floor — `UP043` removed a
+redundant `AsyncGenerator` default, and the formatter dropped the parentheses from a multi-exception
+`except`, which PEP 758 allows on 3.14.
+
+That generalises past this consumer and is the reason it is recorded here rather than left in the
+filing: **wherever a sweep's item 1 is a floor question and the answer is to raise it, expect the
+pull's first red to be `UP` rules and a formatter change, not the type check.** Two of the three
+consumers still unswept declare `>=3.11`, so it is ahead of them and not behind us. Carried into
+[`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md).
+
+### What it settles about the `c514bd9` finding
+
+The third occurrence of the `pythonVersion` finding — four `ingesta` modules importing
+`typing.override`, two of them shipped in the wheel — was resolved, and **not by the mechanism the
+table above expected.** The derived `pythonVersion` never got the chance to fail: the floor moved up
+to meet the code rather than the code moving down to meet the floor. Both are valid answers to the
+same question and the sweep is what forced it to be asked, which is the claim this plan actually
+makes about `c514bd9`. It finds a defect rather than a difference, and the repo decides what the
+defect was.
+
+### Three things no prediction covered
+
+- `inv repo-tasks.update` was a no-op — `v0.3.0` is still the latest tag, so the global tool was
+  already current. Worth noting because the sweep doc puts that step first and a no-op there reads
+  as a skipped step.
+- **`configs.ensure-deps` corrupted that consumer's `pyproject.toml`**, splicing all fourteen
+  manifest entries into the middle of `"ingesta[store]"` while `configs.diff` in the same run
+  correctly reported exactly two missing. Restored by hand and the two entries written manually
+  (`ae506ef`). Filed as
+  [`2026-09-13-ensure-deps-splices-into-an-extras-bracket.md`](2026-09-13-ensure-deps-splices-into-an-extras-bracket.md),
+  absorbed alongside this and kept as its own plan — it is a defect in this repo's code rather than
+  a fact about the transition, and it is still live. See the pitfall below for what it means for the
+  three remaining sweeps.
+- The security-workflow caller was copied from the `scaffoldapy` template at `d17c607`, which the
+  GitHub API reports as the only commit on this repo's `main` ever to have touched
+  `security-reusable.yml` — so that pin is current rather than stale (`ingesta` `1967f31`). That
+  closes the complement-list item for this consumer and is the first time the "`scaffoldapy`'s
+  template hands it to every generated repo for free" route has been used by a repo that is not
+  generated by it.
+
+The packaged-`tests/` decision was left untaken there: no `__init__.py`, and the pull added none —
+the deliberate outcome the complement list asks for.
+
+[PITFALL: **`configs.ensure-deps` is unsafe for `ingesta` today and safe for the other four, and the
+difference is one entry's position.** Measured 2026-09-18 by running `_DEV_ARRAY_RE` against each
+declared consumer's `pyproject.toml`: `scaffoldapy` captures 15 entries, `invoke-stubs` 14,
+`agent-skills` 12, `power-user-linux-setup` 16 — and `ingesta` captures **0**, because its restored
+file still opens the group with `"ingesta[store]"`. So the three remaining sweeps are not blocked,
+and `ingesta`'s next one re-fires the same corruption on a file that was repaired by hand. The
+repair did not remove the exposure; it only removed the damage.]
 
 ## Attachments
 
