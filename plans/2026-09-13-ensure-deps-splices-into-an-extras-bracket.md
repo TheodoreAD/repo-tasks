@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-13
+status: in-progress
+updated: 2026-09-26
 source_repo: github.com-personal/ingesta
 source_session: 21c18768-649d-4753-9dca-e23e5b9555d3.jsonl
 source_moment: 2026-09-13
@@ -89,3 +89,55 @@ does not round-trip; the closing bracket has to be found by a scan that skips qu
 comments rather than by the first `]`. A regression test with an extras entry first in the list, and
 one with a `[` in a comment, both asserting the result still parses and only the missing entries
 were added.
+
+## Landed 2026-09-26, `a0ee510`
+
+Exactly as recommended, with two things the direction above did not anticipate.
+
+**A second shape was wrong for the same reason, in this repo.** `_declared_dev_specs`' docstring had
+already recorded it — a text reader sees `dev = [{ include-group = "repo-tasks-quality" }]` as
+declaring nothing — but only as an argument for why `diff` uses tomllib, never as a live defect in
+`ensure_deps`. It is one: run here before the fix, `ensure_deps` would have spliced the whole
+manifest into the repo that authors it. The case was understood one layer down and unhandled one
+layer up, which is the same sentence that plan wrote about the `invoke-stubs` self-reference three
+weeks earlier.
+
+**The scan is anchored to the `[dependency-groups]` table**, not to the first `dev = [` in the file
+as the old regex was. Once membership and position come from different readers, splicing into a
+different array than the one measured is a new way to be wrong — and `dev` is not a unique key in a
+pyproject.toml, since pdm and poetry both spell dev groups under tables of their own.
+
+`_scan_past_array` skips comments and all four TOML string forms, and tracks `[`/`]` depth so a
+nested array cannot end the outer one.
+
+## Verification
+
+**Eight regression cases, six of which fail against the previous code** — extras entry first, extras
+entry last, a bracket inside a comment, an inline table before the strings, a marker quoting inside
+a basic string, this repo's own `include-group` shape, a `dev` array under
+`[tool.pdm.dev-dependencies]` alongside the real one, and the byte-identical survival of the extras
+entry itself. Proved by reverting only `configs.py` and re-running them, not by reasoning about the
+diff. The two that pass either way are coverage rather than regression proof, and are labelled as
+such here rather than counted.
+
+**The original repro, replayed on that consumer's own file.** The attached `verify_repro.py` reads
+`ingesta`'s real `pyproject.toml`, rewinds its dev group to the pre-repair state this plan records
+(the two manifest entries absent, `"ingesta[store]"` still first), runs `ensure_deps` on a scratch
+copy and asserts the outcome. Result: the file parses, `"ingesta[store]"` is still entry 0, exactly
+`pytest-socket` and `pytest-timeout` were added, and every other byte is identical. The run prints
+`already present` for the other twelve, which is the precise inversion of the 2026-09-13 symptom —
+`added` for all fourteen. Nothing in that repo was written; the script re-reads the source file
+afterwards and asserts it unchanged.
+
+[UNVERIFIED: **the fix has not been run inside `ingesta` itself**, which is what this plan's
+`source_repo` owes — the replay above uses that consumer's real input but this repo's working-tree
+code, not the global tool in that tree. Discharging it needs `inv repo-tasks.update` there once this
+is pushed and released, and then `configs.ensure-deps` in that repo's own session. It is the sweep
+step rather than a separate errand, and `ingesta`'s dev group is currently complete, so the honest
+repro there is the rewind the script does. Until then, **any consumer still on a `repo-tasks` older
+than this keeps the bug**, which is recorded in `contributing/consumer-sweep.md` as a live pitfall
+rather than a historical one.]
+
+## Attachments
+
+- `verify_repro.py` — committed, 2 KB, attached 2026-09-26
