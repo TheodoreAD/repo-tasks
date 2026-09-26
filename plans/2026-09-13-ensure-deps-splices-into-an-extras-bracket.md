@@ -143,10 +143,21 @@ a clean `Exit` naming the likely cause means restructuring the task's opening, s
 computed above the `pyproject_path.exists()` check, and that is a bigger edit than the message is
 worth on its own. Worth doing next time that function is touched for another reason.]
 
-[UNVERIFIED: **Released in `v0.4.0` on 2026-09-26, and this machine's global tool is on it, so what
-is left is the run inside `ingesta`.** The fix has not been run inside `ingesta` itself, which is
-what this plan's `source_repo` owes — the replay above uses that consumer's real input but this
-repo's working-tree code, not the global tool in that tree. Discharging it needs
+~~[UNVERIFIED:~~ **Verified 2026-09-26, with the installed tool on that consumer's own tree, in a
+clone rather than its working tree.** `ingesta`'s `main` was shallow-cloned into a scratch
+directory, its dev group rewound by deleting the `pytest-socket` and `pytest-timeout` lines (four
+extras entries, `"ingesta[store]"` first, still opening the group), and `configs.ensure-deps` run
+there through the global tool's own `inv` by absolute path. Its interpreter imports `repo_tasks`
+from the uv tool's site-packages at 0.4.0, and `a0ee510` is an ancestor of `v0.4.0`, so this is the
+shipped fix rather than this checkout. It printed `added` for exactly those two and
+`already present` for the other twelve; the result parses, the dev group's first four entries are
+the extras unchanged, and a diff against the rewound file shows the two inserted lines and nothing
+else. A clone rather than that repo's tree for the reason the starlette plan gives: nothing written
+in another session's working copy, and its `main` is what every run of the fix will actually meet.
+The original entry follows. **Released in `v0.4.0` on 2026-09-26, and this machine's global tool is
+on it, so what is left is the run inside `ingesta`.** The fix has not been run inside `ingesta`
+itself, which is what this plan's `source_repo` owes — the replay above uses that consumer's real
+input but this repo's working-tree code, not the global tool in that tree. Discharging it needs
 `inv repo-tasks.update` there once this is pushed and released, and then `configs.ensure-deps` in
 that repo's own session. It is the sweep step rather than a separate errand, and `ingesta`'s dev
 group is currently complete, so the honest repro there is the rewind the script does. Until then,
