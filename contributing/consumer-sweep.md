@@ -123,6 +123,8 @@ inv venv.sync               # or plain `uv sync` where the consumer publishes no
 repo-tasks configs.diff     # what this consumer has drifted from — both configs and dev group
 repo-tasks configs.ensure-deps
 inv deps.lock               # re-resolve uv.lock; review the diff
+inv deps.check-currency     # manifest entries the lock still holds behind; take any with
+                            # inv deps.lock --package <name>, since a plain lock keeps old pins
 inv venv.sync
 inv configs.pull
 inv quality.precommit       # the gate, against the new tool and the new configs
@@ -278,7 +280,7 @@ clone, uncommitted template edit), in CI it raised `ShallowCloneWarning` (clean,
 condition raises only its own half. Fixing the one the sweep saw left CI red on the other. Reproduce
 with `git clone --depth 1 file://<path>` before calling a consumer done.]
 
-## Two lags, both invisible from a green terminal
+## Three lags, all invisible from a green terminal
 
 - **The dev machine lags `main`.** The global `uv tool install` is whatever `inv repo-tasks.update`
   last fetched. A local gate can pass for a day against the old tool while CI runs the new one.
@@ -287,6 +289,11 @@ with `git clone --depth 1 file://<path>` before calling a consumer done.]
   declared them still passes locally and fails in CI, where only the group exists. This is what
   `require_tool`'s preflight message is worded for: it names the manifest entry, because the binary
   being on `PATH` is not evidence the group declares it.
+- **A declared entry freezes at its first lock.** `configs.diff` asks whether each manifest entry is
+  _declared_, and a plain `uv lock` never moves a version already locked, so an entry declared
+  without a constraint stays wherever the consumer first resolved it. `power-user-linux-setup` held
+  `invoke-stubs` at its first commit for a month while `configs.diff` called it up to date.
+  `inv deps.check-currency` is the step that asks, and needs a `repo-tasks` newer than `v0.4.0`.
 
 [PITFALL: `scaffoldapy` is two things — a repo with its own gate, and a generator whose output has
 its own gate. `inv quality.precommit` there is evidence about the first only. Only its e2e tier

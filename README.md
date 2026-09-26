@@ -173,6 +173,7 @@ with a message naming the task.
 | `inv ci.status`                       | gh, network     |
 | `inv configure`                       | network         |
 | `inv deps.audit`                      | network         |
+| `inv deps.check-currency`             | network         |
 | `inv deps.lock`                       | network         |
 | `inv dev-env.setup`                   | network         |
 | `inv dist.list-versions`              | network         |

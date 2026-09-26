@@ -266,6 +266,14 @@ def _applicable_quality_deps() -> list[str]:
     return [dep for dep in _quality_deps() if dep != excluded]
 
 
+def quality_dep_names() -> list[str]:
+    """The bare names of the `repo-tasks-quality` entries that apply to this project, in manifest
+    order — what `deps.check-currency` looks up in the lock. Public so that task reads the manifest
+    through the same self-exclusion `ensure_deps` and `diff` apply, rather than a second reader of
+    it."""
+    return [_bare_name(dep) for dep in _applicable_quality_deps()]
+
+
 def _report_self_exclusion(excluded: str | None) -> None:
     """Say when an entry was skipped, rather than letting it look absent from the manifest.
 
