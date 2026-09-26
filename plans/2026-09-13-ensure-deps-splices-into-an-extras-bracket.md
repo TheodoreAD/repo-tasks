@@ -143,14 +143,15 @@ a clean `Exit` naming the likely cause means restructuring the task's opening, s
 computed above the `pyproject_path.exists()` check, and that is a bigger edit than the message is
 worth on its own. Worth doing next time that function is touched for another reason.]
 
-[UNVERIFIED: **the fix has not been run inside `ingesta` itself**, which is what this plan's
-`source_repo` owes — the replay above uses that consumer's real input but this repo's working-tree
-code, not the global tool in that tree. Discharging it needs `inv repo-tasks.update` there once this
-is pushed and released, and then `configs.ensure-deps` in that repo's own session. It is the sweep
-step rather than a separate errand, and `ingesta`'s dev group is currently complete, so the honest
-repro there is the rewind the script does. Until then, **any consumer still on a `repo-tasks` older
-than this keeps the bug**, which is recorded in `contributing/consumer-sweep.md` as a live pitfall
-rather than a historical one.]
+[UNVERIFIED: **Released in `v0.4.0` on 2026-09-26, and this machine's global tool is on it, so what
+is left is the run inside `ingesta`.** The fix has not been run inside `ingesta` itself, which is
+what this plan's `source_repo` owes — the replay above uses that consumer's real input but this
+repo's working-tree code, not the global tool in that tree. Discharging it needs
+`inv repo-tasks.update` there once this is pushed and released, and then `configs.ensure-deps` in
+that repo's own session. It is the sweep step rather than a separate errand, and `ingesta`'s dev
+group is currently complete, so the honest repro there is the rewind the script does. Until then,
+**any consumer still on a `repo-tasks` older than this keeps the bug**, which is recorded in
+`contributing/consumer-sweep.md` as a live pitfall rather than a historical one.]
 
 ## Attachments
 

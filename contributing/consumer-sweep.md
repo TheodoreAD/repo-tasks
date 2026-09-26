@@ -173,9 +173,9 @@ gate regardless; that is what says the new tool works here. `ensure-deps` is add
 One consumer is also a `repo-tasks-quality` entry (`invoke-stubs`), and since 2026-09-13 both
 `configs.diff` and `ensure-deps` skip the entry naming the project they are running in, printing
 why. Nothing to do by hand there any more — but a consumer still running an older `repo-tasks` will
-be told to splice that package into its own dev group. `v0.3.0` is such a version, since the skip
-landed after it. So if the skip line is absent, the tool is older than the skip, and that one next
-step must be ignored.
+be told to splice that package into its own dev group. `v0.3.0` is such a version; the skip shipped
+in `v0.4.0`. So if the skip line is absent, the tool is older than the skip, and that one next step
+must be ignored.
 
 In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `inv test.integration`
 (~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
@@ -211,9 +211,9 @@ between that and a commit. **Fixed 2026-09-26**: membership now comes from tomll
 
 Kept because the sweep runs whatever tool the consumer has, not this working tree. The tell is the
 two commands disagreeing in one run — `diff` naming two missing entries while `ensure-deps` prints
-"added" for all of them — and if you see it, the global tool predates the fix. The fix is in the
-first release after `v0.3.0`; `inv repo-tasks.update` reaches it only once that tag exists. A file
-already corrupted by it now gets a sentence naming this cause from both commands, instead of a
+"added" for all of them — and if you see it, the global tool predates the fix. The fix shipped in
+`v0.4.0`, 2026-09-26, so `inv repo-tasks.update` reaches it from that tag on. A file already
+corrupted by it now gets a sentence naming this cause from both commands, instead of a
 `TOMLDecodeError` traceback.]
 
 [PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
