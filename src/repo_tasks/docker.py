@@ -13,11 +13,15 @@ from .version import Version, current_version, set_dev
 _NO_IMAGES = "no repo-tasks.toml [[docker]] entries and no root Dockerfile — nothing to do"
 
 
-def _registry_host(image: str) -> str:
+def registry_host(image: str) -> str:
     """The registry `docker login` has to name, from an image reference. Docker's own rule: the
     first path segment is a registry only when it looks like a host — it contains a dot or a port,
     or it is exactly `localhost`. Anything else is a Docker Hub namespace, and Docker Hub is what a
-    bare `docker login` targets."""
+    bare `docker login` targets.
+
+    Public because `helm.py` asks the same question of every [[docker]] entry, to say when a chart
+    registry shares a host with an image registry — and a second copy of this rule there is exactly
+    what would drift."""
     first, _, rest = image.partition("/")
     if rest and ("." in first or ":" in first or first == "localhost"):
         return first
@@ -157,7 +161,7 @@ def login(c: Context, project: str | None = None):
     if image is None:
         print(f"[docker.login] {_NO_IMAGES}")
         return
-    run_interactive(f"docker login {_registry_host(image.image)}")
+    run_interactive(f"docker login {registry_host(image.image)}")
 
 
 @task(help={"project": "Image entry whose registry to log out of (default: the only one)"})
@@ -169,8 +173,10 @@ def logout(c: Context, project: str | None = None):
     the token.** A leaked or retired token is revoked where it was issued (GitHub's token settings
     for ghcr.io), and this task cannot reach that.
 
-    helm reads docker's store as a fallback, so for a registry both tools use this is also what
-    stops helm authenticating there; `helm.logout` clears helm's own store, which this does not.
+    **On a registry helm also uses, this ends helm's access too**, by either of two routes: helm
+    reads docker's store as a fallback, and where both configs name the same `credsStore` the
+    keyring holds one entry per host that both tools share. `helm.logout` says the same from its
+    side; for a shared host, run both.
 
     docker prints "Removing login credentials" and exits 0 whether or not a credential was there,
     so that line is not evidence one existed. Nothing is prompted, so this runs through `c.run`."""
@@ -178,7 +184,7 @@ def logout(c: Context, project: str | None = None):
     if image is None:
         print(f"[docker.logout] {_NO_IMAGES}")
         return
-    c.run(f"docker logout {_registry_host(image.image)}", echo=True)
+    c.run(f"docker logout {registry_host(image.image)}", echo=True)
 
 
 ns: Collection = Collection(check, build, push, release, login, logout)

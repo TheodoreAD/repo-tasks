@@ -212,4 +212,4 @@ def test_logout_targets_the_same_host_login_does(c, monkeypatch):
     ],
 )
 def test_registry_host_follows_dockers_own_rule(image, expected):
-    assert docker._registry_host(image) == expected
+    assert docker.registry_host(image) == expected

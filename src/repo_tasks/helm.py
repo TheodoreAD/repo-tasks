@@ -9,8 +9,10 @@ from pathlib import Path
 
 from invoke import Collection, Context, task
 
+from .docker import registry_host as docker_registry_host
 from .interactive import run_interactive
-from .projects import HelmChart, discover_helm_charts
+from .nextsteps import next_steps
+from .projects import HelmChart, discover_docker_images, discover_helm_charts
 from .requirements import NETWORK, requires
 from .version import Version, current_version, set_dev
 
@@ -23,6 +25,17 @@ def _registry_host(registry: str) -> str:
     """The host `helm registry login` has to name, from a chart's oci:// registry reference —
     `oci://ghcr.io/org/charts` is pushed to, `ghcr.io` is logged in to."""
     return registry.removeprefix("oci://").split("/", 1)[0]
+
+
+def _images_sharing(c: Context, host: str) -> list[str]:
+    """The [[docker]] entries that push to `host`, by name — the case where one login covers both
+    tools and one logout ends both.
+
+    Two independent routes make it so, both measured 2026-09-26 against a local htpasswd registry.
+    helm reads `~/.docker/config.json` as a fallback, which a helm config pinned to a plain file
+    store still honoured. And where both configs name the same `credsStore`, as this machine's do,
+    the keyring holds one entry per host that both tools read and either tool's logout erases."""
+    return [image.name for image in discover_docker_images(c) if docker_registry_host(image.image) == host]
 
 
 def _resolve_chart(c: Context, project: str | None) -> HelmChart | None:
@@ -122,10 +135,9 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     `credsStore`, then a detected platform default. So the credential reaches the OS secret store
     wherever the machine has a credential helper installed.
 
-    Reading is wider than writing: helm searches its own config **and** falls back to
-    `~/.docker/config.json`, keyed by registry host. A chart registry on the same host as an image
-    registry is therefore already covered by `docker.login`, and this task is what a chart registry
-    on its own host needs.
+    A chart registry on the same host as a [[docker]] entry is already covered by `docker.login`,
+    and this says so before prompting — see `_images_sharing` for the two routes. It still logs in:
+    the hint informs, and a second login to the same host is harmless.
 
     Verified 2026-09-26 against a local htpasswd `registry:2`, a host no docker credential covers:
     the login landed in the OS keyring, helm's own config got an explicit `credsStore` and no
@@ -137,7 +149,13 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     resolved_registry = registry or chart.registry
     if resolved_registry is None:
         raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
-    run_interactive(f"helm registry login {_registry_host(resolved_registry)}")
+    host = _registry_host(resolved_registry)
+    if sharing := _images_sharing(c, host):
+        print(
+            f"[helm.login] {host} is also where {', '.join(sharing)} pushes, so `inv docker.login` already "
+            "covers helm there — helm reads docker's credentials for the same host. Logging in anyway."
+        )
+    run_interactive(f"helm registry login {host}")
 
 
 @task(
@@ -153,8 +171,12 @@ def logout(c: Context, project: str | None = None, registry: str | None = None):
     `credsStore`, which oras writes there on first login when a helper is installed. **Local only:
     it does not revoke the token**, which happens where it was issued.
 
-    **Only helm's own store.** helm also reads `~/.docker/config.json` as a fallback, so on a host
-    `docker.login` covers, helm keeps authenticating after this until `docker.logout` runs too.
+    **On a host a [[docker]] entry also uses, one tool's logout is not enough, and says so.** helm
+    falls back to docker's credential, so it can keep authenticating after this; and where both
+    configs name the same `credsStore` the keyring entry is shared, so this also erases docker's and
+    leaves `~/.docker/config.json` a secretless `auths` entry pointing at nothing — measured, see
+    `_images_sharing`. Which of the two applies depends on machine config this does not read, and
+    `inv docker.logout` is the right next step in both.
 
     helm prints "Removing login credentials" and exits 0 whether or not a credential was there, so
     that line is not evidence one existed. Nothing is prompted, so this runs through `c.run`."""
@@ -165,7 +187,15 @@ def logout(c: Context, project: str | None = None, registry: str | None = None):
     resolved_registry = registry or chart.registry
     if resolved_registry is None:
         raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
-    c.run(f"helm registry logout {_registry_host(resolved_registry)}", echo=True)
+    host = _registry_host(resolved_registry)
+    c.run(f"helm registry logout {host}", echo=True)
+    if sharing := _images_sharing(c, host):
+        print(
+            f"[helm.logout] {host} is also where {', '.join(sharing)} pushes. helm can still authenticate "
+            "there through docker's credential, and if both tools share a keyring entry this logout "
+            "removed docker's too — either way, log docker out as well."
+        )
+        next_steps("inv docker.logout")
 
 
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a

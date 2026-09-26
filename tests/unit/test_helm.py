@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from repo_tasks import helm
-from repo_tasks.projects import HelmChart
+from repo_tasks.projects import DockerImage, HelmChart
 
 
 def _stub_chart(**overrides):
@@ -21,9 +21,16 @@ def _stub_chart(**overrides):
     return HelmChart(**defaults)  # pyright: ignore[reportArgumentType]
 
 
-def _stub(monkeypatch, chart=None, version="1.2.3"):
+def _image(name: str, image: str) -> DockerImage:
+    return DockerImage(name=name, path=Path(), dockerfile=Path("Dockerfile"), image=image, group=name)
+
+
+def _stub(monkeypatch, chart=None, version="1.2.3", images=()):
+    """No [[docker]] entries unless a test names some — otherwise the same-host hint would read
+    whatever repo-tasks.toml the suite happens to run beside."""
     monkeypatch.setattr(helm, "discover_helm_charts", lambda c: [chart or _stub_chart()])
     monkeypatch.setattr(helm, "current_version", lambda c, group=None: version)
+    monkeypatch.setattr(helm, "discover_docker_images", lambda c: list(images))
 
 
 def test_lint_runs_helm_lint_on_the_chart_path(c, monkeypatch):
@@ -142,6 +149,44 @@ def test_login_errors_when_the_chart_has_no_registry(c, monkeypatch):
     _stub(monkeypatch, chart=_stub_chart(registry=None))
     with pytest.raises(ValueError, match="no registry"):
         helm.login.body(c)
+
+
+def test_login_says_when_an_image_registry_shares_the_host(c, monkeypatch, capsys):
+    _stub(monkeypatch, images=[_image("api", "ghcr.io/org/api"), _image("web", "docker.io/org/web")])
+    commands = _capture_interactive(monkeypatch)
+    helm.login.body(c)
+    out = capsys.readouterr().out
+    assert "ghcr.io is also where api pushes" in out
+    assert "web" not in out  # another host entirely
+    # The hint informs; it never skips the login the user asked for.
+    assert commands == ["helm registry login ghcr.io"]
+
+
+def test_login_matches_docker_hosts_by_dockers_own_rule(c, monkeypatch, capsys):
+    """A bare `org/web` image is Docker Hub, so it shares nothing with a chart on ghcr.io — and
+    shares `docker.io` with a chart pushed there."""
+    _stub(monkeypatch, chart=_stub_chart(registry="oci://docker.io/org/charts"), images=[_image("web", "org/web")])
+    _capture_interactive(monkeypatch)
+    helm.login.body(c)
+    assert "docker.io is also where web pushes" in capsys.readouterr().out
+
+
+def test_login_is_silent_about_sharing_when_no_image_uses_the_host(c, monkeypatch, capsys):
+    _stub(monkeypatch, images=[_image("web", "docker.io/org/web")])
+    _capture_interactive(monkeypatch)
+    helm.login.body(c)
+    assert "also where" not in capsys.readouterr().out
+
+
+def test_logout_on_a_shared_host_points_at_docker_logout(c, monkeypatch, capsys):
+    """Measured: helm's logout alone leaves helm authenticating through docker's credential, or —
+    with a shared keyring — erases docker's and strands a secretless auths entry."""
+    _stub(monkeypatch, images=[_image("api", "ghcr.io/org/api")])
+    helm.logout.body(c)
+    out = capsys.readouterr().out
+    assert "ghcr.io is also where api pushes" in out
+    assert "inv docker.logout" in out
+    c.run.assert_called_once_with("helm registry logout ghcr.io", echo=True)
 
 
 def test_logout_targets_the_same_host_login_does(c, monkeypatch):
