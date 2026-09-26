@@ -1,8 +1,15 @@
 # Making a change here reach consumers without breaking them
 
-A push to `main` is a deploy. `bootstrap-repo-tasks.sh` is unpinned until a `vX.Y.Z` tag exists
-(`selfinstall.stamp` refuses to pin to a tag that isn't real), so every consumer's next CI run
-installs whatever `main` is at that moment — with no consumer-side action and no notice.
+A push to `main` is a deploy to any consumer whose `bootstrap-repo-tasks.sh` still carries the
+unpinned form: its next CI run installs whatever `main` is at that moment, with no consumer-side
+action and no notice.
+
+[PITFALL: **that used to be "unpinned until a `vX.Y.Z` tag exists", and the tag stopped being the
+variable on 2026-09-04.** `selfinstall.stamp` does refuse to pin to a tag that isn't real, so the
+sentence was true when written and became a false explanation the moment `v0.2.0` was cut — the
+script stays unpinned until somebody re-runs `stamp` **in that consumer**, which is a per-repo
+action nothing prompts. It read as a property of this repo's release state for three weeks, which is
+why the stamp step is now in the sweep rather than implied by tagging.]
 
 [PITFALL: a change to the shared tool list or the shipped configs is a breaking change for consumers
 even when it is purely additive here. A consumer's `dependency-groups.dev` and its pulled config
@@ -92,7 +99,29 @@ inv deps.lock               # re-resolve uv.lock; review the diff
 inv venv.sync
 inv configs.pull
 inv quality.precommit       # the gate, against the new tool and the new configs
+inv repo-tasks.stamp        # re-pin this consumer's bootstrap to the version its gate just passed
 ```
+
+**The stamp is last, and it is what actually pins a consumer.** `inv repo-tasks.update` moves the
+_developer machine_ to the latest tag; a consumer's CI installs whatever its
+`bootstrap-repo-tasks.sh` says, and until 2026-09-26 all three consumers carrying that script still
+had the unpinned form, so their CI tracked `main` while their developers were on `v0.3.0` — local
+green saying nothing about CI, which is the failure this whole file exists for.
+`plans/2026-08-25-consumer-transitions.md` has the decision and what it costs.
+
+It runs after the gate because `stamp` pins the version **active in the process running it**, not
+the newest tag: that records what this repo was verified against, and running it earlier would pin a
+version not yet known to work here. It needs the network for the tag list, and falls back to the
+unpinned form rather than pinning a tag that does not exist. `power-user-linux-setup` and
+`invoke-stubs` have no bootstrap script — they pin through their own lock, so the step is a no-op
+there and the `inv deps.lock --package repo-tasks` at the top is their equivalent.
+
+[PITFALL: **not `inv configure`, which is what `stamp`'s own docstring points you at.** That is the
+fresh-checkout composite — dev-env setup, `configs.pull` and `stamp` in one — so in a sweep it
+re-runs steps already done above, in a different order. The docstring's "a human shouldn't run this
+directly" cites the generated script's header, and that header is warning against re-running **the
+script** (which yanks the global tool out from under every other repo), not against running
+`stamp`.]
 
 `configs.diff` is first _of the reading steps_ for a reason: it reports both halves of the drift
 (stale config files _and_ `dependency-groups.dev` entries the manifest has grown), so it tells you
@@ -234,6 +263,11 @@ normal state.]
 
 ## Still open
 
-Whether tagging a release — which would pin consumers and turn each of these into a deliberate
-per-consumer update — is the better answer than any of the above.
-`plans/2026-08-25-consumer-transitions.md`.
+Nothing about whether to pin: that was settled 2026-09-26 as the `repo-tasks.stamp` step above, once
+the canary made a consumer's own unpinned CI stop being the family's only detector for a break
+pushed from here. `plans/2026-08-25-consumer-transitions.md` carries the reasoning and the cost.
+
+What is open is that **nothing reports which consumers are still unpinned.** `consumers.diff` reads
+config files and dev groups; the pin lives in `bootstrap-repo-tasks.sh`, and only
+`inv repo-tasks.status` reads it — inside the one repo a sweep does not need telling. Until the
+reporter grows it, a consumer swept without the stamp step looks identical to one swept with it.
