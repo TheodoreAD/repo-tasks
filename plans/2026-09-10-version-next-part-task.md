@@ -57,6 +57,7 @@ more do not, abandon it.]
 | `v0.2.0` |            | minor | no — under a minute, unambiguous                          |
 | `v0.3.0` | 2026-09-08 | minor | no — under a minute, unambiguous                          |
 | `v0.4.0` | 2026-09-26 | minor | not recorded at the time — which is why this table exists |
+| `v0.5.0` | 2026-09-27 | minor | no — four new tasks, read straight off the surface list   |
 
 ## Recommended direction
 

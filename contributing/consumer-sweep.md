@@ -293,7 +293,7 @@ with `git clone --depth 1 file://<path>` before calling a consumer done.]
   _declared_, and a plain `uv lock` never moves a version already locked, so an entry declared
   without a constraint stays wherever the consumer first resolved it. `power-user-linux-setup` held
   `invoke-stubs` at its first commit for a month while `configs.diff` called it up to date.
-  `inv deps.check-currency` is the step that asks, and needs a `repo-tasks` newer than `v0.4.0`.
+  `inv deps.check-currency` is the step that asks, and needs `repo-tasks` `v0.5.0` or later.
 
 [PITFALL: `scaffoldapy` is two things — a repo with its own gate, and a generator whose output has
 its own gate. `inv quality.precommit` there is evidence about the first only. Only its e2e tier
