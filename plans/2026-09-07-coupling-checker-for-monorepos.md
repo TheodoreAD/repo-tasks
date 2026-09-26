@@ -89,6 +89,30 @@ check is a `test.*` task this repo could own outright — no dependency, no conf
 it proves the property rather than approximating it. If it is cheap enough, it may be the whole
 answer and the linters become optional.]
 
+**Run 2026-09-26: the failure mode is real, and the check is cheap.** The three-package fixture as
+specified above, written by a small builder into a scratch directory (uv 0.11.19, CPython 3.14.5):
+
+| edge                                  | `uv sync --all-packages`, shared env | wheel alone in a clean venv, `--no-index --find-links dist` |
+| ------------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
+| `pkg-worker` → `pkg-core`, undeclared | imports                              | `ModuleNotFoundError: No module named 'pkg_core'`           |
+| `pkg-api` → `pkg-core`, declared      | imports                              | imports; the install pulled `pkg-core` in by declaration    |
+
+No false positive on the legitimate edge, which is the column that would disqualify it. Cost:
+`uv build --all-packages --wheel` about 0.6s for three members, then **0.085s** per member for
+create venv, install, import. `--find-links dist --no-index` is what makes it honest: the sibling is
+installable only if something declares it, and nothing on an index can stand in.
+
+[PITFALL: **it proves import-time edges only.** An import inside a function body, or behind
+`TYPE_CHECKING`, is not exercised by `import pkg_worker`, and the private-module reach (`pkg-api`
+into `pkg_core._internal`, declared) passes by construction, since the dependency exists. So this
+answers the manifest question completely for top-level imports and says nothing about the
+architecture question, which is import-linter's. The prediction in experiment 1 stands on that
+split.]
+
+What this changes: experiment 2 is enough to build the manifest half without any linter. The
+remaining experiments now only decide whether an architecture linter is worth adding on top, and
+experiment 4 still comes first among them.
+
 ### 3. Cost, measured on something real
 
 Wall-clock on the fixture is meaningless — every tool is fast on three packages. Run each against a
