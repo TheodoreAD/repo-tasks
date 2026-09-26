@@ -35,6 +35,9 @@ _SRC = Path("src/repo_tasks")
 # Longest matching prefix wins, so a local special case can sit in front of a broader network one.
 _COMMAND_REQUIREMENTS: dict[str, frozenset[str]] = {
     "docker ": frozenset({DOCKER}),
+    # Client-side only: erases a stored credential without contacting the daemon or the registry.
+    # Measured 2026-09-26 with DOCKER_HOST pointing at a socket that does not exist.
+    "docker logout": frozenset(),
     # Trailing space, or this matches `actionlint` — which is a gate step, so the mistake surfaced
     # as "the offline gate needs Docker" the first time this ran.
     "act ": frozenset({DOCKER}),

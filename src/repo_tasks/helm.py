@@ -140,6 +140,34 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     run_interactive(f"helm registry login {_registry_host(resolved_registry)}")
 
 
+@task(
+    help={
+        "project": "Chart whose registry to log out of (default: the sole/first discovered chart)",
+        "registry": "OCI registry override, oci://-prefixed (default: the [[helm]] entry's own registry)",
+    }
+)
+def logout(c: Context, project: str | None = None, registry: str | None = None):
+    """Remove the credential `helm.login` stored for a chart's registry (helm registry logout).
+
+    Erases it from helm's own store — the OS secret store where its registry config names a
+    `credsStore`, which oras writes there on first login when a helper is installed. **Local only:
+    it does not revoke the token**, which happens where it was issued.
+
+    **Only helm's own store.** helm also reads `~/.docker/config.json` as a fallback, so on a host
+    `docker.login` covers, helm keeps authenticating after this until `docker.logout` runs too.
+
+    helm prints "Removing login credentials" and exits 0 whether or not a credential was there, so
+    that line is not evidence one existed. Nothing is prompted, so this runs through `c.run`."""
+    chart = _resolve_chart(c, project)
+    if chart is None:
+        print(f"[helm.logout] {_NO_CHARTS}")
+        return
+    resolved_registry = registry or chart.registry
+    if resolved_registry is None:
+        raise ValueError(f"chart {chart.name!r} has no registry — set one on its [[helm]] entry or pass --registry")
+    c.run(f"helm registry logout {_registry_host(resolved_registry)}", echo=True)
+
+
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as helm.set-dev (contributing/task-module-conventions.md).
-ns: Collection = Collection(lint, package, push, login)
+ns: Collection = Collection(lint, package, push, login, logout)

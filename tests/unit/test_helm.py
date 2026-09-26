@@ -92,7 +92,7 @@ def test_resolve_chart_raises_when_project_not_found(c, monkeypatch):
         helm.lint.body(c, project="nonexistent")
 
 
-@pytest.mark.parametrize("task_name", ["lint", "package", "push", "login"])
+@pytest.mark.parametrize("task_name", ["lint", "package", "push", "login", "logout"])
 def test_tasks_no_op_cleanly_with_zero_charts(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(helm, "discover_helm_charts", lambda c: [])
     getattr(helm, task_name).body(c)  # pyright: ignore[reportAny]
@@ -142,6 +142,26 @@ def test_login_errors_when_the_chart_has_no_registry(c, monkeypatch):
     _stub(monkeypatch, chart=_stub_chart(registry=None))
     with pytest.raises(ValueError, match="no registry"):
         helm.login.body(c)
+
+
+def test_logout_targets_the_same_host_login_does(c, monkeypatch):
+    _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
+    helm.logout.body(c)
+    c.run.assert_called_once_with("helm registry logout ghcr.io", echo=True)
+    assert commands == []
+
+
+def test_logout_registry_flag_overrides_the_entry_registry(c, monkeypatch):
+    _stub(monkeypatch)
+    helm.logout.body(c, registry="oci://localhost:5000/charts")
+    c.run.assert_called_once_with("helm registry logout localhost:5000", echo=True)
+
+
+def test_logout_errors_when_the_chart_has_no_registry(c, monkeypatch):
+    _stub(monkeypatch, chart=_stub_chart(registry=None))
+    with pytest.raises(ValueError, match="no registry"):
+        helm.logout.body(c)
 
 
 @pytest.mark.parametrize(

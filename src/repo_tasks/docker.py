@@ -160,4 +160,25 @@ def login(c: Context, project: str | None = None):
     run_interactive(f"docker login {_registry_host(image.image)}")
 
 
-ns: Collection = Collection(check, build, push, release, login)
+@task(help={"project": "Image entry whose registry to log out of (default: the only one)"})
+def logout(c: Context, project: str | None = None):
+    """Remove the credential `docker.login` stored for an image's registry (docker logout).
+
+    Erases it from wherever docker keeps it — the OS secret store under a `credsStore`, or the
+    config file otherwise — and deletes the host's `auths` entry. **Local only: it does not revoke
+    the token.** A leaked or retired token is revoked where it was issued (GitHub's token settings
+    for ghcr.io), and this task cannot reach that.
+
+    helm reads docker's store as a fallback, so for a registry both tools use this is also what
+    stops helm authenticating there; `helm.logout` clears helm's own store, which this does not.
+
+    docker prints "Removing login credentials" and exits 0 whether or not a credential was there,
+    so that line is not evidence one existed. Nothing is prompted, so this runs through `c.run`."""
+    image = _resolve_image(c, project)
+    if image is None:
+        print(f"[docker.logout] {_NO_IMAGES}")
+        return
+    c.run(f"docker logout {_registry_host(image.image)}", echo=True)
+
+
+ns: Collection = Collection(check, build, push, release, login, logout)

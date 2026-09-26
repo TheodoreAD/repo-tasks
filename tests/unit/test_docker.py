@@ -143,7 +143,7 @@ def test_check_narrows_to_one_project(c, monkeypatch):
     c.run.assert_called_once_with("docker build --check -f services/api/Dockerfile services/api", echo=True)
 
 
-@pytest.mark.parametrize("task_name", ["check", "build", "push", "release", "login"])
+@pytest.mark.parametrize("task_name", ["check", "build", "push", "release", "login", "logout"])
 def test_tasks_no_op_cleanly_with_zero_images(c, monkeypatch, capsys, task_name):
     monkeypatch.setattr(docker, "discover_docker_images", lambda c: [])
     getattr(docker, task_name).body(c)  # pyright: ignore[reportAny]
@@ -188,6 +188,15 @@ def test_login_never_puts_a_credential_in_the_command(c, monkeypatch):
     commands = _capture_interactive(monkeypatch)
     docker.login.body(c)
     assert commands == ["docker login ghcr.io"]
+
+
+def test_logout_targets_the_same_host_login_does(c, monkeypatch):
+    # Nothing is prompted, so unlike login it goes through c.run and never needs the terminal.
+    _stub(monkeypatch)
+    commands = _capture_interactive(monkeypatch)
+    docker.logout.body(c)
+    c.run.assert_called_once_with("docker logout ghcr.io", echo=True)
+    assert commands == []
 
 
 @pytest.mark.parametrize(
