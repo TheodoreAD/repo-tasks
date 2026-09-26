@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-13
+updated: 2026-09-26
 source_repo: github.com-personal/scaffoldapy
 source_session: 7a3f34e6-b0c7-4532-8c89-ec43239414e7.jsonl
 source_moment: 2026-09-07T20:45:00Z
@@ -80,11 +80,26 @@ deprecation loud and stops matching anything by itself the moment starlette ship
 is what makes it safe to forget. Both halves were measured rather than reasoned about — see
 Verification.]
 
-[NEEDS CLARIFICATION: is a temporary entry supposed to leave a trigger behind? The comment can say
-"drop this once starlette releases the `anyio.from_thread` rename", the same shape as the invoke
-`ResourceWarning` entry's "drop this once invoke closes them" — which is honest but is also a
-sentence nothing ever re-reads. Whether that is good enough here, or whether an expiring ignore
-wants something that actually notices, is the general question this is the first instance of.]
+~~Is a temporary entry supposed to leave a trigger behind?~~ **No, settled by the user 2026-09-26.**
+Checked first against what had actually happened: starlette **1.7.0** shipped the rename on
+2026-09-23 (its tag's `testclient.py:53` annotates `anyio.from_thread.BlockingPortal`, read from the
+`$RESEARCH_HOME` clone), and nothing noticed for three days. That looks like the case for a trigger,
+and it is the opposite. The message-matched entry went inert on its own the day that release landed,
+so the three days cost nothing. The direction that does cost something is removing it too early,
+while a consumer's lock still resolves 1.6.0, and a trigger watching upstream releases would have
+fired at exactly that moment. The other two candidates were weighed and rejected: a machine-readable
+expiry marker read by an off-gate task (it measures the release rather than the locks, and cannot
+express invoke's "unfixed upstream" condition), and a canary test that imports starlette with the
+ignore removed (starlette, fastapi and httpx2 in a test environment for one line).
+
+The rule is written where the next temporary ignore will be added: the head of `filterwarnings` in
+`pytest.ini`, promoted to the shipped copy. Match on the exact message, name the condition, drop at
+a later consumer sweep.
+
+[DEFERRED: drop `ignore:The anyio.abc.BlockingPortal alias is deprecated` from the shipped
+`pytest.ini` at the first consumer sweep after every web-service consumer's `uv.lock` resolves
+starlette 1.7.0 or newer. Until then it is harmless on current installs and still needed on old
+locks.]
 
 ## Recommended direction
 
@@ -166,7 +181,5 @@ error; the fix landed here hours later and that repo has had no push since. So i
 rather than wrong, and a session reading it as live evidence would re-investigate a bug that no
 longer exists. That six-day blind window is the whole argument for the canary.]
 
-Still open here, and untouched by any of the above: the `[NEEDS CLARIFICATION:]` about whether a
-deliberately temporary ignore should leave behind something that notices when its condition expires,
-rather than a comment nothing re-reads. That is what keeps this plan open now that the repro is
-closed.
+The expiry question was answered 2026-09-26 (no trigger; see Open questions). What keeps this plan
+open is the DEFERRED drop of the entry itself, once consumer locks have moved past starlette 1.6.0.
