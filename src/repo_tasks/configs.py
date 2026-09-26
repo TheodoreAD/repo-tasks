@@ -189,6 +189,31 @@ def _bare_name(spec: str) -> str:
     return match.group(0).lower() if match else spec.lower()
 
 
+def unreadable_pyproject() -> str | None:
+    """A sentence saying this project's pyproject.toml does not parse, or None when it does or
+    there is none — for `ensure_deps` and `diff` to stop on, and for `consumers.diff` to report as
+    one consumer's line rather than dying on.
+
+    Every dev-group reader here goes through tomllib, so an unparseable file used to surface as a
+    `TOMLDecodeError` traceback from whichever helper touched it first. The people who would meet
+    that are mostly the victims of the bug that moved these readers to tomllib: until 2026-09-26
+    `ensure_deps` could splice entries into the middle of a `"pkg[extra]"` string and leave exactly
+    such a file behind, so the likely cause is named rather than left to be inferred. Checked up
+    front rather than caught around each reader, which would put the same handler in five places."""
+    pyproject_path = Path("pyproject.toml")
+    if not pyproject_path.exists():
+        return None
+    try:
+        tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        return (
+            f"pyproject.toml does not parse as TOML ({error}), so nothing was read or written. An older "
+            'repo-tasks configs.ensure-deps left files like this by splicing entries inside a "pkg[extra]" '
+            "string — `git diff pyproject.toml` shows it if so, and restoring the file fixes it."
+        )
+    return None
+
+
 def _own_project_name() -> str | None:
     """This project's own `[project] name`, normalised the way a dependency spec's bare name is —
     or None where there is no pyproject.toml, no `[project]` table, or no name in it.
@@ -542,6 +567,8 @@ def diff(c: Context, source: str | None = None):
     The constraint half was added 2026-09-06, after the name-only comparison let a real fix reach
     nobody: `hadolint-py` gained `!=2.15.1.2` because that release's macOS wheel is a corrupt zip,
     and every consumer already declaring a bare `hadolint-py` was told it was up to date."""
+    if (problem := unreadable_pyproject()) is not None:
+        raise Exit(f"[configs.diff] {problem}")
     changed = _diff_config_files(source)
     _report_self_exclusion(_self_referential_dep())
     missing = _missing_quality_deps()
@@ -664,6 +691,8 @@ def ensure_deps(c: Context):
     in, which would make a package depend on its own published build: see `_self_referential_dep`.
     Run `inv deps.lock` and review/commit the diff afterward — this task never touches uv.lock
     itself."""
+    if (problem := unreadable_pyproject()) is not None:
+        raise Exit(f"[configs.ensure-deps] {problem}")
     canonical = _applicable_quality_deps()
     pyproject_path = Path("pyproject.toml")
 

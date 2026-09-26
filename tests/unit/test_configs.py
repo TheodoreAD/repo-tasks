@@ -492,6 +492,28 @@ def test_ensure_deps_ignores_a_dev_array_outside_dependency_groups(tmp_cwd):
     assert "basedpyright" in _dev_names(text)
 
 
+# The shape the old splice produced: entries written inside the `"a[store]"` string.
+_CORRUPTED_PYPROJECT = '[project]\nname = "c"\n\n[dependency-groups]\ndev = [\n  "a[st  "ruff",\nore]",\n]\n'
+
+
+@pytest.mark.parametrize("task", [configs.ensure_deps, configs.diff], ids=["ensure-deps", "diff"])
+def test_an_unparseable_pyproject_stops_with_a_sentence_and_writes_nothing(tmp_cwd, task):
+    """Every dev-group reader is tomllib now, so this used to be a `TOMLDecodeError` traceback —
+    met mostly by the repos the old splice had corrupted."""
+    (tmp_cwd / "pyproject.toml").write_text(_CORRUPTED_PYPROJECT, encoding="utf-8")
+    before = sorted(p.name for p in tmp_cwd.iterdir())
+    with pytest.raises(Exit, match=r"pyproject\.toml does not parse as TOML .*`git diff pyproject\.toml`"):
+        task.body(MockContext(run=Result(exited=1)))
+    assert (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8") == _CORRUPTED_PYPROJECT
+    assert sorted(p.name for p in tmp_cwd.iterdir()) == before
+
+
+def test_a_parseable_or_absent_pyproject_is_not_reported(tmp_cwd):
+    assert configs.unreadable_pyproject() is None
+    (tmp_cwd / "pyproject.toml").write_text('[project]\nname = "c"\n', encoding="utf-8")
+    assert configs.unreadable_pyproject() is None
+
+
 # ---------------------------------------------------------------------------
 # version-constraint drift (the half a bare-name comparison cannot see)
 # ---------------------------------------------------------------------------

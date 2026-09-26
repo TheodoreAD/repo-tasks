@@ -42,7 +42,7 @@ from invoke import Context, task
 from invoke.exceptions import Exit
 
 from .ci import reusable_pins
-from .configs import Drift, drift_summary
+from .configs import Drift, drift_summary, unreadable_pyproject
 from .projects import Consumer, discover_consumers, projects_root
 from .selfinstall import read_pin
 
@@ -65,8 +65,10 @@ def _measured_version() -> str:
         return "unknown"
 
 
-def _measure(consumer: Consumer, source: str | None) -> Drift:
-    """One consumer's drift, read from inside its tree.
+def _measure(consumer: Consumer, source: str | None) -> Drift | str:
+    """One consumer's drift, read from inside its tree — or, where its pyproject.toml does not
+    parse, the sentence saying so, so that one broken consumer is a line in the report rather than a
+    traceback ending the loop before the others are measured.
 
     `chdir` rather than threading a root through `configs.py`, deliberately. Every helper there
     already reads the tree it is standing in, and this task is the only caller that ever wants a
@@ -74,6 +76,8 @@ def _measure(consumer: Consumer, source: str | None) -> Drift:
     reader of the module that does the real work. `contextlib.chdir` restores on the way out
     including on an exception, and this loop is sequential, which is the condition it needs."""
     with contextlib.chdir(consumer.path):
+        if (problem := unreadable_pyproject()) is not None:
+            return problem
         return drift_summary(source)
 
 
@@ -171,6 +175,9 @@ def _report(consumer: Consumer, source: str | None, measured: str, security_head
         return True
 
     drift = _measure(consumer, source)
+    if isinstance(drift, str):
+        print(f"[consumers.diff] {consumer.name}: {drift}")
+        return True
     pin = _pin_line(consumer, measured)
     security = _security_finding(consumer, security_head)
     findings = [f for f in (_Finding(pin) if pin else None, security) if f is not None]

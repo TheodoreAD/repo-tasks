@@ -413,6 +413,22 @@ def test_the_canary_workflow_checks_out_a_declared_consumer():
         )
 
 
+def test_an_unparseable_pyproject_is_one_consumers_line_not_the_end_of_the_run(tmp_cwd, monkeypatch, capsys):
+    """The state an older ensure-deps left behind. A traceback here would end the loop before the
+    consumers after it were measured, so the report would say nothing about them at all."""
+    _declare(tmp_cwd, _REPO_TASKS_TOML)
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha")
+    corrupted = '[dependency-groups]\ndev = [\n  "a[st  "ruff",\nore]",\n]\n'
+    (alpha / "pyproject.toml").write_text(corrupted, encoding="utf-8")
+    _consumer_tree(tmp_cwd, "beta")
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    out = capsys.readouterr().out
+    assert "alpha: pyproject.toml does not parse as TOML" in out
+    assert "[consumers.diff] beta:" in out, "the consumer after the broken one was never measured"
+
+
 def test_measuring_restores_the_working_directory(tmp_cwd, monkeypatch):
     """`_measure` chdirs into each consumer, so a failure to restore would leave every later task in
     this process reading the wrong tree — and the tasks that write would write there."""
