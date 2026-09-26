@@ -123,8 +123,8 @@ with no secret means a login through the helper, not a leftover.**]
 
 ## What is left here
 
-Nothing to build. The tasks exist and are correct; what is missing is evidence that `helm.login`
-does what its docstring says. The docker half is done.
+Nothing to build, and as of 2026-09-26 nothing left to verify: both login paths put the credential
+in the OS keyring. Only the DEFERRED nicety at the end remains.
 
 **The docker half, verified 2026-09-26.** `docker login ghcr.io` against the machine's explicit
 `credsStore: secretservice`, then both places a credential could land were read:
@@ -144,32 +144,43 @@ for login even though that token carries no `read:packages` scope, so it proves 
 not that the stored credential can push or pull. A push-capable login is a PAT or CI's
 `GITHUB_TOKEN`.]
 
-[UNVERIFIED: that `helm.login` results in a credential in the OS keyring rather than a base64 entry
-in a file. Unit-tested for command construction only. The check, as originally written for both
-tools:
+~~[UNVERIFIED: that `helm.login` results in a credential in the OS keyring.~~ **Verified 2026-09-26,
+against a local registry rather than a hosted one.** The check needed a host that is not also an
+image registry, since helm reads docker's store as a fallback and `ghcr.io` now holds a docker
+credential. A local `registry:2` on `localhost:5000` with htpasswd auth and a throwaway user is such
+a host, needs no account, and sends nothing off the machine. Helm's own registry config did not
+exist beforehand, so this also exercised oras's detection path, the one the pitfall above says fails
+hard when the helper is missing.
 
-```shell
-inv docker.login                       # against ghcr.io
-docker-credential-secretservice list   # or `get`, to confirm the credential is in the keyring
-```
+- `helm registry login localhost:5000 --password-stdin --plain-http` succeeded.
+- `docker-credential-secretservice list` then held `localhost:5000` beside `ghcr.io`.
+- `~/.config/helm/registry/config.json` was **created** holding `credsStore: secretservice` and
+  `auths: {}`: detection chose the helper, wrote the choice down, and left no entry for the host at
+  all, not even a secretless one. `~/.docker/config.json` was untouched, as `Put()` writes the
+  primary store only.
+- `helm push` of a throwaway chart to `oci://localhost:5000/charts` succeeded, so the credential
+  reads back out of the keyring and not only goes in.
+- **The control:** after `helm registry logout localhost:5000` the keyring entry was gone and the
+  same push failed with `basic credential not found`. The registry refuses anonymous pushes, so the
+  first push succeeding is evidence it used the stored credential.
 
-then read `~/.docker/config.json` with the pitfall above in hand — a **secretless** entry is
-evidence of a login through the helper, and only a secret-bearing one is the failure. With `auths`
-now `{}`, any host is a sound choice for the docker half: nothing can resolve from a file entry and
-be mistaken for the keyring path.
+Same caveat as the docker half: stdin rather than `inv helm.login`'s prompt, for the same TTY
+reason, with the task's own contribution (the host) unit-tested. The container was removed
+afterwards. One change outlives the check, deliberately: helm's registry config now exists with an
+explicit `credsStore`, which is the state the machine setup would want anyway, and it is no longer
+subject to detection.]
 
-Then `inv helm.login` against a host that is **not** an image registry. That distinction still
-stands, and is the one thing the purge does not remove: the same-host case cannot distinguish helm
-storing its own credential from helm reading docker's through the fallback, and this repo's
-`repo-tasks.toml` happens to put images and charts on the same `ghcr.io`. **It now matters more:**
-`ghcr.io` holds a docker credential as of 2026-09-26, so a helm check against it would pass through
-the fallback whatever helm's own store did. Waiting on the user naming a non-GHCR OCI registry they
-have an account on.]
+[PITFALL: **a local registry is the sound target for this check, not just the convenient one.** A
+hosted second registry would have needed an account, and anything on `ghcr.io` would have passed
+through the docker fallback whatever helm's own store did. The same shape answers any future "where
+did this credential go" question for an OCI tool: a host nothing else has a credential for, a push
+that must authenticate, and a logout-then-push control.]
 
 [DEFERRED: whether `helm.login` should notice that its chart registry host matches a `[[docker]]`
 entry's host and say that one login covers both. Useful, and pure output — but it is guidance about
-a machine state this repo cannot see, and it should not be written before the verification above
-proves what the shared path actually does.]
+a machine state this repo cannot see. The verification above proved helm's **own** store; the docker
+fallback read is still known from source only (`NewStoreWithFallbacks`), since proving it needs a
+chart to pull from a host that has only a docker credential.]
 
 ## Recommended direction
 
@@ -177,9 +188,7 @@ proves what the shared path actually does.]
    `power-user-linux-setup` as `2026-08-30-os-secret-store-for-registries-and-pypi.md` and owned the
    helper package, the explicit `credsStore`, the round-trip verification, and migrating the one
    plaintext credential that existed.
-2. **Run the verification above.** The docker half is done (2026-09-26). The helm check on a
-   distinct host is now the whole of what this plan is waiting on, and it is the only thing in the
-   family that can answer its `[UNVERIFIED:]`.
+2. ~~Run the verification above~~ — both halves done 2026-09-26, recorded above.
 3. **Only then consider the deferred nicety.** It is guidance about a machine state this repo cannot
    see, and the verification is what says whether the guidance would be true.
 
