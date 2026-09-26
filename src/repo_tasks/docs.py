@@ -61,7 +61,14 @@ def _relative_links(text: str) -> list[tuple[int, str]]:
     documentation, not a link this repo has to keep working. [PITFALL: the span half was missing at
     first, and `def f[T](x)` in prose about PEP 695 generics is a valid `[text](target)` — the gate
     went red on correct input, and the only way to green was rewording prose around the bug.
-    Measured across every markdown file in the repo family: stripping spans loses no real link.]"""
+    Measured across every markdown file in the repo family: stripping spans loses no real link.]
+
+    **Indented code blocks are not skipped, deliberately — fence the sample instead.** Four leading
+    spaces also indent a list item's continuation lines, which carry real links throughout these
+    docs, so a naive indent rule would stop checking exactly the links most likely to break. Telling
+    them apart is CommonMark's list-aware block pass, and a parser such as `markdown-it-py` would
+    cost this task its zero dependencies, which is what keeps it in the gate. Settled as won't-fix
+    2026-09-26, with zero real hits in the family."""
     found: list[tuple[int, str]] = []
     in_fence = False
     for number, line in enumerate(text.splitlines(), start=1):
