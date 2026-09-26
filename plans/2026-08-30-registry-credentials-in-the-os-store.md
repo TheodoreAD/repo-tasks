@@ -1,6 +1,6 @@
 ---
 status: planned
-updated: 2026-09-06
+updated: 2026-09-26
 ---
 
 # Both `docker.login` and `helm.login` reach the OS secret store, once the machine has a helper
@@ -123,11 +123,30 @@ with no secret means a login through the helper, not a leftover.**]
 
 ## What is left here
 
-Nothing to build. The tasks exist and are correct; what is missing is any evidence they do what
-their docstrings say — and as of 2026-09-05 that evidence can be produced.
+Nothing to build. The tasks exist and are correct; what is missing is evidence that `helm.login`
+does what its docstring says. The docker half is done.
 
-[UNVERIFIED: that either login task actually results in a credential in the OS keyring rather than a
-base64 entry in a file. Both are unit-tested for command construction only. The check:
+**The docker half, verified 2026-09-26.** `docker login ghcr.io` against the machine's explicit
+`credsStore: secretservice`, then both places a credential could land were read:
+
+- `docker-credential-secretservice list` returned
+  `{"Registry credentials for ghcr.io":"TheodoreAD"}`, so the credential is in the OS keyring.
+- `~/.docker/config.json` went from `auths: {}` to `auths: {"ghcr.io": {}}`, an entry with **no**
+  fields: the secretless shape `nativeStore.Store` writes on a helper login, per the pitfall above.
+  Nothing base64 was written to the file.
+
+[PITFALL: **this ran `docker login` with `--password-stdin`, not `inv docker.login`**, because the
+Bash tool an agent drives has no TTY and `run_interactive` needs one to prompt. That is the same
+code path for the question asked here — where docker puts the credential is decided by `credsStore`
+and not by how the password arrived — and the task's own contribution, the host taken from
+`repo-tasks.toml`, is unit-tested. The password was the `gh` CLI's OAuth token, which GHCR accepted
+for login even though that token carries no `read:packages` scope, so it proves the storage path and
+not that the stored credential can push or pull. A push-capable login is a PAT or CI's
+`GITHUB_TOKEN`.]
+
+[UNVERIFIED: that `helm.login` results in a credential in the OS keyring rather than a base64 entry
+in a file. Unit-tested for command construction only. The check, as originally written for both
+tools:
 
 ```shell
 inv docker.login                       # against ghcr.io
@@ -142,9 +161,10 @@ be mistaken for the keyring path.
 Then `inv helm.login` against a host that is **not** an image registry. That distinction still
 stands, and is the one thing the purge does not remove: the same-host case cannot distinguish helm
 storing its own credential from helm reading docker's through the fallback, and this repo's
-`repo-tasks.toml` happens to put images and charts on the same `ghcr.io`. Both halves want a
-deliberate session — they are interactive logins against a real account, not something to fold into
-unrelated work.]
+`repo-tasks.toml` happens to put images and charts on the same `ghcr.io`. **It now matters more:**
+`ghcr.io` holds a docker credential as of 2026-09-26, so a helm check against it would pass through
+the fallback whatever helm's own store did. Waiting on the user naming a non-GHCR OCI registry they
+have an account on.]
 
 [DEFERRED: whether `helm.login` should notice that its chart registry host matches a `[[docker]]`
 entry's host and say that one login covers both. Useful, and pure output — but it is guidance about
@@ -157,9 +177,9 @@ proves what the shared path actually does.]
    `power-user-linux-setup` as `2026-08-30-os-secret-store-for-registries-and-pypi.md` and owned the
    helper package, the explicit `credsStore`, the round-trip verification, and migrating the one
    plaintext credential that existed.
-2. **Run the verification above**, both tools, with the helm check on a distinct host. This is now
-   the whole of what this plan is waiting on, and it is the only thing in the family that can answer
-   its `[UNVERIFIED:]`.
+2. **Run the verification above.** The docker half is done (2026-09-26). The helm check on a
+   distinct host is now the whole of what this plan is waiting on, and it is the only thing in the
+   family that can answer its `[UNVERIFIED:]`.
 3. **Only then consider the deferred nicety.** It is guidance about a machine state this repo cannot
    see, and the verification is what says whether the guidance would be true.
 
