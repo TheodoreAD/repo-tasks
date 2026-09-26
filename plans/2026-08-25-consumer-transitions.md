@@ -751,12 +751,22 @@ The file's header widened with it — from "non-python artifacts this repo ships
 tasks need to know about this repo" — because consumers are not an artifact this repo ships and the
 old sentence would have made the entries read as a category error.]
 
-[DEFERRED: whether the reporter reads anything `configs.diff` cannot. The complement list earlier in
-this file names six such items, and at least two are mechanical — `rg -n 'runner.configure' tasks/`
-for report-mode wiring, and the presence of a `.github/workflows/security.yml` caller. Both are
-greppable from outside the target tree and neither needs a decision to report. The other four are
-readings and stay manual. Worth settling only once the loop exists, since it is an addition to it
-rather than a change of shape.]
+[DECISION: **yes, and it is done — both mechanical items are settled, by different routes. Resolved
+2026-09-26.** This asked whether the reporter should read anything `configs.diff` cannot, and named
+two candidates it called mechanical.
+
+- **The security caller** became a reported line, `6de6a50`. Plus the bootstrap pin, `6a73807`,
+  which this deferral did not think of because the pin was still believed to be waiting on a tag.
+- **Report-mode wiring did not need reporting at all.** "Filing the two new consumers narrowed the
+  complement list" below establishes it is a two-repo item, both answered: `power-user-linux-setup`
+  is wired and verified, and the `scaffoldapy`-generated repos are that repo's own open question.
+  There is nothing left for a check to find, so the `rg -n
+  'runner.configure' tasks/` this
+  proposed would report clean forever.
+
+That is the shape worth keeping: one candidate earned a check and the other dissolved on being
+looked at, and only one of those outcomes is visible from the deferral as written. The remaining
+four items are readings and stay manual.]
 
 ## Filing the two new consumers narrowed the complement list (2026-09-13)
 
