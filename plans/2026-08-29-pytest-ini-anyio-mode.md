@@ -149,8 +149,11 @@ assert on the file a consumer without AnyIO actually receives.
 
 [UNVERIFIED: the derivation is proven against a hand-written `uv.lock` fixture and against this
 repo, never against the consumer that needs the line. Nothing reaches a consumer until
-`inv repo-tasks.update` moves the global tool; `2026-08-25-consumer-transitions.md` owns that
-ordering and now lists this change.]
+`inv repo-tasks.update` moves the global tool; `contributing/consumer-sweep.md` owns that ordering.
+One consumer data point since, recorded by the now-retired `2026-08-25-consumer-transitions.md`: the
+2026-09-05 `power-user-linux-setup` sweep saw `anyio_mode` **emitted, correctly**, since AnyIO is in
+that lock. That is the positive case only; the consumer that needs the line to be absent has not
+been swept.]
 
 Rejected: **shipping AnyIO as a `repo-tasks-quality` dependency** and then shipping the line
 unconditionally. It reads well — the manifest is already where the family standardises pytest

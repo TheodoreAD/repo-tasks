@@ -53,10 +53,17 @@ having been warned locally first, the warning is not enough and this question an
 ## Recommended direction
 
 Wait for that test rather than deciding now. The next family-wide manifest change is the natural
-trigger, and it is also what would answer the long-standing `[UNVERIFIED:]` in
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) about `require_tool`'s
-preflight never having fired from a consumer's own CI — the two questions want the same event, so
-they should be read together.
+trigger, and it is also what answers the `[UNVERIFIED:]` below, moved here 2026-09-26 when the
+now-retired `2026-08-25-consumer-transitions.md` was retired — the two questions want the same
+event, so they are read together.
+
+[UNVERIFIED: **`configs.require_tool`'s preflight has never fired from a consumer's own CI**, only
+locally (landed `99f26a8`, 2026-08-26). Every consumer sweep since — `power-user-linux-setup` twice,
+`ingesta` once — moved only non-binary items, so none could make it fire, and the canary cannot
+either: it pulls no config and reads no dev group. It waits on a family-wide manifest change that
+adds a **gate binary**. When one lands, note which consumer's CI printed the preflight message
+rather than exit 127 — and, per the third question above, whether that consumer had been warned
+locally first.]
 
 If it does move, prefer `precommit` over `check`: `precommit` is already the half that may mutate
 and the one a human runs deliberately, so a step whose answer depends on the installed package is

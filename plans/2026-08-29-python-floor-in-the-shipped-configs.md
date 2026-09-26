@@ -199,10 +199,38 @@ The ruff half is verified **here**: `inv quality.precommit` green on the pulled 
 and `ruff check --show-settings` reporting 3.11 from `requires-python` with no pin present. That is
 the whole of what this repo can prove on its own.
 
-It is **not** verified at a consumer, and cannot be yet: nothing reaches one until
-`inv repo-tasks.update` moves the global tool, so a `configs.diff` run today compares against the
-old package and reports "up to date" — indistinguishable from a real match. Left to the deferred
-cross-repo sweep in `2026-08-25-consumer-transitions.md`, which owns that ordering.
+~~It is **not** verified at a consumer, and cannot be yet~~ — **verified at consumers since
+2026-09-05**, below. The ordering hazard that note described is in
+[`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md) now: nothing reaches a
+consumer until `inv repo-tasks.update` moves the global tool, and a `configs.diff` run before that
+reports "up to date" against the old package.
+
+### What the derived `pythonVersion` found at consumers (moved 2026-09-26)
+
+Moved here from the now-retired `2026-08-25-consumer-transitions.md` when it was retired, because
+this plan owns `c514bd9` and the finding is about what that commit does. **It is the only change in
+that plan's whole sweep that found a defect rather than a difference**, three consumers out of five:
+
+| repo                     | where the above-floor syntax was                | resolved                           |
+| ------------------------ | ----------------------------------------------- | ---------------------------------- |
+| `power-user-linux-setup` | two test modules, `from typing import override` | 2026-09-05, `typing_extensions`    |
+| `ingesta`                | four modules, **two shipped in the wheel**      | 2026-09-13, floor raised to `3.14` |
+| `agent-skills`           | one test module                                 | not yet — filed there              |
+
+All three declared `>=3.11`, developed on a 3.14 venv, and carried no `pythonVersion`. The first
+one's `pyproject.toml` even declared `typing-extensions` as a dev dependency with a comment saying
+why, and a third module already used the right import; the other two had drifted.
+
+[PITFALL: **the absent guard is the expensive one, and it is invisible by construction.** Nothing in
+any of the three was failing. A suite run on 3.14 and a type check run on 3.14 agree perfectly, and
+a green gate is exactly what a repo with no floor check looks like. Each occurrence reads as that
+repo's own small oversight until they are put side by side.]
+
+`ingesta` answered it the other way round from the expected one — the floor moved up to meet the
+code rather than the code down to the floor — and that is a valid answer too. The claim this
+derivation makes is that it forces the question to be asked, not which way it is answered. And
+raising a floor turns the pulled `ruff.toml`'s `UP` rules on at the new floor, so that sweep's first
+red was lint, not the type check; that consequence is recorded in `consumer-sweep.md`.
 
 **The basedpyright half landed 2026-08-30** (`b79b76a`, `c514bd9`, `db5d8d2`), verified here to the
 same depth and no further:
