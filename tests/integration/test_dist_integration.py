@@ -13,6 +13,7 @@ and json_index, and contributing/test-tiers.md):
 """
 
 import pytest
+from invoke import Exit
 
 from repo_tasks import dist
 from repo_tasks.projects import discover_python_projects
@@ -94,3 +95,61 @@ def test_versions_json_sub_paths_over_a_real_socket(c, json_index, capsys, label
     # The point of doing this over a socket rather than with a mocked _get: prove the media type
     # was actually sent. A mock can only show that _get was called with it.
     assert json_index.seen_accept == [dist._JSON_ACCEPT], label
+
+
+def _write_monorepo(root) -> None:
+    """The coupling-checker plan's fixture, generated rather than committed so this repo's own lock
+    never has to resolve it: three members, one declared edge, one undeclared, no third-party
+    dependencies, so nothing beyond the build backend is fetched."""
+    member = """\
+[project]
+name = "{name}"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [{deps}]
+{sources}
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{module}"]
+"""
+    files = {
+        "pyproject.toml": (
+            '[project]\nname = "monorepo"\nversion = "0.1.0"\nrequires-python = ">=3.11"\n'
+            'dependencies = []\n\n[tool.uv]\npackage = false\n\n[tool.uv.workspace]\nmembers = ["packages/*"]\n'
+        ),
+        "packages/pkg-core/pyproject.toml": member.format(name="pkg-core", deps="", sources="", module="pkg_core"),
+        "packages/pkg-core/src/pkg_core/__init__.py": "VALUE = 'core'\n",
+        "packages/pkg-api/pyproject.toml": member.format(
+            name="pkg-api",
+            deps='"pkg-core"',
+            sources="\n[tool.uv.sources]\npkg-core = { workspace = true }\n",
+            module="pkg_api",
+        ),
+        "packages/pkg-api/src/pkg_api/__init__.py": "from pkg_core import VALUE\n",
+        "packages/pkg-worker/pyproject.toml": member.format(
+            name="pkg-worker", deps="", sources="", module="pkg_worker"
+        ),
+        "packages/pkg-worker/src/pkg_worker/__init__.py": "from pkg_core import VALUE\n",
+    }
+    for relative, text in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+def test_check_isolated_catches_an_undeclared_sibling_import(c, tmp_path, monkeypatch, capsys):
+    """The ground truth the task stands on, end to end: the undeclared edge imports in the shared
+    workspace and fails alone, while the declared one passes both ways."""
+    _write_monorepo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    c.run("uv lock --quiet", env={"VIRTUAL_ENV": ""})
+    with pytest.raises(Exit):
+        dist.check_isolated.body(c)
+    out = capsys.readouterr().out
+    assert "monorepo  installs nothing (a virtual project) — skipped" in out
+    assert "pkg-api  imports alone (pkg_api)" in out
+    assert "pkg-core  imports alone (pkg_core)" in out
+    assert "pkg-worker  FAILS alone — ModuleNotFoundError: No module named 'pkg_core'" in out

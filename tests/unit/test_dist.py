@@ -3,10 +3,12 @@ matching tests/test_quality.py's style), plus versions' JSON/HTML parsing — ne
 monkeypatching the module's own _get and discover_python_projects."""
 
 import json
+import re
 import urllib.error
 from types import SimpleNamespace
 
 import pytest
+from invoke import Exit, MockContext, Result
 
 from repo_tasks import dist
 
@@ -225,3 +227,72 @@ def test_version_from_filename_sdist():
 
 def test_version_from_filename_unrecognized_extension():
     assert dist._version_from_filename("repo_tasks-1.2.3.exe", "repo-tasks") is None
+
+
+def _isolated_runs(**imports: Result) -> dict[object, Result]:
+    """`c.run` answers for check_isolated: the three setup commands succeed for any project, and
+    each project's import step answers as given. Regex keys, since the paths are a fresh temp dir."""
+    runs: dict[object, Result] = {
+        re.compile(r"^uv export --package \S+ --frozen"): Result(exited=0),
+        re.compile(r"^uv venv --no-project"): Result(exited=0),
+        re.compile(r"^uv pip install --quiet --python"): Result(exited=0),
+    }
+    for name, result in imports.items():
+        # `.*` first: MockContext tries each key with `match`, which anchors at the start.
+        runs[re.compile(rf".*/bin/python -c .* {re.escape(name)}$", re.DOTALL)] = result
+    return runs
+
+
+def _workspace(*names: str):
+    return lambda c: [SimpleNamespace(name=name, version="0.1.0") for name in names]
+
+
+def test_check_isolated_names_a_project_that_cannot_import_alone(tmp_cwd, monkeypatch, capsys):
+    (tmp_cwd / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(dist, "discover_python_projects", _workspace("root", "pkg-api", "pkg-worker"))
+    c = MockContext(
+        run=_isolated_runs(
+            root=Result(exited=3),
+            **{
+                "pkg-api": Result(stdout="pkg_api\n", exited=0),
+                "pkg-worker": Result(stderr="Traceback\nModuleNotFoundError: No module named 'pkg_core'\n", exited=1),
+            },
+        )
+    )
+    with pytest.raises(Exit):
+        dist.check_isolated.body(c)
+    out = capsys.readouterr().out
+    assert "root  installs nothing (a virtual project) — skipped" in out
+    assert "pkg-api  imports alone (pkg_api)" in out
+    assert "pkg-worker  FAILS alone — ModuleNotFoundError: No module named 'pkg_core'" in out
+    assert "1 of 3 cannot import" in out
+
+
+def test_check_isolated_passes_quietly_when_every_project_imports(tmp_cwd, monkeypatch, capsys):
+    (tmp_cwd / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(dist, "discover_python_projects", _workspace("pkg-api"))
+    dist.check_isolated.body(MockContext(run=_isolated_runs(**{"pkg-api": Result(stdout="pkg_api\n", exited=0)})))
+    assert "cannot import" not in capsys.readouterr().out
+
+
+def test_check_isolated_installs_the_declared_closure_from_the_lock(tmp_cwd, monkeypatch):
+    """The lock, not a wheel plus an index: `--no-dev --no-editable` is what keeps a dev-only
+    dependency and an undeclared sibling out of the install."""
+    (tmp_cwd / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(dist, "discover_python_projects", _workspace("pkg-api"))
+    c = MockContext(run=_isolated_runs(**{"pkg-api": Result(exited=0)}))
+    dist.check_isolated.body(c)
+    first = c.run.call_args_list[0].args[0]  # pyright: ignore[reportAttributeAccessIssue]
+    assert first.startswith("uv export --package pkg-api --frozen --no-dev --no-editable ")
+
+
+def test_check_isolated_narrows_to_one_project(tmp_cwd, monkeypatch, capsys):
+    (tmp_cwd / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(dist, "discover_python_projects", _workspace("pkg-api", "pkg-worker"))
+    dist.check_isolated.body(MockContext(run=_isolated_runs(**{"pkg-api": Result(exited=0)})), project="pkg-api")
+    assert "pkg-worker" not in capsys.readouterr().out
+
+
+def test_check_isolated_needs_a_lock(tmp_cwd):
+    with pytest.raises(Exit, match=r"no uv\.lock"):
+        dist.check_isolated.body(MockContext())

@@ -113,6 +113,21 @@ What this changes: experiment 2 is enough to build the manifest half without any
 remaining experiments now only decide whether an architecture linter is worth adding on top, and
 experiment 4 still comes first among them.
 
+**Built 2026-09-26 as `inv dist.check-isolated`**, the user's call, with one change from the
+experiment's shape. The experiment installed a built wheel with `--no-index --find-links dist`; the
+task installs each member's closure from the **lock** instead, via
+`uv export --package <name> --frozen --no-dev --no-editable`, which lists a sibling as a local path
+only when declared and pins everything else to the locked version. A wheel plus the index plus
+`--find-links` would let an unrelated index package sharing a sibling's name satisfy the import.
+Import names are read from each installed distribution's own file list, and a virtual root, which
+installs nothing, is skipped rather than failed. Live: this repo's `repo-tasks` and `sample-service`
+both import alone, and the scratch workspace reports `pkg-worker` failing on `pkg_core` with the
+other three passing or skipped. The integration test builds the fixture into `tmp_path`, as decided.
+
+[DEFERRED: the architecture half — experiments 4, 1 and 3, in that order — whether import-linter is
+worth adding for private-module reach and layering. Only worth running if a real monorepo in the
+family wants those contracts; the manifest half no longer depends on it.]
+
 ### 3. Cost, measured on something real
 
 Wall-clock on the fixture is meaningless — every tool is fast on three packages. Run each against a

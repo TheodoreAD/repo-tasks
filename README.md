@@ -176,6 +176,7 @@ with a message naming the task.
 | `inv deps.check-currency`             | network         |
 | `inv deps.lock`                       | network         |
 | `inv dev-env.setup`                   | network         |
+| `inv dist.check-isolated`             | network         |
 | `inv dist.list-versions`              | network         |
 | `inv dist.publish`                    | network         |
 | `inv docker.build`                    | docker          |

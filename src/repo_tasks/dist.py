@@ -6,14 +6,17 @@ installed, so this module has no interaction with venv.py's --no-editable/CI-mod
 import http.client
 import json
 import re
+import shlex
 import shutil
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import cast
 
-from invoke import Collection, Context, task
+from invoke import Collection, Context, Exit, task
 
+from .nextsteps import next_steps
 from .projects import PythonProject, discover_python_projects
 from .requirements import NETWORK, requires
 from .version import Version, set_dev
@@ -214,6 +217,93 @@ def list_versions(c: Context, project: str | None = None, index: str | None = No
         print(v)
 
 
+_LOCK_PATH = Path("uv.lock")
+
+# Run by the clean venv's own interpreter: import every top-level package or module the named
+# distribution installed, read from its own file list since a distribution name is not an import
+# name. Exit 3 means there is no such distribution — a virtual workspace root, which installs nothing.
+_IMPORT_DISTRIBUTION = """\
+import importlib.metadata, sys
+try:
+    files = importlib.metadata.distribution(sys.argv[1]).files or []
+except importlib.metadata.PackageNotFoundError:
+    sys.exit(3)
+tops = sorted({
+    f.parts[0].removesuffix(".py") for f in files
+    if f.parts[0] != ".." and not f.parts[0].endswith((".dist-info", ".data"))
+    and (len(f.parts) > 1 or f.suffix == ".py")
+})
+for top in tops:
+    __import__(top)
+print(" ".join(tops))
+"""
+
+_NOT_A_PACKAGE = 3
+
+
+def _isolated_import(c: Context, project: PythonProject, workdir: str) -> tuple[bool, str]:
+    """Install `project`'s declared closure alone into a fresh venv and import it. Returns whether
+    it imported, and the line to report."""
+    reqs, venv = f"{workdir}/{project.name}.txt", f"{workdir}/{project.name}"
+    c.run(
+        f"uv export --package {project.name} --frozen --no-dev --no-editable --no-hashes --no-header --quiet -o {reqs}",
+        hide=True,
+    )
+    c.run(f"uv venv --no-project --quiet {venv}", hide=True)
+    c.run(f"uv pip install --quiet --python {venv}/bin/python -r {reqs}", hide=True)
+    result = c.run(f"{venv}/bin/python -c {shlex.quote(_IMPORT_DISTRIBUTION)} {project.name}", hide=True, warn=True)
+    if result.ok:
+        return True, f"imports alone ({result.stdout.strip()})"
+    if result.exited == _NOT_A_PACKAGE:
+        return True, "installs nothing (a virtual project) — skipped"
+    lines = result.stderr.strip().splitlines()
+    return False, f"FAILS alone — {lines[-1] if lines else f'exit {result.exited}'}"
+
+
+@requires(NETWORK)
+@task(name="check-isolated", help={"project": "Project to check (default: every python project in the repo)"})
+def check_isolated(c: Context, project: str | None = None):
+    """Install each python project with only what it declares, into a clean venv, and import it —
+    exits nonzero naming any that cannot import alone.
+
+    The failure this catches is invisible everywhere else: a workspace syncs every member into one
+    environment, so package A importing sibling B without declaring it works in every local run and
+    in CI, then fails for whoever installs A's wheel. Measured 2026-09-26 on a three-package
+    fixture: the undeclared edge imported in the shared environment and raised
+    `ModuleNotFoundError` alone, and the declared edge imported both ways. The same holds for a
+    single-project repo importing a dev-only dependency at import time.
+
+    **The closure comes from the lock**, `uv export --package <name> --no-dev --no-editable`: exactly
+    what the project declares, at the versions it locks, with a sibling included as a local path only
+    when declared. Chosen over installing a built wheel with the index plus `--find-links`, where an
+    unrelated index package sharing a sibling's name could satisfy — or mask — the import.
+
+    It proves import-time edges only. An import inside a function, or a declared dependency's
+    private module, passes; that half is an architecture linter's question (see the coupling-checker
+    plan). Needs the network for third-party packages; builds only in a temporary directory."""
+    if not _LOCK_PATH.exists():
+        raise Exit("[dist.check-isolated] no uv.lock — run `inv deps.lock` first; the check installs from it", code=1)
+    targets = discover_python_projects(c)
+    if project is not None:
+        targets = [p for p in targets if p.name == project]
+        if not targets:
+            raise ValueError(f"no python project found for {project!r}")
+    if not targets:
+        print(f"[dist.check-isolated] {_NO_PROJECTS}")
+        return
+    failed: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="repo-tasks-isolated-") as workdir:
+        for target in targets:
+            ok, line = _isolated_import(c, target, workdir)
+            print(f"[dist.check-isolated] {target.name}  {line}")
+            if not ok:
+                failed.append(target.name)
+    if failed:
+        print(f"[dist.check-isolated] {len(failed)} of {len(targets)} cannot import with only what they declare")
+        next_steps(*(f"declare what {name} imports in its own [project] dependencies" for name in failed))
+        raise Exit(code=1)
+
+
 # set_dev is imported for the --dev flag; an explicit collection keeps it from being published a
 # second time as dist.set-dev (contributing/task-module-conventions.md).
-ns: Collection = Collection(clean, build, publish, list_versions)
+ns: Collection = Collection(clean, build, publish, list_versions, check_isolated)
