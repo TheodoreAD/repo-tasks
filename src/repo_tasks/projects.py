@@ -153,6 +153,37 @@ def docs_generators(root: Path = _CWD) -> list[str]:
     return [str(command) for command in cast(list[object], docs.get("generators", []))]
 
 
+def pyright_extra_include(root: Path = _CWD) -> list[str]:
+    """Top-level trees this repo asks basedpyright to check beyond the shipped `include` —
+    `repo-tasks.toml`'s `[pyright] extra-include`, empty when the file or the key is absent.
+
+    **Added to the shipped list, never replacing it**, which is what `extra-` says: the shipped
+    `["src*", "tests*", "tasks*"]` is what every consumer shares, and a repo declares only what it
+    has beyond that — `scaffoldapy`'s `template/`, whose literal Python basedpyright never saw. Each
+    entry lands in `include` verbatim, so the shipped entries' rule applies: end it in `*`
+    (`template*`), since a literal path that stops existing is a hard basedpyright error rather than
+    a no-op. Settled 2026-09-26 over deriving `include` from every tracked tree, which would leave a
+    deliberately untyped tree no opt-out."""
+    return _pyright_setting("extra-include", root)
+
+
+def pyright_unchecked(root: Path = _CWD) -> list[str]:
+    """Top-level trees this repo leaves unchecked on purpose — `repo-tasks.toml`'s
+    `[pyright] unchecked`, globs matched against a tracked file's first path segment.
+
+    The opt-out `configs.check-include` needs to be right on correct input. Its first run found one:
+    this repo's `plans/` holds a plan's evidence script, which is a probe rather than product code,
+    is deleted when the plan retires, and would add ten basedpyright errors if it were covered. A
+    tree listed here is reported as unchecked by declaration instead of failing the check."""
+    return _pyright_setting("unchecked", root)
+
+
+def _pyright_setting(key: str, root: Path) -> list[str]:
+    data = _load_toml(root / _REPO_TASKS_TOML) if (root / _REPO_TASKS_TOML).exists() else {}
+    pyright = cast(dict[str, object], data.get("pyright", {}))
+    return [str(entry) for entry in cast(list[object], pyright.get(key, []))]
+
+
 def python_floor(root: Path = _CWD) -> str | None:
     """The `major.minor` a project declares as its lowest supported Python, or None when it declares
     no `requires-python` at all.

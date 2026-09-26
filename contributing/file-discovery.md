@@ -2,8 +2,9 @@
 
 Which of the tools `quality.py` wraps skip gitignored content on their own, which are blind to it,
 and why the shipped configs are include-shaped rather than carrying exclude lists. Extracted from
-the now-retired `plans/2026-08-19-gitignore-tool-alignment.md`; the one question it left open is
-`plans/2026-09-05-pyright-include-coverage.md`.
+the now-retired `plans/2026-08-19-gitignore-tool-alignment.md`. The one question it left open,
+whether an unchecked tree can be noticed, was answered and built 2026-09-26; see the end of the next
+section.
 
 The guiding principle: **`.gitignore` absorbs as much of this as it can** — one declaration,
 respected automatically by every tool that supports it — and a tool's own exclude list is reserved
@@ -18,6 +19,16 @@ include-shaped config until someone opts it in. Stated 2026-08-23.]
 
 `contributing/test-tiers.md` applies the same rule to `pytest.ini`'s `testpaths`, and
 `pyrightconfig.json`'s `include` is the rule's other main instance.
+
+**An include list has the mirror of an exclude list's cost: a new tree is silently unchecked.** So
+`include` is extensible per consumer, and the gap is reportable. `repo-tasks.toml`'s
+`[pyright] extra-include` adds trees to the shipped globs at `configs.pull`, `[pyright] unchecked`
+names a tree left out on purpose, and `inv configs.check-include` reports tracked `.py` files
+covered by neither, with the line that fixes it. Settled 2026-09-26, over deriving `include` from
+every tracked tree, which would give a deliberately untyped tree no way out. That case appeared on
+the check's first run here: `plans/` holds a plan's probe script, which would add ten type errors if
+covered. The check found `scaffoldapy`'s `template/`, and with `extra-include = ["template*"]` the
+whole tree type-checks clean under that repo's own environment.
 
 ## Three ways a tool gets gitignore-awareness
 

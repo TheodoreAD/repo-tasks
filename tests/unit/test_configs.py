@@ -110,6 +110,83 @@ def test_shipped_pyright_include_entries_tolerate_absence():
         assert "/" not in entry, entry
 
 
+def test_the_derivation_can_find_the_shipped_include_line():
+    """The guard that keeps `extra-include` from silently doing nothing: `_extend_include` edits the
+    line only if `_INCLUDE_RE` matches it, so a reformatted shipped file would pull unchanged."""
+    text = (configs._source_dir(None) / "pyrightconfig.json").read_text(encoding="utf-8")
+    assert configs.include_entries(text) == ["src*", "tests*", "tasks*"]
+
+
+def test_pull_appends_declared_extra_include_entries(c, tmp_cwd):
+    (tmp_cwd / "repo-tasks.toml").write_text('[pyright]\nextra-include = ["template*"]\n', encoding="utf-8")
+    configs.pull.body(c, source=None)
+    text = (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
+    assert '"include": ["src*", "tests*", "tasks*", "template*"],\n' in text
+    assert configs.include_entries(text) == ["src*", "tests*", "tasks*", "template*"]
+
+
+def test_pull_leaves_include_byte_identical_without_a_declaration(c, tmp_cwd):
+    configs.pull.body(c, source=None)
+    assert '"include": ["src*", "tests*", "tasks*"],\n' in (tmp_cwd / "pyrightconfig.json").read_text(encoding="utf-8")
+
+
+def test_restore_derived_lines_keeps_the_packages_own_include():
+    """The promote guard for the new derived line: a repo declaring extra trees must not ship them
+    back as every consumer's `include`, the bug that made `include` verbatim in the first place."""
+    package = '{\n  "include": ["src*", "tests*"],\n  "reportAny": "error"\n}\n'
+    root = '{\n  "include": ["src*", "tests*", "template*"],\n  "reportAny": "warning"\n}\n'
+    restored = configs.restore_derived_lines(root, package)
+    assert restored == '{\n  "include": ["src*", "tests*"],\n  "reportAny": "warning"\n}\n'
+
+
+def _include_repo(tmp_cwd: Path, include: str, toml: str, *files: str) -> MockContext:
+    (tmp_cwd / "pyrightconfig.json").write_text(f'{{\n  "include": [{include}],\n}}\n', encoding="utf-8")
+    if toml:
+        (tmp_cwd / "repo-tasks.toml").write_text(toml, encoding="utf-8")
+    listing = "".join(f"{file}\n" for file in files)
+    return MockContext(
+        run={"git ls-files --cached --others --exclude-standard -- '*.py'": Result(stdout=listing, exited=0)}
+    )
+
+
+def test_check_include_passes_when_every_tree_is_covered(tmp_cwd, capsys):
+    c = _include_repo(tmp_cwd, '"src*", "tests*", "tasks*"', "", "src/pkg/a.py", "tests/test_a.py", "tasks.py")
+    configs.check_include.body(c)
+    assert "every other tracked .py is covered" in capsys.readouterr().out
+
+
+def test_check_include_names_an_uncovered_tree_and_the_line_that_fixes_it(tmp_cwd, capsys):
+    c = _include_repo(tmp_cwd, '"src*", "tests*"', "", "src/a.py", "template/tasks.py", "template/conftest.py")
+    with pytest.raises(Exit):
+        configs.check_include.body(c)
+    out = capsys.readouterr().out
+    assert "template: 2 tracked .py file(s), never checked" in out
+    assert '[pyright] extra-include = ["template*"]' in out
+    assert "inv configs.pull" in out
+
+
+def test_check_include_says_when_a_declared_tree_is_not_pulled_yet(tmp_cwd, capsys):
+    """It reads the file in effect, so the pending state is visible rather than reported as a gap
+    the user has already declared."""
+    c = _include_repo(tmp_cwd, '"src*"', '[pyright]\nextra-include = ["template*"]\n', "template/tasks.py")
+    with pytest.raises(Exit):
+        configs.check_include.body(c)
+    out = capsys.readouterr().out
+    assert "declared in repo-tasks.toml but not pulled yet" in out
+    assert "extra-include = [" not in out  # nothing new to declare
+
+
+def test_check_include_does_not_fail_on_a_tree_left_unchecked_by_declaration(tmp_cwd, capsys):
+    c = _include_repo(tmp_cwd, '"src*"', '[pyright]\nunchecked = ["plans*"]\n', "src/a.py", "plans/probe/x.py")
+    configs.check_include.body(c)
+    assert "plans: 1 tracked .py file(s), unchecked by declaration" in capsys.readouterr().out
+
+
+def test_check_include_noops_without_a_pyrightconfig(tmp_cwd, capsys):
+    configs.check_include.body(MockContext())
+    assert "no pyrightconfig.json" in capsys.readouterr().out
+
+
 def test_pull_overwrites_existing_file(c, tmp_cwd):
     (tmp_cwd / "ruff.toml").write_text("stale content", encoding="utf-8")
     configs.pull.body(c, source=None)

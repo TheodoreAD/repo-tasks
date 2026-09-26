@@ -13,6 +13,12 @@
 # checkouts live is machine-local and comes from $REPO_TASKS_PROJECTS_ROOT, defaulting to this
 # repo's parent directory.
 
+[pyright]
+# plans/ holds a plan's evidence scripts: probes rather than product code, deleted with the plan
+# when it retires, and not written to pass the gate's type check. `inv configs.check-include`
+# reports it as unchecked by declaration instead of as a gap.
+unchecked = ["plans*"]
+
 [[consumer]]
 name = "power-user-linux-setup"
 

@@ -1,11 +1,11 @@
 """Canonical tool config distribution — ruff.toml/pyrightconfig.json/dprint.json/pytest.ini/
 zizmor.yml/.editorconfig, shipped as package data so a fix or improvement lands once and reaches every
 consumer deliberately (a pinned dependency bump), instead of being hand-copied and silently
-drifting per repo. Every file is copied verbatim but for two lines, each derived from something the
-consumer itself declares — pyrightconfig.json's `pythonVersion` from its `requires-python`, and
-pytest.ini's `anyio_mode` from whether its lock resolves AnyIO (see `_derive_for_project`).
-Everything else is byte-identical to the package copy, pyrightconfig.json's `include` globs
-included; see the comment in that file. `pull`/`diff` read from the installed package by
+drifting per repo. Every file is copied verbatim but for three lines, each derived from something
+the consumer itself declares — pyrightconfig.json's `pythonVersion` from its `requires-python` and
+its `include` extended by `repo-tasks.toml`'s `[pyright] extra-include`, and pytest.ini's
+`anyio_mode` from whether its lock resolves AnyIO (see `_derive_for_project`). Everything else is
+byte-identical to the package copy. `pull`/`diff` read from the installed package by
 default, or from `--source git:<url>`/`local:<path>` to stage a candidate from elsewhere instead.
 The reverse direction — promoting a repo's own tuned root config into the shipped baseline — is
 `configs.promote` in repo-tasks' own `tasks.py`, not exported here: every consumer's `check`
@@ -20,6 +20,8 @@ binary into the command that fixes it. All three read the same packaged `pyproje
 is one manifest and no second list to keep in step."""
 
 import difflib
+import fnmatch
+import json
 import re
 import shutil
 import subprocess
@@ -35,7 +37,7 @@ from typing import cast
 from invoke import Context, Exit, task
 
 from .nextsteps import next_steps
-from .projects import python_floor
+from .projects import pyright_extra_include, pyright_unchecked, python_floor, tracked_files
 
 _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini", "zizmor.yml", ".editorconfig"]
 
@@ -99,11 +101,31 @@ def _staged_source(source: str | None) -> Generator[Path]:
             shutil.rmtree(src_dir, ignore_errors=True)
 
 
-# The two lines in the shipped configs that are correct for some consumers and wrong for others.
-# Both are anchored to a whole line including its newline, so removing one leaves no blank behind
-# and no dangling comma in the JSON (each sits between other keys, never last).
+# The lines in the shipped configs that are correct for some consumers and wrong for others. Each
+# is anchored to a whole line including its newline, so removing one leaves no blank behind and no
+# dangling comma in the JSON (each sits between other keys, never last).
 _PYTHON_VERSION_RE = re.compile(r'^(?P<indent>[ \t]*)"pythonVersion": "[^"]*",\n', re.MULTILINE)
 _ANYIO_MODE_RE = re.compile(r"^anyio_mode = auto\n", re.MULTILINE)
+# pyrightconfig.json's `include`, which the shipped file keeps on one line. Extended rather than
+# removed: a consumer's `[pyright] extra-include` entries are appended to the shipped globs.
+_INCLUDE_RE = re.compile(r'^(?P<indent>[ \t]*)"include": \[(?P<items>[^\]\n]*)\],\n', re.MULTILINE)
+
+
+def _extend_include(text: str, extra: list[str]) -> str:
+    """`text` with `extra` appended to its `include` line, each JSON-quoted. Unchanged when there
+    is nothing to add, so a consumer declaring nothing gets the shipped line byte for byte."""
+    if not extra:
+        return text
+    added = ", ".join(json.dumps(entry) for entry in extra)
+    return _INCLUDE_RE.sub(lambda m: f'{m["indent"]}"include": [{m["items"]}, {added}],\n', text, count=1)
+
+
+def include_entries(text: str) -> list[str] | None:
+    """The `include` globs a pyrightconfig.json's text declares, or None when the line is not in
+    the shape the shipped file writes. Read with the derivation's own pattern rather than a JSON
+    parser, since the file carries comments."""
+    match = _INCLUDE_RE.search(text)
+    return cast(list[str], json.loads(f"[{match['items']}]")) if match else None
 
 
 def _project_resolves_anyio(root: Path) -> bool:
@@ -131,6 +153,7 @@ def _derive_for_project(name: str, text: str, root: Path) -> str:
     one answer. A pull that preserved hand-edits would give that question two, and leave `diff`
     nothing to check against. Every other shipped file is still copied verbatim."""
     if name == "pyrightconfig.json":
+        text = _extend_include(text, pyright_extra_include(root))
         floor = python_floor(root)
         if floor is None:
             return _PYTHON_VERSION_RE.sub("", text)
@@ -142,7 +165,10 @@ def _derive_for_project(name: str, text: str, root: Path) -> str:
 
 def restore_derived_lines(root_text: str, package_text: str) -> str | None:
     """`root_text` with every derived line put back to the packaged copy's own value — or None when
-    the two disagree about whether such a line is present at all.
+    the two disagree about whether such a line is present at all. `include` is one of them since
+    consumers can extend it: without restoring it, promoting from a repo that declares
+    `[pyright] extra-include` would ship its trees as everyone's, the bug that made `include` verbatim
+    in the first place.
 
     The guard for the promote direction (`configs.promote` in this repo's tasks.py). `pull` resolves
     those lines against whatever the repo running it declares, so promoting a root file verbatim
@@ -153,7 +179,7 @@ def restore_derived_lines(root_text: str, package_text: str) -> str | None:
     None rather than a guess when a line is present on one side only: that means the promoting repo
     declares no floor (or no AnyIO) while the package declares one, and nothing here knows where in
     the file to re-insert the missing line. The caller refuses and says so."""
-    for pattern in (_PYTHON_VERSION_RE, _ANYIO_MODE_RE):
+    for pattern in (_PYTHON_VERSION_RE, _ANYIO_MODE_RE, _INCLUDE_RE):
         root_match = pattern.search(root_text)
         package_match = pattern.search(package_text)
         if (root_match is None) != (package_match is None):
@@ -685,6 +711,61 @@ def _dev_array(text: str) -> _DevArray | None:
     if closing is None:
         return None
     return _DevArray(key_start=key.start("key"), items_start=key.end(), items_end=closing)
+
+
+_PYRIGHT_CONFIG = Path("pyrightconfig.json")
+
+
+@task(name="check-include")
+def check_include(c: Context):
+    """Report tracked Python that no pyrightconfig.json `include` entry covers — code basedpyright
+    never checks, and nothing else says so. Reads only; exits nonzero when anything is uncovered.
+
+    `include` is a list of top-level globs by decision (contributing/file-discovery.md), so a new
+    top-level tree is silently unchecked until someone adds it. Found twice: `examples/` here until
+    it moved under `tests/fixtures/`, and `scaffoldapy`'s `template/`, unchecked since it was
+    written. Matching is `fnmatch` on each file's first path segment, which is exactly how the
+    shipped top-level globs select.
+
+    Not in `quality.check`, settled 2026-09-26: a finding here is fixed by a declaration, not a code
+    change, and the fix is named — `[pyright] extra-include` in `repo-tasks.toml`, then
+    `inv configs.pull`. It reads the file actually in effect rather than what a pull would write, so
+    an entry declared but not yet pulled is reported as exactly that.
+
+    A tree left unchecked on purpose is declared in `[pyright] unchecked` and reported as such
+    without failing — needed on this repo's first run, where `plans/` holds a plan's probe script."""
+    if not _PYRIGHT_CONFIG.exists():
+        print("[configs.check-include] no pyrightconfig.json — nothing to check (`inv configs.pull` writes one)")
+        return
+    entries = include_entries(_PYRIGHT_CONFIG.read_text(encoding="utf-8"))
+    if entries is None:
+        raise Exit("[configs.check-include] pyrightconfig.json has no one-line `include` array to read", code=1)
+    unchecked = pyright_unchecked()
+    uncovered: dict[str, int] = {}
+    waived: dict[str, int] = {}
+    for file in tracked_files(c, "*.py"):
+        segment = file.split("/", 1)[0]
+        if any(fnmatch.fnmatchcase(segment, entry) for entry in entries):
+            continue
+        bucket = waived if any(fnmatch.fnmatchcase(segment, entry) for entry in unchecked) else uncovered
+        bucket[segment] = bucket.get(segment, 0) + 1
+    for segment, count in sorted(waived.items()):
+        print(f"[configs.check-include] {segment}: {count} tracked .py file(s), unchecked by declaration")
+    if not uncovered:
+        print(f"[configs.check-include] every other tracked .py is covered by {entries}")
+        return
+    declared = set(pyright_extra_include())
+    for segment, count in sorted(uncovered.items()):
+        state = "declared in repo-tasks.toml but not pulled yet" if f"{segment}*" in declared else "never checked"
+        print(f"[configs.check-include] {segment}: {count} tracked .py file(s), {state}")
+    missing = [f"{segment}*" for segment in sorted(uncovered) if f"{segment}*" not in declared]
+    steps: list[str] = []
+    if missing:
+        entries_toml = ", ".join(json.dumps(entry) for entry in missing)
+        steps.append(f"add to repo-tasks.toml:  [pyright] extra-include = [{entries_toml}]")
+    steps.append("inv configs.pull")
+    next_steps(*steps)
+    raise Exit(code=1)
 
 
 @task
