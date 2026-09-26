@@ -127,9 +127,10 @@ def login(c: Context, project: str | None = None, registry: str | None = None):
     registry is therefore already covered by `docker.login`, and this task is what a chart registry
     on its own host needs.
 
-    [UNVERIFIED: that any of this reaches the keyring on this machine, which currently has no
-    credential helper installed — see plans/2026-08-30-registry-credentials-in-the-os-store.md,
-    blocked on the machine setup that installs one.]"""
+    [UNVERIFIED: that any of this reaches the keyring. The machine has had
+    `docker-credential-secretservice` and an explicit `credsStore` since 2026-09-05, so it is now
+    checkable; the check, a real login against a host that is not also an image registry, is in
+    plans/2026-08-30-registry-credentials-in-the-os-store.md.]"""
     chart = _resolve_chart(c, project)
     if chart is None:
         print(f"[helm.login] {_NO_CHARTS}")
