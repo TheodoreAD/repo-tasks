@@ -256,11 +256,21 @@ def version(c: Context):
 @requires(NETWORK)
 @task
 def stamp(c: Context):
-    """Regenerate bootstrap-repo-tasks.sh, pinning the repo-tasks version active right now. Runs
-    as part of `inv configure` — see the generated script's own header for why a human shouldn't
-    run it directly. Falls back to an unpinned install if `v{active version}` isn't an actual
-    upstream tag (e.g. this checkout is ahead of the last release, or nothing's been tagged yet) —
-    pinning to a tag that doesn't exist would make the generated script fail every time it runs.
+    """Regenerate bootstrap-repo-tasks.sh, pinning the repo-tasks version active right now. Falls
+    back to an unpinned install if `v{active version}` isn't an actual upstream tag (e.g. this
+    checkout is ahead of the last release, or nothing's been tagged yet) — pinning to a tag that
+    doesn't exist would make the generated script fail every time it runs.
+
+    **Run it directly whenever a repo should be re-pinned**, which since 2026-09-26 is the last step
+    of a consumer sweep (contributing/consumer-sweep.md). `inv configure` also calls it, as one part
+    of setting up a fresh checkout, and is the wrong command mid-sweep because it re-runs dev-env
+    setup and `configs.pull` too.
+
+    This used to say a human shouldn't run it directly, citing the generated script's own header. That
+    header warns against re-running **the script**, which reinstalls the global tool and yanks it out
+    from under any other repo being worked on — a different thing entirely, and nothing about it argues
+    against running this task. The misreading mattered: an unpinned bootstrap is what makes a push to
+    this repo a deploy to a consumer's next CI run, and re-stamping is the only thing that fixes it.
 
     **The number is the *active* one — this process's `repo-tasks`, not the global uv tool — and
     that is deliberate.** The script records what this repo was last configured against, so a

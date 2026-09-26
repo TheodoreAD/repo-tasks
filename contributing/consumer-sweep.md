@@ -116,12 +116,13 @@ unpinned form rather than pinning a tag that does not exist. `power-user-linux-s
 `invoke-stubs` have no bootstrap script — they pin through their own lock, so the step is a no-op
 there and the `inv deps.lock --package repo-tasks` at the top is their equivalent.
 
-[PITFALL: **not `inv configure`, which is what `stamp`'s own docstring points you at.** That is the
-fresh-checkout composite — dev-env setup, `configs.pull` and `stamp` in one — so in a sweep it
-re-runs steps already done above, in a different order. The docstring's "a human shouldn't run this
-directly" cites the generated script's header, and that header is warning against re-running **the
-script** (which yanks the global tool out from under every other repo), not against running
-`stamp`.]
+[PITFALL: **not `inv configure`.** That is the fresh-checkout composite — dev-env setup,
+`configs.pull` and `stamp` in one — so in a sweep it re-runs steps already done above, in a
+different order. `stamp`'s own docstring used to send you there, citing the generated script's
+header for why a human "shouldn't run it directly"; that header warns against re-running **the
+script**, which yanks the global tool out from under every other repo, and says nothing against
+running the task. Corrected 2026-09-26, in the same change that made the step part of this sweep —
+but a consumer on an older `repo-tasks` still has the old wording.]
 
 `configs.diff` is first _of the reading steps_ for a reason: it reports both halves of the drift
 (stale config files _and_ `dependency-groups.dev` entries the manifest has grown), so it tells you
