@@ -1,6 +1,6 @@
 ---
-status: blocked on the batched consumer sweep, which is the only thing that can verify the derived configs at a consumer
-updated: 2026-08-30
+status: blocked on scaffoldapy absorbing its python-version tier rules plan, the rules' permanent home
+updated: 2026-09-26
 ---
 
 # The shipped canonical configs decide every consumer's Python floor

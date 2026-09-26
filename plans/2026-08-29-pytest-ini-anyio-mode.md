@@ -1,6 +1,6 @@
 ---
-status: blocked on the batched consumer sweep, which is the only thing that can verify the derivation at a consumer
-updated: 2026-09-08
+status: blocked on a sweep of scaffoldapy or agent-skills, the only consumers whose lock has no AnyIO, to verify the line is omitted
+updated: 2026-09-26
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---
 
