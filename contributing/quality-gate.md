@@ -594,11 +594,12 @@ It is the only thing here that asks what a change does to a repo this package **
 than to a repo that merely uses it, and the only check that can fail before the change reaches one.
 
 [DECISION: **install from the checkout, not from `bootstrap-repo-tasks.sh`.** That script installs
-`main`, which is what is already shipped — running it would produce a green canary for a broken
-push. `uv tool install --force --with-executables-from invoke ./repo-tasks` is the whole mechanism,
-and it works because a generated repo deliberately declares neither `repo-tasks` nor `invoke`: every
-`inv` in that tier, copier's own `_tasks` included, resolves from the global tool. Swapping the
-global tool is therefore swapping the thing under test, with nothing in the consumer to change.]
+whatever it names — `main` while unpinned, a release tag once a sweep has stamped it — and either
+way that is what is already shipped, so running it would produce a green canary for a broken push.
+`uv tool install --force --with-executables-from invoke ./repo-tasks` is the whole mechanism, and it
+works because a generated repo deliberately declares neither `repo-tasks` nor `invoke`: every `inv`
+in that tier, copier's own `_tasks` included, resolves from the global tool. Swapping the global
+tool is therefore swapping the thing under test, with nothing in the consumer to change.]
 
 [DECISION: its own workflow, for the reason the dependency audit gives above — GitHub gives each
 workflow its own check run, so `CI ✓` beside `Canary ✗` already reads as "this repo is fine, what it
@@ -611,11 +612,17 @@ change break the consumer as it stands today", and a pin answers it about a cons
 exists. The cost is that the canary can go red for a reason that is not this repo's — accepted, and
 the log says which side failed.]
 
-**Why it earns a whole workflow for one consumer.** That consumer's CI already installs `main`
-unpinned, so it has always been a canary — on _its_ push schedule. Measured 2026-09-13: its `main`
-(`b2690c6`) last ran CI on 2026-09-07, red, on the starlette/`anyio` collection error this repo
-fixed hours later in `487c9c8`. Six days in which the consumer's badge said broken, the fix said
-fixed, and nothing ran to decide between them. The gap is never the mechanism, always the trigger.
+**Why it earns a whole workflow for one consumer.** While that consumer's bootstrap was unpinned,
+its CI installed `main` and so was a canary already — on _its_ push schedule. Measured 2026-09-13:
+its `main` (`b2690c6`) last ran CI on 2026-09-07, red, on the starlette/`anyio` collection error
+this repo fixed hours later in `487c9c8`. Six days in which the consumer's badge said broken, the
+fix said fixed, and nothing ran to decide between them. That was a trigger gap.
+
+Pinning, decided 2026-09-26 as the last step of a sweep ([`consumer-sweep.md`](consumer-sweep.md)),
+turns it into more than one: a stamped consumer's CI tests the tag it was last verified against and
+says nothing about unreleased code here at all. From then on this job is not a faster copy of the
+consumer's own check but the only test of what an unreleased change does to a generated repo — and
+the pin is only safe to take because it exists.
 
 [PITFALL: **the canary is not the sweep, and passing it is not "consumers verified".** It covers one
 of five consumers, and of that one it covers the half `inv quality.precommit` there cannot — what
