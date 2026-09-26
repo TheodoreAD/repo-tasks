@@ -270,11 +270,20 @@ Nothing about whether to pin: that was settled 2026-09-26 as the `repo-tasks.sta
 the canary made a consumer's own unpinned CI stop being the family's only detector for a break
 pushed from here. `plans/2026-08-25-consumer-transitions.md` carries the reasoning and the cost.
 
-Nor about which consumers are unpinned: `inv consumers.diff` reports that too since 2026-09-26, as
-`bootstrap unpinned` or as a pin behind the version the run measured with. Its first run named
-`scaffoldapy`, `agent-skills` and `ingesta` — the last of which had been swept hours earlier and
-reported up to date, because until then nothing looked at the pin.
+Nor about which consumers are unpinned, nor which lack the security-workflow caller:
+`consumers.diff` reports both since 2026-09-26 — `bootstrap unpinned` or a pin behind the version
+the run measured with, and a missing caller or one whose SHA is behind the reusable workflow it
+names. Everything mechanical on the complement list in `plans/2026-08-25-consumer-transitions.md` is
+now something that runs.
 
-What is open is the rest of the complement list in `plans/2026-08-25-consumer-transitions.md`: the
-security-workflow caller is greppable from outside a consumer and still is not reported, and the
-four items below it are readings rather than checks.
+What is open is the four items on that list which are **readings** rather than checks, and they stay
+manual: whether a derived `pythonVersion` is right for that repo, the packaged-`tests/` decision,
+whether to `venv.recreate` onto the declared floor, and task-code lag in a consumer that pins
+`repo-tasks` in its own lock.
+
+[PITFALL: **both new checks landed by finding something in a repo that looked finished.** The pin
+check named `ingesta`, swept and reported up to date hours earlier; the caller check named
+`power-user-linux-setup`, the most-swept consumer in the family and clean on every other line.
+Neither had been missed by a sweep — both items were on the complement list, which is exactly the
+list no command read. So "swept recently" is not evidence about anything a sweep does not measure,
+and the complement list is where to look for what that is.]
