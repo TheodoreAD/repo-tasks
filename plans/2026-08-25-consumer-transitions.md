@@ -1013,13 +1013,21 @@ defect was.
 The packaged-`tests/` decision was left untaken there: no `__init__.py`, and the pull added none —
 the deliberate outcome the complement list asks for.
 
-[PITFALL: **`configs.ensure-deps` is unsafe for `ingesta` today and safe for the other four, and the
-difference is one entry's position.** Measured 2026-09-18 by running `_DEV_ARRAY_RE` against each
-declared consumer's `pyproject.toml`: `scaffoldapy` captures 15 entries, `invoke-stubs` 14,
-`agent-skills` 12, `power-user-linux-setup` 16 — and `ingesta` captures **0**, because its restored
-file still opens the group with `"ingesta[store]"`. So the three remaining sweeps are not blocked,
-and `ingesta`'s next one re-fires the same corruption on a file that was repaired by hand. The
-repair did not remove the exposure; it only removed the damage.]
+[PITFALL: **`configs.ensure-deps` was unsafe for `ingesta` and safe for the other four, and the
+difference was one entry's position.** Measured 2026-09-18 by running the old `_DEV_ARRAY_RE`
+against each declared consumer's `pyproject.toml`: `scaffoldapy` captured 15 entries, `invoke-stubs`
+14, `agent-skills` 12, `power-user-linux-setup` 16 — and `ingesta` **0**, because its restored file
+still opens the group with `"ingesta[store]"`. So the three remaining sweeps were never blocked, and
+`ingesta`'s next one would have re-fired the same corruption on a file repaired by hand: the repair
+removed the damage and left the exposure.
+
+**Fixed 2026-09-26, `a0ee510`**, by the filed plan's own recommended direction — membership from
+tomllib so the two commands cannot disagree, write offsets from a scan that skips strings and
+comments. Worth keeping the measurement rather than deleting it with the bug, for two reasons. It is
+the evidence that the three outstanding sweeps could proceed, which was the question at the time.
+And a sweep runs whatever `repo-tasks` that consumer's machine has, so a global tool predating the
+fix still corrupts `ingesta` — the tell is `diff` and `ensure-deps` disagreeing in one run, and
+`inv repo-tasks.update` is the answer.]
 
 ## Item 5, and the tag it was waiting for had already been cut (2026-09-26)
 
@@ -1079,13 +1087,23 @@ generated script's header for the reason; that header is warning against re-runn
 which reinstalls the global tool out from under other repos, and says nothing against running
 `stamp`. The cross-reference points at an argument about a different thing.]
 
-[DEFERRED: **`consumers.diff` cannot see any of this, and it is the cheapest complement item yet
-identified.** The pin state is one regex over a file at a known path in each consumer's checkout —
-`_stamped_version()` already implements the read and `repo-tasks.status` already prints the verdict,
-but only for the repo it is run inside, which is the one place a sweep does not need telling. An
-unpinned consumer after this decision is exactly the "declared but never done" state that the
-reporter exists to make loud, and it would be reading a file rather than making a judgement, which
-puts it on the mechanical side of the line the earlier deferral draws.]
+~~[DEFERRED: **`consumers.diff` cannot see any of this, and it is the cheapest complement item yet
+identified.**~~ **Landed the same day, `6a73807`.** The read became `selfinstall.read_pin`, which
+takes a root so the reporter can ask about five repos from outside each, and returns _whether the
+script exists_ alongside what it pins — those are opposite answers rather than one number, since no
+script means that repo pins through its own lock and is fine. Compared against the version the run
+measured with rather than the newest upstream tag, so the reporter stays offline and every line in
+one report is answerable against the same number.
+
+**Its first run reported `ingesta` behind, hours after the same command called it up to date.** That
+is the sharpest evidence in this file for the "something that runs" pitfall below, because this time
+the gap was not membership and not measurement: `ingesta` was declared, measured, swept, verified
+green in CI, and had its sweep merged into this plan the same day. What nobody had looked at was a
+file at a known path in that repo, which no amount of sweeping would have surfaced because nothing
+read it. `scaffoldapy` and `agent-skills` are unpinned too, exactly as the decision above predicts.
+
+The complement list is now four items rather than six, and the remaining mechanical one is the
+security-workflow caller.]
 
 [UNVERIFIED: **`canary.yml`'s header comment becomes wrong when `scaffoldapy` is pinned**, and it is
 load-bearing prose rather than decoration — lines 7–9 justify the whole workflow by that consumer's
