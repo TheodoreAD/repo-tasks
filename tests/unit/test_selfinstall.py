@@ -97,6 +97,42 @@ def test_version_prints_installed_version(c, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "1.2.3"
 
 
+def test_read_pin_separates_no_script_from_a_script_with_no_pin(tmp_path):
+    """The two states a single `version: str | None` used to read alike, and `consumers.diff` says
+    opposite things about them: no script means this repo pins through its own lock and is fine, a
+    script with no pin means its CI installs `main` at run time."""
+    absent = tmp_path / "no-script"
+    absent.mkdir()
+    assert selfinstall.read_pin(absent) == selfinstall.Pin(present=False, version=None)
+    assert not selfinstall.read_pin(absent).unpinned
+
+    unpinned = tmp_path / "unpinned"
+    unpinned.mkdir()
+    (unpinned / "bootstrap-repo-tasks.sh").write_text(
+        f"uv tool install 'repo-tasks @ git+{selfinstall._REPO_URL}'\n", encoding="utf-8"
+    )
+    assert selfinstall.read_pin(unpinned) == selfinstall.Pin(present=True, version=None)
+    assert selfinstall.read_pin(unpinned).unpinned
+
+    pinned = tmp_path / "pinned"
+    pinned.mkdir()
+    (pinned / "bootstrap-repo-tasks.sh").write_text(
+        f"uv tool install 'repo-tasks @ git+{selfinstall._REPO_URL}@v0.3.0'\n", encoding="utf-8"
+    )
+    assert selfinstall.read_pin(pinned) == selfinstall.Pin(present=True, version="0.3.0")
+    assert not selfinstall.read_pin(pinned).unpinned
+
+
+def test_read_pin_reads_a_tree_it_is_not_standing_in(tmp_cwd, monkeypatch):
+    """The reason it takes a root at all: `consumers.diff` asks about five repos from outside each."""
+    other = tmp_cwd / "elsewhere"
+    other.mkdir()
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
+    selfinstall.stamp.body(MockContext(run=_ls_remote("v1.2.3")))  # stamps cwd, not `other`
+    assert selfinstall.read_pin(tmp_cwd).version == "1.2.3"
+    assert not selfinstall.read_pin(other).present
+
+
 def test_stamp_writes_pinned_install_script_when_tag_exists(tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
     c = MockContext(run=_ls_remote("v1.2.3", "v1.0.0"))

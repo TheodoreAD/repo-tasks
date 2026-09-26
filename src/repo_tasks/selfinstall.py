@@ -11,6 +11,7 @@ into the tool bin dir, not `inv`/`invoke` — the same opt-in pipx historically 
 `inv` on PATH at all."""
 
 import re
+from dataclasses import dataclass
 from importlib.metadata import version as _installed_version
 from pathlib import Path
 
@@ -69,14 +70,43 @@ def _latest_tag(c: Context) -> str | None:
     return tags[0] if tags else None
 
 
+@dataclass(frozen=True)
+class Pin:
+    """How one repo's bootstrap script resolves `repo-tasks`, as the two independent facts a caller
+    needs — whether the script is there at all, and whether it names a version.
+
+    Both matter and they are not the same answer. A repo with **no** script pins through its own
+    lock and is fine; a repo **with** one carrying the unpinned form has CI installing `main` at run
+    time, however recently its configs were pulled. Collapsing the pair into a single
+    `version: str | None` is what let those two read alike, and `consumers.diff` needs to say
+    opposite things about them."""
+
+    present: bool
+    version: str | None
+
+    @property
+    def unpinned(self) -> bool:
+        """A script that is there and names no version — the state that makes a push here a deploy."""
+        return self.present and self.version is None
+
+
+def read_pin(root: Path) -> Pin:
+    """`root`'s bootstrap pin, read without standing in that tree.
+
+    Takes a root because `consumers.diff` asks this about five repos it is not standing in, and
+    because the filename belongs here: this module owns the script's template, so a second module
+    spelling `bootstrap-repo-tasks.sh` for itself would be the hand-kept second copy this package
+    argues against everywhere else."""
+    script = root / _STAMP_PATH
+    if not script.exists():
+        return Pin(present=False, version=None)
+    match = re.search(r"repo-tasks @ git\+[^@']+@v([^']+)'", script.read_text(encoding="utf-8"))
+    return Pin(present=True, version=match.group(1) if match else None)
+
+
 def _stamped_version() -> str | None:
-    """The version pinned in this repo's own bootstrap-repo-tasks.sh, or None if it hasn't been
-    stamped yet (run `inv configure`) or was stamped before any tag existed (unpinned form,
-    nothing to compare against)."""
-    if not _STAMP_PATH.exists():
-        return None
-    match = re.search(r"repo-tasks @ git\+[^@']+@v([^']+)'", _STAMP_PATH.read_text(encoding="utf-8"))
-    return match.group(1) if match else None
+    """The version pinned in the tree this is standing in — `status`' reading of the above."""
+    return read_pin(Path()).version
 
 
 def _installed_tools(c: Context) -> dict[str, str] | None:

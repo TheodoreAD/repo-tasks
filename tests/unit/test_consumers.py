@@ -170,6 +170,93 @@ def test_one_consumer_being_clean_does_not_hide_another_being_behind(tmp_cwd, mo
     assert "beta: config files behind: pytest.ini" in out
 
 
+# ---------------------------------------------------------------------------
+# the bootstrap pin: the one drift no config comparison can reach
+# ---------------------------------------------------------------------------
+
+
+def _bootstrap(root: Path, pinned: str | None) -> None:
+    ref = f"@v{pinned}" if pinned else ""
+    (root / "bootstrap-repo-tasks.sh").write_text(
+        f"uv tool install 'repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks{ref}'\n", encoding="utf-8"
+    )
+
+
+def test_a_consumer_with_no_bootstrap_script_is_not_reported_unpinned(tmp_cwd, monkeypatch, capsys):
+    """It pins through its own lock, so there is no script and nothing to say — the distinction the
+    reporter would lose if "no version" were one state instead of two."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(MockContext())
+    out = capsys.readouterr().out
+    assert "alpha: up to date" in out
+    assert "bootstrap" not in out
+
+
+def test_an_unpinned_bootstrap_is_behind_even_with_every_config_current(tmp_cwd, monkeypatch, capsys):
+    """The state that made a push here a deploy, and the one `configs.diff` structurally cannot see:
+    it compares shipped config files and the dev group, and the pin is in neither. Before this, a
+    consumer swept without the stamp step looked identical to one swept with it."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned=None)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit) as excinfo:
+        consumers.diff.body(MockContext())
+    assert excinfo.value.code == 1
+    assert "alpha: bootstrap unpinned" in capsys.readouterr().out
+
+
+def test_a_bootstrap_pinned_to_the_measured_version_is_up_to_date(tmp_cwd, monkeypatch, capsys):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned="9.9.9")
+    monkeypatch.setattr(consumers, "_measured_version", lambda: "9.9.9")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(MockContext())
+    assert "alpha: up to date" in capsys.readouterr().out
+
+
+def test_a_bootstrap_pinned_to_an_older_version_names_both(tmp_cwd, monkeypatch, capsys):
+    """Compared against the version this run measured with, not the newest upstream tag — that needs
+    the network, and every other line in the same report was produced by the measured one."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned="0.2.0")
+    monkeypatch.setattr(consumers, "_measured_version", lambda: "0.3.0")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(MockContext())
+    assert "bootstrap pinned to v0.2.0, behind the v0.3.0 this was measured with" in capsys.readouterr().out
+
+
+def test_the_pin_is_reported_alongside_config_drift_not_instead_of_it(tmp_cwd, monkeypatch, capsys):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned=None)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift(["ruff.toml"], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(MockContext())
+    out = capsys.readouterr().out
+    assert "config files behind: ruff.toml" in out
+    assert "bootstrap unpinned" in out
+
+
+def test_reading_the_pin_writes_nothing_into_the_consumer(tmp_cwd, monkeypatch):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha")
+    _bootstrap(alpha, pinned=None)
+    before = (alpha / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(MockContext())
+    assert [p.name for p in alpha.iterdir()] == ["bootstrap-repo-tasks.sh"]
+    assert (alpha / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8") == before
+
+
 def test_the_canary_workflow_checks_out_a_declared_consumer():
     """The reporter measures every consumer and runs none of them; `.github/workflows/canary.yml` is
     the other half — it runs one consumer's own tier against the ref being pushed, because that
