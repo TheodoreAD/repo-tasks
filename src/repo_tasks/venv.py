@@ -53,7 +53,10 @@ def _register_github_path(bin_dir: Path) -> None:
         "no_dev": "Skip the dev dependency group — slim runtime-only install",
         "no_install_project": "Sync only third-party dependencies, skipping the local project entirely",
         "python": _PYTHON_HELP,
-    }
+        "extra": "Include this optional-dependency extra; repeat for several (e.g. --extra store --extra api)",
+        "group": "Include this dependency group; repeat for several",
+    },
+    iterable=["extra", "group"],
 )
 def sync(
     c: Context,
@@ -62,6 +65,8 @@ def sync(
     no_dev: bool = False,
     no_install_project: bool = False,
     python: str | None = None,
+    extra: list[str] | None = None,
+    group: list[str] | None = None,
 ):
     """Sync .venv from uv.lock (uv sync --locked). Fails loudly on a stale or missing lock
     instead of silently rewriting it — run `inv deps.lock` first if that happens.
@@ -74,12 +79,20 @@ def sync(
     existing caller gets — nothing is said and uv keeps whatever .venv already has, or picks the
     newest interpreter satisfying `requires-python` when there is no venv yet. Given a version, uv
     removes a venv on any other version and recreates it, in that order, so an interpreter it cannot
-    obtain leaves the existing venv untouched rather than deleting it first and failing after."""
+    obtain leaves the existing venv untouched rather than deleting it first and failing after.
+
+    `--extra` and `--group` select what a runtime image needs from a project that keeps its
+    deployable layers in extras — a deps layer wanting two of four, say, under `--no-dev`. Each is
+    repeatable and passed to uv as given; neither is set by default, so no existing caller moves.
+    There is deliberately no `--all-extras`: an image carrying every extra is the fat default this
+    exists to avoid, and a project that wants them all can name them."""
     cmd = "uv sync --locked"
     if project:
         cmd += f" --package {project}"
     if python:
         cmd += f" --python {python}"
+    cmd += "".join(f" --extra {name}" for name in extra or [])
+    cmd += "".join(f" --group {name}" for name in group or [])
     if no_editable:
         cmd += " --no-editable"
     if no_dev:

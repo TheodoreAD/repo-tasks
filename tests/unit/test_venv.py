@@ -32,6 +32,18 @@ def test_sync_project_narrows_to_one_workspace_member(c):
     c.run.assert_called_once_with("uv sync --locked --package sample-service", echo=True)
 
 
+def test_sync_selects_extras_and_groups_repeatably(c):
+    """The runtime-image case that asked for it: two of a project's extras, without dev."""
+    venv.sync.body(c, no_dev=True, extra=["store", "api"], group=["serve"])
+    c.run.assert_called_once_with("uv sync --locked --extra store --extra api --group serve --no-dev", echo=True)
+
+
+def test_sync_empty_extra_and_group_lists_add_nothing(c):
+    """What invoke passes for an iterable flag nobody gave: an empty list, not None."""
+    venv.sync.body(c, extra=[], group=[])
+    c.run.assert_called_once_with("uv sync --locked", echo=True)
+
+
 def test_sync_all_flags_combined(c):
     venv.sync.body(c, no_editable=True, no_dev=True, no_install_project=True)
     c.run.assert_called_once_with("uv sync --locked --no-editable --no-dev --no-install-project", echo=True)

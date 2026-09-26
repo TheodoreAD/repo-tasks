@@ -235,7 +235,12 @@ inv venv.sync --no-editable            # CI test job: real (non-editable) instal
 inv venv.sync --no-editable --no-dev   # runtime image: neither dev deps nor an editable install
 inv venv.sync --no-install-project     # deps-only venv, for a Docker/CI layer cache keyed on
                                         # just pyproject.toml + uv.lock, before any repo code lands
+inv venv.sync --no-dev --extra store --extra api   # runtime image needing two of a project's extras
 ```
+
+`--extra` and `--group` are repeatable and select optional dependencies and dependency groups by
+name. There is no `--all-extras`: an image carrying every extra is the fat default the selector
+exists to avoid.
 
 Neither `venv.sync` nor `venv.create` says which Python to build against, so uv takes the newest
 interpreter satisfying `requires-python` — a repo declaring `>=3.11` develops on 3.14, while
