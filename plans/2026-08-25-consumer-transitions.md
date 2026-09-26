@@ -28,7 +28,11 @@ Both were the same mechanism, seen twice in a day. What made each expensive:
 - **Consumers track `main`, immediately and silently.** `bootstrap-repo-tasks.sh` is unpinned until
   a `vX.Y.Z` tag exists (`selfinstall.stamp` refuses to pin to a tag that isn't real), so a
   consumer's CI installs whatever `main` is at run time. A push here is a deploy to every consumer's
-  next CI run, with no consumer-side action and no notice.
+  next CI run, with no consumer-side action and no notice. **The parenthetical is the load-bearing
+  false explanation in this file** — true when written, and wrong as a _reason_ from 2026-09-04
+  onward, since a tag existing does nothing until `stamp` is re-run in each consumer. Corrected in
+  "Item 5, and the tag it was waiting for had already been cut" at the end of this file; the first
+  sentence is still true of three consumers' CI.
 - **The dev machine lags `main`, so local green means nothing about CI.** The global
   `uv tool install` is whatever `inv repo-tasks.update` last fetched. In `scaffoldapy` the local
   gate passed for a day with the old tool while CI ran the new one; then, once updated, the gate
@@ -69,12 +73,14 @@ repo-tasks commit.]
   rather than `ensure_deps`' `_DEV_ARRAY_RE` — that regex sees repo-tasks' own
   `dev = [{ include-group = "repo-tasks-quality" }]` as declaring nothing and would report the whole
   manifest missing in the repo that owns it. Resolved 2026-08-26.]
-- [NEEDS CLARIFICATION: is the fix pinning, or a release cadence? The moment a `v0.1.0` tag exists,
-  `stamp` pins consumers to it and `repo-tasks.update` targets tags — the machinery is built
-  (`contributing/release-flow.md`) and unused. Pinned consumers stop tracking `main`, which turns
-  each of these incidents into a deliberate per-consumer update. The cost is that a fix here reaches
-  nobody until released, and every consumer has to be walked forward — which is the "consumer sweep"
-  below either way.]
+- [DECISION: **pinning — each sweep re-stamps that consumer's `bootstrap-repo-tasks.sh`. Resolved
+  2026-09-26.** The question as written here is unanswerable because its premise expired: it waits
+  on "the moment a `v0.1.0` tag exists", and `v0.2.0` and `v0.3.0` were cut on 2026-09-04 and
+  2026-09-08. The machinery is not "built and unused" either — `repo-tasks.update` has been
+  installing `@<latest tag>` since before this plan's own measurements started citing "the installed
+  v0.3.0 tool". What was actually unpinned was three consumers' bootstrap scripts, which is a
+  different thing with a different fix. See "Item 5, and the tag it was waiting for had already been
+  cut" at the end of this file.]
 - [NEEDS CLARIFICATION: what is the consumer sweep, concretely? When `repo-tasks-quality` or a
   shipped config changes, which repos need `inv repo-tasks.update` + `configs.ensure-deps` +
   `deps.lock` + `configs.pull` + gate, and where is that list? Measured 2026-08-25 across
@@ -111,9 +117,11 @@ Rough, in order of payoff per effort:
    `inv consumers.diff`.** The acting half stays manual, as decided.
 4. ~~The `scaffoldapy` canary as a CI job here — the only item that catches a break _before_ it
    ships~~ — landed 2026-09-13, `fa3ea44`. See "The canary landed" at the end of this file.
-5. Tagging a release is a policy decision that changes what all of the above defends against; take
-   it when the release flow is exercised for real, not as part of this plan. **The only item left in
-   this list, and the only one that was ever a policy question rather than a mechanism.**
+5. ~~Tagging a release is a policy decision that changes what all of the above defends against; take
+   it when the release flow is exercised for real, not as part of this plan.~~ — **resolved
+   2026-09-26 as pinning, and the policy question turned out to be a smaller one than this item
+   describes: the release flow had already been exercised twice.** See "Item 5, and the tag it was
+   waiting for had already been cut" at the end of this file. Nothing is left in this list.
 
 ## Verification (2026-08-26)
 
@@ -1012,6 +1020,78 @@ declared consumer's `pyproject.toml`: `scaffoldapy` captures 15 entries, `invoke
 file still opens the group with `"ingesta[store]"`. So the three remaining sweeps are not blocked,
 and `ingesta`'s next one re-fires the same corruption on a file that was repaired by hand. The
 repair did not remove the exposure; it only removed the damage.]
+
+## Item 5, and the tag it was waiting for had already been cut (2026-09-26)
+
+The last item in "Recommended direction" and the `[NEEDS CLARIFICATION:]` above are one question,
+and both were phrased against a world that stopped existing on 2026-09-04. Measured before
+answering, because the wording invites answering from memory:
+
+| what this plan assumed                      | what is actually true                                |
+| ------------------------------------------- | ---------------------------------------------------- |
+| no `vX.Y.Z` tag exists yet                  | `v0.2.0` 2026-09-04, `v0.3.0` 2026-09-08             |
+| the release flow is built and unexercised   | exercised for real twice, `cef6894` and `893f07d`    |
+| `stamp` will pin consumers once a tag lands | it would, and **nobody has re-run it in a consumer** |
+| consumers track `main`                      | their **CI** does; their developers do not           |
+
+**The split is the finding.** `inv repo-tasks.update` installs `@<latest tag>`, so every developer
+machine in the family has been on `v0.3.0` since 2026-09-08 — which is why every measurement in this
+file from that date onward says "the installed v0.3.0 tool" and means it. But three consumers run
+`./bootstrap-repo-tasks.sh` in CI (`scaffoldapy` ci.yml:25, `agent-skills` ci.yml:23, `ingesta`
+ci.yml:23) and all three carry the unpinned form, `repo-tasks @ git+<url>` with no `@vX.Y.Z`. So the
+family sits in the one combination that gives neither benefit: **local pinned to a tag, CI tracking
+`main`** — precisely the "local green means nothing about CI" that this plan's Context section opens
+with, now arriving from the opposite direction to the one it describes.
+
+`power-user-linux-setup` and `invoke-stubs` have no bootstrap script at all and take the package as
+their own dependency, so they are already pinned by construction. The decision reaches exactly three
+repos, and they are exactly the "configs only" row of the flavour table.
+
+[DECISION: **pin them — each sweep ends by re-stamping that consumer's `bootstrap-repo-tasks.sh`.
+Resolved 2026-09-26.** A push here stops being a deploy to three repos' CI, which is the thing the
+2026-08-24 incidents cost a day of red runs over.
+
+What made this answerable now rather than in August is the canary. Pinning defends against "a push
+here breaks a consumer"; until 2026-09-13 the only detector for that was those consumers' own
+unpinned CI going red **after** the push, so pinning would have removed the family's only check and
+replaced it with nothing. `fa3ea44` supplies the pre-push half for the one consumer whose generated
+output is the expensive case, so the unpinned CI is no longer load-bearing.
+
+The cost is named rather than discovered: those three lose the property that a task-code fix reaches
+them for free. `3a58b1d` and `7fc0b23` both arrived in `scaffoldapy` the moment the global tool
+moved, and this plan recorded that as the reason it "was never behind on that item at all". After
+pinning, a fix here needs a tag, a re-stamp and a commit in each consumer — which converts invisible
+breakage into visible staleness. That is the trade, and it is the right way round: `consumers.diff`
+reports staleness and nothing reports breakage until CI is red.]
+
+**Where the step goes, and why at the end.** `inv repo-tasks.stamp` in the consumer's own checkout,
+_after_ its gate passes. `stamp` pins `v{active}` — the version of `repo_tasks` in the interpreter
+running the task, not the newest tag — so it records what that repo was verified against, and
+running it before the gate would pin a version not yet known to work there. It needs the network for
+the tag list and warns when `active` is behind the newest release. `_STAMP_PATH` is relative to cwd,
+so it must be run in the consumer, not from here.
+
+[PITFALL: **`inv configure` is the wrong command for this even though it is what the docstring
+names.** It is the fresh-checkout composite — dev-env setup, `configs.pull` and `stamp` together —
+so in a sweep it would re-run steps the sweep has already done in its own order, `configs.pull`
+included. `repo-tasks.stamp`'s docstring says a human "shouldn't run it directly" and points at the
+generated script's header for the reason; that header is warning against re-running **the script**,
+which reinstalls the global tool out from under other repos, and says nothing against running
+`stamp`. The cross-reference points at an argument about a different thing.]
+
+[DEFERRED: **`consumers.diff` cannot see any of this, and it is the cheapest complement item yet
+identified.** The pin state is one regex over a file at a known path in each consumer's checkout —
+`_stamped_version()` already implements the read and `repo-tasks.status` already prints the verdict,
+but only for the repo it is run inside, which is the one place a sweep does not need telling. An
+unpinned consumer after this decision is exactly the "declared but never done" state that the
+reporter exists to make loud, and it would be reading a file rather than making a judgement, which
+puts it on the mechanical side of the line the earlier deferral draws.]
+
+[UNVERIFIED: **`canary.yml`'s header comment becomes wrong when `scaffoldapy` is pinned**, and it is
+load-bearing prose rather than decoration — lines 7–9 justify the whole workflow by that consumer's
+CI installing `main` at run time. Pinning does not weaken the canary; it makes it the only thing
+testing the generated half, since that repo's own CI stops being a post-push check on `main`. But
+the comment has to be rewritten in the same change, and nothing will fail if it is not.]
 
 ## Attachments
 
