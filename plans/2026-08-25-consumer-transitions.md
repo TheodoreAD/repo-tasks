@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-09-26
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
@@ -81,20 +81,20 @@ repo-tasks commit.]
   v0.3.0 tool". What was actually unpinned was three consumers' bootstrap scripts, which is a
   different thing with a different fix. See "Item 5, and the tag it was waiting for had already been
   cut" at the end of this file.]
-- [NEEDS CLARIFICATION: what is the consumer sweep, concretely? When `repo-tasks-quality` or a
-  shipped config changes, which repos need `inv repo-tasks.update` + `configs.ensure-deps` +
-  `deps.lock` + `configs.pull` + gate, and where is that list? Measured 2026-08-25 across
-  `~/projects/github.com-personal`: exactly two consumers exist — `power-user-linux-setup` (swept by
-  hand, `395dc3d`) and `scaffoldapy` (swept by hand, `56d80e8`, plus template fixes `2e29f2b`). The
-  five `*-polite-mcp` repos and `product-research-pipeline` do not consume repo-tasks at all (no
-  `from repo_tasks` in any `tasks.py`, no `bootstrap-repo-tasks.sh`, no workflow running the gate) —
-  they predate the template and are its migration backlog, not a sweep target. The list is small
-  enough today that a checklist in `contributing/` is the whole mechanism; a task that runs the
-  sweep against local checkouts earns its keep only once those repos are regenerated onto the
-  template. Written down in `contributing/consumer-sweep.md`, landed `d47b37a`; resolved 2026-08-26.
-  The task half is resolved too, 2026-09-13 — as a read-only reporter, and against a different
-  variable than the condition stated here. See "The sweep becomes a reporter task" at the end of
-  this file.]
+- [DECISION: **resolved in both halves, see the end of this entry.** What is the consumer sweep,
+  concretely? When `repo-tasks-quality` or a shipped config changes, which repos need
+  `inv repo-tasks.update` + `configs.ensure-deps` + `deps.lock` + `configs.pull` + gate, and where
+  is that list? Measured 2026-08-25 across `~/projects/github.com-personal`: exactly two consumers
+  exist — `power-user-linux-setup` (swept by hand, `395dc3d`) and `scaffoldapy` (swept by hand,
+  `56d80e8`, plus template fixes `2e29f2b`). The five `*-polite-mcp` repos and
+  `product-research-pipeline` do not consume repo-tasks at all (no `from repo_tasks` in any
+  `tasks.py`, no `bootstrap-repo-tasks.sh`, no workflow running the gate) — they predate the
+  template and are its migration backlog, not a sweep target. The list is small enough today that a
+  checklist in `contributing/` is the whole mechanism; a task that runs the sweep against local
+  checkouts earns its keep only once those repos are regenerated onto the template. Written down in
+  `contributing/consumer-sweep.md`, landed `d47b37a`; resolved 2026-08-26. The task half is resolved
+  too, 2026-09-13 — as a read-only reporter, and against a different variable than the condition
+  stated here. See "The sweep becomes a reporter task" at the end of this file.]
 - [DECISION: **yes, and on every push rather than only on a change to those three things. Landed
   2026-09-13, `fa3ea44`, as `.github/workflows/canary.yml`.** The shape is the one sketched here —
   check out `scaffoldapy` beside this repo, install the checkout as the global tool, run its
@@ -155,7 +155,8 @@ Walking it also corrected the sweep doc: `inv repo-tasks.update` is a single glo
 of the per-consumer loop, and `scaffoldapy`'s sweep is not finished at `quality.precommit` —
 `test.integration` is the half that covers what it generates.
 
-[UNVERIFIED: the preflight has still never fired from a consumer's own CI, only locally — no
+~~[UNVERIFIED:~~ **moved 2026-09-26 to `2026-09-06-dev-group-drift-in-the-gate.md`**, which waits on
+the same event. The preflight has still never fired from a consumer's own CI, only locally — no
 consumer has yet had a dev group behind the manifest since it landed. The first family-wide manifest
 change after this is the real test.]
 
@@ -181,11 +182,12 @@ consumer does go red on this, the inert-by-default reasoning in
 [`2026-08-27-pytest-plugin-survey.md`](2026-08-27-pytest-plugin-survey.md) is wrong and that plan's
 selection criterion needs revisiting, not just this sweep.
 
-[DEFERRED: run the sweep and record which way it went. Until then the drift is known and benign, not
-forgotten — that distinction is the whole reason this section exists rather than a memory entry.
-**Answered for `power-user-linux-setup` 2026-09-05** and recorded at the end of this file: the
-prediction held, and `pytest-timeout` turned out to be missing from that consumer's group too.
-`scaffoldapy` is still unswept.]
+~~[DEFERRED:~~ **closed 2026-09-26 as per-consumer filings** — see the entry below. Run the sweep
+and record which way it went. Until then the drift is known and benign, not forgotten — that
+distinction is the whole reason this section exists rather than a memory entry. **Answered for
+`power-user-linux-setup` 2026-09-05** and recorded at the end of this file: the prediction held, and
+`pytest-timeout` turned out to be missing from that consumer's group too. `scaffoldapy` is still
+unswept.]
 
 ## The second unswept change (2026-08-29) — the sweep is now batched
 
@@ -218,13 +220,18 @@ is moved — `configs.pull` reads the installed `repo_tasks` package by default,
 measures the old package and reports "up to date" for changes that have not shipped, which looks
 identical to a clean sweep.]
 
-[DEFERRED: one batched sweep once the current run of work here is done. **Half done** — the
-`power-user-linux-setup` half ran 2026-09-05 and every prediction below is answered for it in "The
-batched sweep's first half ran" at the end of this file; `scaffoldapy` still owes its half, and it
-is the half that matters most, since its e2e tier is the only thing testing what it generates.
-Record which way each prediction went — the `[UNVERIFIED:]` above is still waiting on a preflight
-that has never fired from a consumer's own CI, and none of the changes below will make it fire,
-since none is a gate binary.
+~~[DEFERRED:~~ **Closed 2026-09-26: there is no batched sweep any more, only one filing per
+consumer.** Each unswept consumer's remaining work is in a plan filed for it — `scaffoldapy`
+(`2026-09-08-sweep-to-repo-tasks-v0-3-0.md` plus its re-stamp amendment), `agent-skills` (its own
+sweep plan plus the pin amendment), `invoke-stubs` (`2026-09-13-repo-tasks-consumer-sweep.md`),
+`ingesta` (the re-stamp) and `power-user-linux-setup` (the security caller) — and
+`inv consumers.diff` is what says which are still behind. The original text follows. One batched
+sweep once the current run of work here is done. **Half done** — the `power-user-linux-setup` half
+ran 2026-09-05 and every prediction below is answered for it in "The batched sweep's first half ran"
+at the end of this file; `scaffoldapy` still owes its half, and it is the half that matters most,
+since its e2e tier is the only thing testing what it generates. Record which way each prediction
+went — the `[UNVERIFIED:]` above is still waiting on a preflight that has never fired from a
+consumer's own CI, and none of the changes below will make it fire, since none is a gate binary.
 
 **Read the list below as history rather than as scope, since 2026-09-13.** The measurement at the
 end of this file settled that `configs.diff` against the installed tool **is** the list for anything
@@ -413,10 +420,10 @@ its siblings on `d193783` report `success` for `CI`, `Deploy docs to GitHub Page
 said it would: `configs.diff` fired on both halves while nothing in CI changed outcome, because none
 of the pending changes is a binary a gate step shells out to.
 
-[UNVERIFIED: **still unanswered, and this sweep could not answer it** — the `[UNVERIFIED:]` above
-about `require_tool`'s preflight never having fired from a consumer's own CI. None of these changes
-is a gate binary, so nothing here could make it fire. It waits on the first family-wide manifest
-change that adds one.]
+~~[UNVERIFIED:~~ (moved with the one above) **still unanswered, and this sweep could not answer it**
+— the `[UNVERIFIED:]` above about `require_tool`'s preflight never having fired from a consumer's
+own CI. None of these changes is a gate binary, so nothing here could make it fire. It waits on the
+first family-wide manifest change that adds one.]
 
 This section is merged in from `2026-09-05-power-user-linux-setup-swept.md`, filed for this repo
 from that consumer's own session (`25ea8788-b99d-43a2-9611-2d0c1f207694.jsonl`, around
@@ -940,9 +947,10 @@ interesting one:
   `scaffoldapy`'s _own_ tests that can see clone depth, and those are its unit tier, which this job
   does not run.]
 
-[UNVERIFIED: the `configs.require_tool` preflight still has never fired from a consumer's own CI,
-and the canary does not close that either — it would fire only on a family-wide manifest change
-adding a gate binary, and there has been none since it landed. Unchanged from every section above.]
+~~[UNVERIFIED:~~ (moved with the one above) the `configs.require_tool` preflight still has never
+fired from a consumer's own CI, and the canary does not close that either — it would fire only on a
+family-wide manifest change adding a gate binary, and there has been none since it landed. Unchanged
+from every section above.]
 
 ## `ingesta` is swept (2026-09-13) — the first consumer swept by somebody else
 
@@ -1159,6 +1167,33 @@ states: unpinned, the consumer's CI tests `main` on its own schedule; pinned, it
 canary is the only test of unreleased code against a generated repo. The header also stopped citing
 this plan's item 4 and points at `quality-gate.md` instead, so retiring this file leaves it nothing
 to dangle on.
+
+## Migrated to
+
+- **`contributing/consumer-sweep.md`** — already held most of this file: the incidents, the sweep
+  steps, every sweep pitfall, the stamp step. Added on retirement: the pin decision and its cost,
+  declared-not-derived as a `[DECISION:]`, the stale-count pitfall, the "readings" that stay manual
+  with a line each (the complement list), and the "something that runs" pattern as the closing
+  pitfall.
+- **`contributing/quality-gate.md`** — the canary's design; rewritten 2026-09-26 to hold both the
+  pinned and unpinned states.
+- **`contributing/versioning.md`** — the `stable`-tag decision stopped deferring to this plan.
+- **`contributing/type-checking.md`** — already held the `invoke-stubs` self-reference exclusion.
+- **`plans/2026-08-29-python-floor-in-the-shipped-configs.md`** — the three-consumer `pythonVersion`
+  finding and the absent-guard pitfall, since that plan owns `c514bd9`.
+- **`plans/2026-09-06-dev-group-drift-in-the-gate.md`** — the `require_tool` `[UNVERIFIED:]`, which
+  waits on the same event as that plan's own open question.
+- **`plans/2026-08-29-pytest-ini-anyio-mode.md`** — the one consumer data point on `anyio_mode`.
+- **Each consumer's own filing** — the remaining sweeps, listed in the closed `DEFERRED` above.
+- **Code**: `consumers.py`, `projects.py`, `configs.py` and `repo-tasks.toml` stopped citing this
+  file and cite the `contributing/` section that now holds the reason.
+
+Deliberately **not** migrated: the per-sweep prediction tables and drift measurements (verification
+logs, all answered, and `inv consumers.diff` re-measures on demand); the membership-count history
+beyond the one pitfall it earned; the security-caller table (the reporter prints it); the merged-in
+filing provenance. `canary-replica.sh` is deleted with this file — the recipe is prose in
+`quality-gate.md`'s reproduction pitfall, and the script is in this file's history for
+`plans.py archive`.
 
 ## Attachments
 
