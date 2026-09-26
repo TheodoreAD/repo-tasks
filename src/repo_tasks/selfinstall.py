@@ -135,8 +135,13 @@ def _installed_tools(c: Context) -> dict[str, str] | None:
     return tools
 
 
-def _report_a_shadowing_invoke_tool(c: Context) -> None:
+def _report_a_shadowing_invoke_tool(tools: dict[str, str] | None, *, reporter: str, just_installed: bool) -> None:
     """Say so when `invoke` is installed as a uv tool of its own beside this one, and stop there.
+
+    Takes the listing rather than a context so `status`, which already reads it for the global
+    version, asks uv once. `just_installed` is the one thing the two callers know differently:
+    `update` has just `--force`-installed repo-tasks and therefore knows it holds the symlinks now,
+    while `status` cannot tell which of the two was installed last.
 
     **It reports; it does not uninstall the other tool and does not refuse to install.** Removing
     it would be a mutation of machine state outside this package's scope, against the first rule in
@@ -154,14 +159,17 @@ def _report_a_shadowing_invoke_tool(c: Context) -> None:
     `power-user-linux-setup`'s `plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` found it live
     and owns the other two paths that can recreate the split.
     """
-    tools = _installed_tools(c)
     if tools is None or "invoke" not in tools:
         return
+    holder = (
+        "repo-tasks holds them now, having just been installed; a later reinstall of standalone invoke takes them back"
+        if just_installed
+        else "which of the two holds them now is not visible from here; if it is standalone invoke"
+    )
     print(
-        f"[repo-tasks.update] invoke {tools['invoke']} is also installed as a uv tool of its own. Both it "
+        f"[{reporter}] invoke {tools['invoke']} is also installed as a uv tool of its own. Both it "
         "and repo-tasks ship inv and invoke, and whichever was installed last owns uv's bin symlinks — "
-        "uv marks neither as shadowed. repo-tasks holds them now, having just been installed; a later "
-        "reinstall of standalone invoke takes them back, and every repo whose tasks.py reads "
+        f"uv marks neither as shadowed. {holder}, and every repo whose tasks.py reads "
         "'from repo_tasks import ns' then fails to import, pointing at itself rather than at the machine."
     )
     next_steps("uv tool uninstall invoke   # or drop repo-tasks instead, if something here needs bare invoke")
@@ -184,10 +192,10 @@ def update(c: Context):
         target = f"repo-tasks @ git+{_REPO_URL}"
         print("[repo-tasks.update] no tagged release found yet — installing from the default branch")
     c.run(f"{_INSTALL_CMD} '{target}'", echo=True)
-    _report_a_shadowing_invoke_tool(c)
+    _report_a_shadowing_invoke_tool(_installed_tools(c), reporter="repo-tasks.update", just_installed=True)
 
 
-def _global_version(c: Context) -> str | None:
+def _global_version(tools: dict[str, str] | None) -> str | None:
     """The version of this package's own global `uv tool` install, or None when uv cannot answer.
 
     Read from uv rather than from this process, which is the whole point: `_installed_version` can
@@ -196,12 +204,31 @@ def _global_version(c: Context) -> str | None:
     tool" — neither is an error, since a consumer taking this package as a project dependency
     legitimately has no global install at all.
     """
-    tools = _installed_tools(c)
     return None if tools is None else tools.get("repo-tasks")
 
 
-@task
-def status(c: Context):
+def _report_the_latest_release(c: Context, active: str, global_version: str | None) -> None:
+    """The third reading, which answers "am I current?" where the other two only answer "which copy
+    is this?" — and says which of the two local readings is behind, since either can be."""
+    latest = _latest_tag(c)
+    if latest is None:
+        # `_remote_tags` runs under `warn=True`: nothing tagged and an unreachable remote look alike.
+        print("[repo-tasks.status] latest release: unknown — nothing is tagged yet, or the remote was unreachable")
+        return
+    behind = [
+        name
+        for name, reading in (("active", active), ("global", global_version))
+        if reading is not None and f"v{reading}" != latest
+    ]
+    verdict = f"{' and '.join(behind)} not on it" if behind else "both current"
+    print(f"[repo-tasks.status] latest release: {latest} ({verdict})")
+    if "global" in behind:
+        next_steps("inv repo-tasks.update")
+
+
+@requires(NETWORK)
+@task(help={"latest": "Also read the newest upstream release tag (needs the network; off by default)."})
+def status(c: Context, latest: bool = False):
     """Report both repo-tasks versions in play, and compare against what this repo was last
     `configure`d against — drift detection, read-only.
 
@@ -212,12 +239,20 @@ def status(c: Context):
     project dependency. Printing one under a name implying the other is what made a successful
     upgrade read as a failed one, 2026-09-08.
 
-    Both readings are local and cheap. The third number an agent might want — the latest released
-    tag — deliberately is not here: it needs the network, which routine tasks in this package do not
-    take (see `ci.check-actions`, kept out of the gate for the same reason).
+    Both readings are local and cheap. **`--latest` adds the third**, the newest upstream release tag,
+    and is the one place in this task a flag is the right shape: the default stays offline, the way
+    routine tasks in this package do (see `ci.check-actions`, kept out of the gate for the same
+    reason). `@requires(NETWORK)` is declared for the flag's sake — the declaration is per task, so it
+    states what running this *can* need, and the plain call needs nothing.
+
+    Also reports a standalone `invoke` uv tool beside this one, from the listing it already reads for
+    the global version — the same report `update` prints, see `_report_a_shadowing_invoke_tool`. It
+    is one of two failures sharing the symptom "every repo's tasks.py fails to import"; the other,
+    invoke collecting the calling repo's tasks by walking up from cwd, is not diagnosed here.
     """
     active = _installed_version("repo-tasks")
-    global_version = _global_version(c)
+    tools = _installed_tools(c)
+    global_version = _global_version(tools)
     if global_version is None:
         where = "global uv tool: not installed, or uv unavailable"
     elif global_version == active:
@@ -225,6 +260,9 @@ def status(c: Context):
     else:
         where = f"global uv tool: {global_version} (differs)"
     print(f"[repo-tasks.status] active: {active} (this process); {where}")
+    if latest:
+        _report_the_latest_release(c, active, global_version)
+    _report_a_shadowing_invoke_tool(tools, reporter="repo-tasks.status", just_installed=False)
 
     if not _STAMP_PATH.exists():
         print("[repo-tasks.status] this repo has no stamped bootstrap-repo-tasks.sh yet (run `inv configure`)")

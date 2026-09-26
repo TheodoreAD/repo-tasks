@@ -215,6 +215,61 @@ def test_status_survives_uv_being_absent(tmp_cwd, monkeypatch, capsys):
     assert "active: 0.3.0" in out  # the reading that does not need uv still lands
 
 
+def test_status_stays_offline_without_latest(tmp_cwd, monkeypatch, capsys):
+    """The default call must not reach the network: MockContext raises on any command it was not
+    given, so an `ls-remote` here would fail the test rather than pass silently."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    selfinstall.status.body(MockContext(run=_tool_list("repo-tasks v0.3.0", "- inv")))
+    assert "latest release" not in capsys.readouterr().out
+
+
+def test_status_latest_names_which_reading_is_behind(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    c = MockContext(run={**_tool_list("repo-tasks v0.4.0", "- inv"), **_ls_remote("v0.4.0", "v0.3.0")})
+    selfinstall.status.body(c, latest=True)
+    out = capsys.readouterr().out
+    assert "latest release: v0.4.0 (active not on it)" in out
+    # The global install is current, so there is nothing for `update` to do.
+    assert "inv repo-tasks.update" not in out
+
+
+def test_status_latest_points_at_update_when_the_global_install_is_behind(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.3.0")
+    c = MockContext(run={**_tool_list("repo-tasks v0.3.0", "- inv"), **_ls_remote("v0.4.0", "v0.3.0")})
+    selfinstall.status.body(c, latest=True)
+    out = capsys.readouterr().out
+    assert "latest release: v0.4.0 (active and global not on it)" in out
+    assert "inv repo-tasks.update" in out
+
+
+def test_status_latest_says_both_current(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.4.0")
+    c = MockContext(run={**_tool_list("repo-tasks v0.4.0", "- inv"), **_ls_remote("v0.4.0")})
+    selfinstall.status.body(c, latest=True)
+    assert "latest release: v0.4.0 (both current)" in capsys.readouterr().out
+
+
+def test_status_latest_names_both_causes_of_an_empty_tag_list(tmp_cwd, monkeypatch, capsys):
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.4.0")
+    c = MockContext(run={**_tool_list("repo-tasks v0.4.0", "- inv"), **_ls_remote()})
+    selfinstall.status.body(c, latest=True)
+    assert "nothing is tagged yet, or the remote was unreachable" in capsys.readouterr().out
+
+
+def test_status_reports_a_separately_installed_invoke_tool(tmp_cwd, monkeypatch, capsys):
+    """Same report as `update`, but without claiming repo-tasks holds the symlinks — `status` has
+    not just installed anything and cannot tell which of the two went in last."""
+    monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "0.4.0")
+    c = MockContext(run=_tool_list("repo-tasks v0.4.0", "- inv", "invoke v3.0.3", "- inv", "- invoke"))
+    selfinstall.status.body(c)
+    out = capsys.readouterr().out
+    assert "[repo-tasks.status] invoke 3.0.3 is also installed as a uv tool of its own" in out
+    assert "not visible from here" in out
+    assert "having just been installed" not in out
+    for call in c.run.call_args_list:  # pyright: ignore[reportAttributeAccessIssue]
+        assert "uninstall" not in call.args[0]
+
+
 def test_status_reports_no_stamp_yet(c, tmp_cwd, monkeypatch, capsys):
     monkeypatch.setattr(selfinstall, "_installed_version", lambda name: "1.2.3")
     selfinstall.status.body(c)

@@ -195,6 +195,7 @@ with a message naming the task.
 | `inv release.create`                  | gh, network     |
 | `inv release.push-tag`                | network         |
 | `inv repo-tasks.stamp`                | network         |
+| `inv repo-tasks.status`               | network         |
 | `inv repo-tasks.update`               | network         |
 | `inv test.all`                        | docker          |
 | `inv test.integration`                | docker          |

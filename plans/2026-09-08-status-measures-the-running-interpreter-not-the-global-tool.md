@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-12
+updated: 2026-09-26
 ---
 
 # `repo-tasks.status` measures the running interpreter, not the global tool
@@ -8,9 +8,10 @@ updated: 2026-09-12
 _All three halves are now fixed: the docstring that promised otherwise, the measurement — `status`
 reads uv as well and prints both numbers — and `stamp`, which keeps the active reading but says so
 and warns when it is behind. The filename records the behaviour that prompted the plan, and is kept
-rather than renamed because `selfinstall.py` cites it by path. What is left is two deferred items
-the fixes raised rather than the defect: the third version reading, which needs the network, and
-whether the tool-shadowing report `update` now prints wants a `status` or `doctor` of its own._
+rather than renamed because `selfinstall.py` cites it by path. The two items the fixes raised landed
+2026-09-26: `status --latest` reads the upstream release, and `status` reports a shadowing `invoke`
+tool the way `update` does. Nothing is left open here; the cwd half of the shadowing symptom belongs
+to a `doctor` nobody has designed yet._
 
 ## Context
 
@@ -120,12 +121,17 @@ now follows a task into its own module's functions transitively (`3903ad5`); run
 package it flagged exactly one task, which is what makes it a strengthening rather than a new
 policy.]
 
-[DEFERRED: the third reading — the latest released tag. Now that `releases/latest` resolves it is
-answerable, and for an agent asking "am I current?" it is arguably the actionable number, since
-neither of the two now printed says anything about what exists upstream. Kept out of the default
-deliberately: it needs the network, and routine tasks in this package do not take it — the same line
-that keeps `ci.check-actions` out of the gate. **This is where a flag genuinely belongs**, and it is
-the one place a flag was not the wrong shape. Not built, because nobody has asked for the number.]
+~~The third reading — the latest released tag.~~ **Built 2026-09-26 as `status --latest`**, the
+user's call. The default stays offline, which is the reason the flag is the right shape here and
+nowhere else in this plan. It reads the tag list through the same `_latest_tag` that `update` uses,
+names which of the two local readings is behind (either can be), and points at
+`inv repo-tasks.update` only when the global one is.
+
+[PITFALL: **`@requires` is per task, so `status` now declares NETWORK for a flag's sake**, and the
+generated README table lists it among the tasks that need the network, although the plain call needs
+nothing. That is consistent with what `effective` already means — what running a task _can_ need —
+and the docstring says so. The alternative was a separate `latest` task, which puts the one number
+an agent asking "am I current?" wants into a second command it would have to know about.]
 
 ## Verification (2026-09-08)
 
@@ -173,8 +179,8 @@ so `inv configure` answering `network` is readable without opening three modules
 has a consumer that is not a test. The reasoning is in
 [`../contributing/quality-gate.md`](../contributing/quality-gate.md), "Generation runs first".
 
-What is left is the deferred network reading above, and the doctor question at the end of the file.
-`stamp`'s source question, and both measurement questions, are answered.
+`stamp`'s source question, and both measurement questions, are answered; the network reading above
+and the shadowing question at the end of the file were answered 2026-09-26.
 
 ## Should the stamp template pin an interpreter? (2026-09-12)
 
@@ -254,11 +260,16 @@ machine's own `uv tool list`, with no executable line read as a tool — `nuitka
 `invoke` is correctly absent, that split having been cleared by hand on 2026-08-23, so the reporter
 stays silent here and the fabricated-listing test is what covers the case that fires.
 
-[DEFERRED: whether `status` should report the same thing, or whether it wants a `repo-tasks.doctor`
-of its own. `power-user-linux-setup`'s plan calls it "worth doing in the same pass" and the marginal
-cost is now near zero, since `_installed_tools` is already there and `status` already calls it. Left
-alone deliberately: that plan pairs the shadowing case with a second failure that shares its symptom
-— invoke resolving `tasks.py` by walking up from **cwd**, so a command run against another repo
-collects the calling repo's tasks — and says a check reporting only the first "would still leave the
-cwd half undiagnosed, and the two are hard to tell apart from the symptom". A doctor task that
-answers half the question is worth designing rather than reaching for.]
+~~Whether `status` should report the same thing, or wants a `repo-tasks.doctor` of its own.~~
+**`status` reports it, 2026-09-26, the user's call.** The objection recorded here was that a check
+reporting only the shadowing half "would still leave the cwd half undiagnosed" — but `update` has
+printed exactly that half-diagnosis since 2026-09-12, so declining it in `status` was holding the
+second caller to a standard the first was never held to. `_report_a_shadowing_invoke_tool` now takes
+the listing rather than a context, so `status` asks uv once for both the global version and this,
+and says which of the two tools holds the symlinks only where it knows — `update` has just installed
+repo-tasks, `status` has not.
+
+What stays open is the cwd half — invoke resolving `tasks.py` by walking up from **cwd**, so a
+command run against another repo collects the calling repo's tasks — which is a `doctor` question
+rather than a `status` one, and has no plan of its own yet. It is `power-user-linux-setup`'s
+`plans/2026-08-23-invoke-repo-tasks-tool-conflict.md` that describes it.
