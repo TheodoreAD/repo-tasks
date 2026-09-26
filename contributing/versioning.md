@@ -132,12 +132,15 @@ build `latest`.
 a question nothing in this repo asks. A `stable` tag answers "what should I install", which is the
 convention `power-user-linux-setup` uses; version tags answer "what am I pinned to", and that is the
 only question this repo's consumers put. They pin `security-reusable.yml` at a SHA,
-`ci.check-actions` reads GitHub Releases rather than tags, and `bootstrap-repo-tasks.sh`
-deliberately installs from the default branch unpinned. The two mechanisms are complementary rather
-than alternatives, so adopting one would not simplify the other. It becomes a live question again
-only if the bootstrap script is ever pointed at a ref — which is the "is the fix pinning, or a
-release cadence?" question that `plans/2026-08-25-consumer-transitions.md` owns, and it should be
-answered there rather than by adding a tag first.]
+`ci.check-actions` reads GitHub Releases rather than tags, and `bootstrap-repo-tasks.sh` pins a
+version tag once a consumer sweep has stamped it. The two mechanisms are complementary rather than
+alternatives, so adopting one would not simplify the other.
+
+That last clause changed on 2026-09-26, when pinning was decided — the script used to install from
+the default branch unpinned, and this decision had said it would reopen if that ever changed. It did
+not reopen: a stamp pins the exact version that repo's gate passed on, which is "what am I pinned
+to" again, not "what should I install". The pin decision itself is in
+[`consumer-sweep.md`](consumer-sweep.md).]
 
 ### The rc cycle
 

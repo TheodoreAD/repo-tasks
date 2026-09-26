@@ -36,8 +36,7 @@ was counted three times in three weeks — two, three, six — and each answer c
 somebody expected: `from repo_tasks` at the top of a `tasks.py`, then a `bootstrap-repo-tasks.sh`.
 The 2026-09-10 correction is the sharp case, because the one-liner it prescribed _to stop this
 recurring_ is what hid the next two: it cannot see a `tasks/` package, and it cannot see an import
-made lazily inside a function, and three of the six are one of those. See
-`plans/2026-08-25-consumer-transitions.md`.]
+made lazily inside a function, and three of the six are one of those.]
 
 So the list is **declared**, as `[[consumer]]` entries in this repo's `repo-tasks.toml`, and read by
 one command:
@@ -60,6 +59,22 @@ template and are its migration backlog, not a sweep target.
 **Adding one is an edit to `repo-tasks.toml`; finding one to add is a search plus a reading**, which
 is the honest form of the question and is why no command does it. A declared name with no checkout
 is reported as `NOT FOUND` rather than skipped, so a stale entry is loud.
+
+[DECISION: **declared rather than derived, because a derived list fails silently and a declared one
+fails loudly.** Settled 2026-09-13 with the reporter. A reporter that derives its own list inherits
+whatever shape the derivation encodes, and a reporter that misses a consumer reports success — the
+exact defect it was built to catch, in its worst form. Declared, a consumer nobody added is
+**absent** from the report rather than silently excluded from a green one. The search keeps the job
+it always had, which is how a human finds a consumer to add.
+
+Only the names are in version control. Where the checkouts live is machine-local and comes from
+`$REPO_TASKS_PROJECTS_ROOT`, defaulting to this repo's parent directory — see
+`projects.projects_root` for why that split is the right one.]
+
+[PITFALL: **the first count was right, and still went stale in two days.** Two consumers on
+2026-08-25 was a correct measurement; `agent-skills` gained its `tasks.py` on 2026-08-27. That is a
+different failure from a wrong method, with a different fix: a better method does not help a correct
+answer nobody re-ran, and only something that runs does. The reporter is the re-running.]
 
 [PITFALL: **the reporter measures, it does not sweep.** `consumers.diff` tells you which repos are
 behind and on what; acting on that means running that repo's own tasks in its own tree, which is the
@@ -107,7 +122,19 @@ _developer machine_ to the latest tag; a consumer's CI installs whatever its
 `bootstrap-repo-tasks.sh` says, and until 2026-09-26 all three consumers carrying that script still
 had the unpinned form, so their CI tracked `main` while their developers were on `v0.3.0` — local
 green saying nothing about CI, which is the failure this whole file exists for.
-`plans/2026-08-25-consumer-transitions.md` has the decision and what it costs.
+
+[DECISION: **pin, rather than keep consumers' CI on `main`. Settled 2026-09-26.** It was answerable
+then and not in August because of the canary. Pinning defends against "a push here breaks a
+consumer", and until 2026-09-13 the only detector for that was those consumers' own unpinned CI
+going red _after_ the push — pinning would have removed the family's only check and put nothing in
+its place. `canary.yml` now supplies the pre-push half for `scaffoldapy`, whose generated output is
+the expensive case, so the unpinned CI stopped being load-bearing.
+
+The cost is that a task-code fix here stops reaching those consumers' CI for free. `3a58b1d` and
+`7fc0b23` both landed in `scaffoldapy` the moment the global tool moved; after pinning, a fix needs
+a tag here, a re-stamp there, and a commit. That converts invisible breakage into visible staleness,
+which is the right way round: `consumers.diff` reports staleness, and nothing reports breakage until
+CI is red.]
 
 It runs after the gate because `stamp` pins the version **active in the process running it**, not
 the newest tag: that records what this repo was verified against, and running it earlier would pin a
@@ -267,24 +294,41 @@ normal state.]
 
 ## Still open
 
-Nothing about whether to pin: that was settled 2026-09-26 as the `repo-tasks.stamp` step above, once
-the canary made a consumer's own unpinned CI stop being the family's only detector for a break
-pushed from here. `plans/2026-08-25-consumer-transitions.md` carries the reasoning and the cost.
+Nothing about whether to pin: that is the decision beside the stamp step above.
 
 Nor about which consumers are unpinned, nor which lack the security-workflow caller:
 `consumers.diff` reports both since 2026-09-26 — `bootstrap unpinned` or a pin behind the version
 the run measured with, and a missing caller or one whose SHA is behind the reusable workflow it
-names. Everything mechanical on the complement list in `plans/2026-08-25-consumer-transitions.md` is
-now something that runs.
+names. Report-mode wiring was the third candidate for a check and needed none: it only bites a
+consumer that hand-builds its own root `Collection`, which is `power-user-linux-setup` (wired) and
+the repos `scaffoldapy` generates (that repo's own open question).
 
-What is open is the four items on that list which are **readings** rather than checks, and they stay
-manual: whether a derived `pythonVersion` is right for that repo, the packaged-`tests/` decision,
-whether to `venv.recreate` onto the declared floor, and task-code lag in a consumer that pins
-`repo-tasks` in its own lock.
+What stays open is the part of a sweep that is a **reading** rather than a check. No command can do
+these, and a sweep that skips them reports success:
+
+- **Whether a derived value is right.** `configs.pull` writes `pythonVersion` and `anyio_mode` per
+  consumer, so byte-identical across the family is not the test; that the derived version matches
+  what that repo declares, and that its type check still passes there, is.
+- **The packaged-`tests/` decision.** `configs.pull` writes both config halves but cannot decide
+  whether that repo wants the `__init__.py` files — [`type-checking.md`](type-checking.md), "Why
+  `tests/` is a package", which says the decision stays deliberate.
+- **Whether to `venv.recreate` onto the declared floor.** `venv.check` reports a mismatch in nearly
+  every consumer on first run; whether to develop on the floor rather than the newest is that repo's
+  call.
+- **Task-code lag in a consumer pinning `repo-tasks` in its own lock** (`power-user-linux-setup`,
+  `invoke-stubs`), which no diff of config files can see.
+- **Whether a consumer has CI at all.** `invoke-stubs` has no `.github/`, so its local gate is the
+  whole of the evidence for a sweep there, and the security caller cannot be added until that repo
+  decides whether it wants CI.
 
 [PITFALL: **both new checks landed by finding something in a repo that looked finished.** The pin
 check named `ingesta`, swept and reported up to date hours earlier; the caller check named
 `power-user-linux-setup`, the most-swept consumer in the family and clean on every other line.
 Neither had been missed by a sweep — both items were on the complement list, which is exactly the
 list no command read. So "swept recently" is not evidence about anything a sweep does not measure,
-and the complement list is where to look for what that is.]
+and the list of readings above is where to look for what that is.
+
+It is the same finding a fourth time. Membership known, drift unmeasured (`agent-skills`); a list of
+repos derived for three weeks that nothing then measured; a canary that already existed wired to the
+wrong event; a pin at a known path nobody read. Each time the missing thing was **something that
+runs**, and each time the work that felt like progress was refining a description instead.]
