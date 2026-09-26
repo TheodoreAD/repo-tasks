@@ -788,7 +788,20 @@ Recorded so a later sweep does not re-litigate them:
   keeps `configs.pull` standalone, but this repo's root config files are _deliberately_ allowed to
   lead the packaged copies; that is what `configs.promote` is for. A gate step would fire on the
   state the design calls normal.
-- **The `S`/bandit family** — rejected wholesale as noise, with one slice still open; see
-  `plans/2026-08-30-deferred-gate-tools.md`.
-- **deptry** — run ad hoc and it earned its keep, but adoption is still open for the same reason;
-  same plan.
+- **The `S`/bandit family** — rejected wholesale as noise, and the one candidate slice, `S602`/
+  `S603`/`S607` (subprocess), rejected too on 2026-09-26 after three measurements: nearly **inert**
+  here rather than noisy. The package has two `subprocess` call sites; everything else shells out
+  through invoke's `c.run`, which flake8-bandit does not model, and house style keeps moving calls
+  onto `c.run`. A rule that cannot see what the package spends its life doing is not covering the
+  concern. Whether it has reach in a consumer doing its own `subprocess.run` was never measured, and
+  would be the reason to reopen this.
+- **deptry** — useful by hand, not a gate step, settled 2026-09-26. Three runs across nine days and
+  a version bump gave the same **4 findings, 0 defects**: `DEP002` for `python-dotenv` (deliberately
+  unused, a forward-looking dependency for `.env`-based task options — **not** to be cleaned up) and
+  `bump-my-version` (shelled out, invisible to import analysis), and `DEP003` twice for the
+  dogfooding `repo_tasks` self-import in `tasks.py`. As a gate step every consumer would be red on
+  its first run until it wrote its own ignore list. It also never checks dependency groups for
+  unused entries. Run it isolated, never against the project venv:
+  `env -u VIRTUAL_ENV -u PYTHONPATH uv run --no-project --with deptry deptry .` — a bare `uv run` in
+  this directory can delete and recreate `.venv` when `UV_PYTHON` asks for another interpreter. The
+  full measurements are in the retired `plans/2026-08-30-deferred-gate-tools.md`.

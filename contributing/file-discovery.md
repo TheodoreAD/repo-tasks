@@ -180,9 +180,9 @@ stdlib `venv`. In a scratch repo with no root `.gitignore` at all, `git check-ig
 and dprint never see it whatever the root file says. `venv.create` only ever uses uv. A gate step
 checking the root entry would therefore pass in every consumer for a reason unrelated to their
 `.gitignore`: nearly inert, which is the worse answer for the same decision — the same shape
-`plans/2026-08-30-deferred-gate-tools.md` measured for the bandit subprocess rules, which cannot see
-the `c.run` calls this package shells out through. A venv created by a tool that does not
-self-ignore is the only case left, and none of this family's tooling can produce one.]
+[`quality-gate.md`](quality-gate.md) records for the bandit subprocess rules, which cannot see the
+`c.run` calls this package shells out through. A venv created by a tool that does not self-ignore is
+the only case left, and none of this family's tooling can produce one.]
 
 The wider question — is a repo's `.gitignore` complete, does it match upstream `github/gitignore`,
 should a new community entry be adopted — is agent judgement rather than code: fuzzy, infrequent,
