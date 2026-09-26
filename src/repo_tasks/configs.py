@@ -41,8 +41,11 @@ _CONFIG_FILES = ["ruff.toml", "pyrightconfig.json", "dprint.json", "pytest.ini",
 
 _SOURCE_HELP = "Override the config source: git:<url> or local:<path> (default: the installed repo_tasks package)"
 
-_DEV_ARRAY_RE = re.compile(r"dev\s*=\s*\[(?P<items>.*?)\]", re.DOTALL)
 _BARE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+")
+
+_DEPENDENCY_GROUPS_RE = re.compile(r"^[ \t]*\[dependency-groups\][ \t]*$", re.MULTILINE)
+_TABLE_HEADER_RE = re.compile(r"^[ \t]*\[", re.MULTILINE)
+_DEV_KEY_RE = re.compile(r"^[ \t]*(?P<key>dev|\"dev\"|'dev')[ \t]*=[ \t]*\[", re.MULTILINE)
 
 _DUMMY_PYPROJECT_TEMPLATE = """\
 [project]
@@ -274,10 +277,13 @@ def _version_clauses(spec: str) -> frozenset[str]:
 
 def _declared_dev_specs(path: Path) -> dict[str, frozenset[str]]:
     """This project's own `dependency-groups.dev`, as bare name -> version clauses, following
-    `include-group` references. Read with tomllib rather than `ensure_deps`' `_DEV_ARRAY_RE`, which
-    exists only because that task has to splice text back into the file: a regex over the array
-    would see repo-tasks' own `dev = [{ include-group = "repo-tasks-quality" }, ...]` as declaring
-    nothing and report the whole manifest as missing in the very repo that owns it."""
+    `include-group` references.
+
+    Read with tomllib because a reader over the array's *text* gets two shapes wrong, and both are
+    real: repo-tasks' own `dev = [{ include-group = "repo-tasks-quality" }, ...]` reads as declaring
+    nothing, and a consumer's `"pkg[extra]"` closes the array early. `ensure_deps` shared that text
+    reader until 2026-09-26 and now calls this instead, keeping the text only for where to write —
+    so this is the single answer to "what is already declared" that both commands work from."""
     groups = cast(dict[str, list[object]], tomllib.loads(path.read_text(encoding="utf-8")).get("dependency-groups", {}))
     specs: dict[str, frozenset[str]] = {}
     seen: set[str] = set()
@@ -567,6 +573,84 @@ def _derive_project_name(c: Context) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+@dataclass(frozen=True)
+class _DevArray:
+    """Where `dependency-groups.dev`'s array sits in the file's own text.
+
+    `ensure_deps` splices entries back in, and tomllib does not round-trip, so the write half needs
+    offsets rather than parsed values. The *membership* half does not and no longer uses this — see
+    that task for why the two answers come from different readers on purpose."""
+
+    key_start: int
+    """Offset of `dev` itself, for the empty-array rebuild that replaces the whole assignment."""
+    items_start: int
+    """Just inside the opening bracket."""
+    items_end: int
+    """Offset of the matching closing bracket."""
+
+
+def _scan_past_array(text: str, start: int) -> int | None:
+    """The `]` closing an array whose `[` sits just before `start`, or None if the text ends first.
+
+    Skips everything TOML says is not structure — a comment to end of line, and all four string
+    forms — so a bracket inside `"pkg[extra]"` or inside a comment cannot end the array. That is the
+    whole reason this is a scan and not a regex: `dev\\s*=\\s*\\[(.*?)\\]` stops at the **first**
+    `]`, which in `"pkg[extra]"` is inside a string, and `"pkg[extra]"` first in the list is the
+    ordinary way a consumer pulls its own optional dependencies into development. Hit live on
+    2026-09-13, where it spliced all fourteen manifest entries into the middle of `"ingesta[store]"`
+    and left a pyproject.toml that no longer parsed as TOML."""
+    depth = 1
+    i = start
+    end = len(text)
+    while i < end:
+        ch = text[i]
+        if ch == "#":
+            newline = text.find("\n", i)
+            i = end if newline == -1 else newline + 1
+        elif text.startswith('"""', i) or text.startswith("'''", i):
+            delimiter = text[i : i + 3]
+            closing = text.find(delimiter, i + 3)
+            i = end if closing == -1 else closing + 3
+        elif ch == '"':
+            i += 1
+            while i < end and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1  # an escaped quote is content, not the close
+            i += 1
+        elif ch == "'":  # a literal string has no escapes at all
+            closing = text.find("'", i + 1)
+            i = end if closing == -1 else closing + 1
+        else:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return i
+            i += 1
+    return None
+
+
+def _dev_array(text: str) -> _DevArray | None:
+    """`dependency-groups.dev`'s span, or None where this project declares no such array.
+
+    Anchored to the `[dependency-groups]` table rather than to the first `dev = [` anywhere in the
+    file, so the array written to is the same one tomllib reads for membership. `dev` is not a unique
+    key in a pyproject.toml — pdm and poetry both spell their dev groups under tables of their own —
+    and now that the two halves use different readers, a splice into a different array than the one
+    that was measured would be a new way to be wrong rather than the old one."""
+    table = _DEPENDENCY_GROUPS_RE.search(text)
+    if table is None:
+        return None
+    next_table = _TABLE_HEADER_RE.search(text, table.end())
+    key = _DEV_KEY_RE.search(text, table.end(), next_table.start() if next_table else len(text))
+    if key is None:
+        return None
+    closing = _scan_past_array(text, key.end())
+    if closing is None:
+        return None
+    return _DevArray(key_start=key.start("key"), items_start=key.end(), items_end=closing)
+
+
 @task
 def ensure_deps(c: Context):
     """Ensure this project's pyproject.toml declares every quality-tooling dependency repo-tasks
@@ -617,15 +701,21 @@ def ensure_deps(c: Context):
         return
 
     text = pyproject_path.read_text(encoding="utf-8")
-    match = _DEV_ARRAY_RE.search(text)
-    if not match:
+    array = _dev_array(text)
+    if array is None:
         raise Exit(
             "[configs.ensure-deps] no `dependency-groups.dev` array found in pyproject.toml — add one by hand first"
         )
 
     _report_self_exclusion(_self_referential_dep())
-    existing_specs: list[str] = re.findall(r'"([^"]+)"', match.group("items"))
-    present = {_bare_name(s) for s in existing_specs}
+    # Membership from tomllib, via the same helper `diff` uses, so the two commands cannot disagree
+    # about what this project already declares. They did: the regex this replaced read the array's
+    # text, and in a consumer whose group opens with `"pkg[extra]"` it captured nothing, so `diff`
+    # correctly reported two missing entries while `ensure_deps` reported all fourteen and wrote
+    # them. The parsed reader also follows `include-group`, which is what this repo's own
+    # `dev = [{ include-group = "repo-tasks-quality" }]` needs — the text reader saw that as
+    # declaring nothing and would have spliced the whole manifest into the repo that owns it.
+    present = _declared_dev_names(pyproject_path)
     missing = [dep for dep in canonical if _bare_name(dep) not in present]
 
     for dep in canonical:
@@ -638,14 +728,13 @@ def ensure_deps(c: Context):
         return
 
     insertion = "".join(f'  "{dep}",\n' for dep in missing)
-    if not match.group("items").strip():
+    if not text[array.items_start : array.items_end].strip():
         # `dev = []` (dprint's own preferred empty shape) or `dev = [\n]`: splicing after the
         # opening bracket would leave the first entry on the bracket's line, which dprint rejects.
         # Rebuild the whole array in the one multi-line shape dprint accepts — this runs before
         # any venv exists, so there is no formatter available afterwards to clean it up.
         pyproject_path.write_text(
-            text[: match.start()] + f"dev = [\n{insertion}]" + text[match.end() :], encoding="utf-8"
+            text[: array.key_start] + f"dev = [\n{insertion}]" + text[array.items_end + 1 :], encoding="utf-8"
         )
         return
-    insert_at = match.end("items")
-    pyproject_path.write_text(text[:insert_at] + insertion + text[insert_at:], encoding="utf-8")
+    pyproject_path.write_text(text[: array.items_end] + insertion + text[array.items_end :], encoding="utf-8")

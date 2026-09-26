@@ -5,7 +5,9 @@ installed-package source, exercised via the default no-source-override path) plu
 
 import re
 import shutil
+import tomllib
 from pathlib import Path
+from typing import cast
 
 import pytest
 from invoke import Exit, MockContext, Result
@@ -394,6 +396,100 @@ def test_ensure_deps_idempotent_on_second_run(tmp_cwd):
     first = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
     configs.ensure_deps.body(c)
     assert (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8") == first
+
+
+def _dev_names(text: str, table: str = "dependency-groups") -> set[str]:
+    """The bare names a pyproject's `dev` group declares, read with tomllib and typed.
+
+    Parsing is itself an assertion here — the splice this fixes left a file that tomllib rejects —
+    so every one of these tests wants the parse rather than a substring search."""
+    groups = cast(dict[str, list[object]], _table(text, table))
+    return {configs._bare_name(entry) for entry in groups.get("dev", []) if isinstance(entry, str)}
+
+
+def _table(text: str, dotted: str) -> dict[str, object]:
+    """One table out of a parsed pyproject, by dotted path — `tomllib` returns `Any` and this repo's
+    pyright config rejects that, so the cast happens once here instead of at every call site."""
+    node = cast(dict[str, object], tomllib.loads(text))
+    for segment in dotted.split("."):
+        node = cast(dict[str, object], node[segment])
+    return node
+
+
+# The bracket that ends the array is not the first `]` in the text. Each case below used to capture
+# no entries at all, so every manifest entry counted as missing and the splice landed at the wrong
+# offset — inside a string, for the first two. Found live in a consumer 2026-09-13; the assertion
+# that matters in all of them is that the result still parses, which the old code could not satisfy.
+@pytest.mark.parametrize(
+    ("label", "dev_body"),
+    [
+        ("extras entry first", '\n  "c[store]",\n  "c[bot]",\n  "ruff",\n'),
+        ("extras entry last", '\n  "ruff",\n  "c[store]",\n'),
+        ("bracket in a comment", '\n  # the [store] extra is deliberate\n  "ruff",\n'),
+        ("inline table before the strings", '\n  { include-group = "other" },\n  "ruff",\n'),
+        ("marker quoting inside a basic string", '\n  "ruff",\n  "tomli; python_version < \'3.11\'",\n'),
+    ],
+)
+def test_ensure_deps_finds_the_arrays_real_closing_bracket(tmp_cwd, label, dev_body):
+    (tmp_cwd / "pyproject.toml").write_text(
+        '[project]\nname = "c"\nversion = "0.1.0"\n\n'
+        f"[dependency-groups]\nother = []\ndev = [{dev_body}]\n\n[tool.ruff]\nline-length = 120\n",
+        encoding="utf-8",
+    )
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+
+    declared = _dev_names(text)
+    for dep in configs._quality_deps():
+        if configs._bare_name(dep) != "ruff":
+            assert configs._bare_name(dep) in declared, label
+    assert text.count('"ruff"') == 1, f"{label}: an already-present entry was re-added"
+    assert _table(text, "tool.ruff")["line-length"] == 120, f"{label}: the table after the array was disturbed"
+
+
+def test_ensure_deps_leaves_an_extras_entry_byte_identical(tmp_cwd):
+    # The consumer's own entry is the thing the old splice destroyed, so assert on it directly
+    # rather than only on the file parsing.
+    (tmp_cwd / "pyproject.toml").write_text(
+        '[project]\nname = "c"\nversion = "0.1.0"\n\n[dependency-groups]\ndev = [\n  "c[store]",\n]\n',
+        encoding="utf-8",
+    )
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+    assert '  "c[store]",\n' in text
+    assert "c" in _dev_names(text)  # the entry survived as an entry, not just as surviving bytes
+
+
+def test_ensure_deps_is_a_no_op_where_dev_includes_the_manifest_group(tmp_cwd):
+    # This repo's own shape. The text reader saw `{ include-group = ... }` as declaring nothing and
+    # would have spliced the whole manifest into the repo that authors it; the parsed reader follows
+    # the reference, so there is nothing missing and nothing to write.
+    original = (
+        '[project]\nname = "repo-tasks"\nversion = "0.1.0"\n\n'
+        "[dependency-groups]\n"
+        + "repo-tasks-quality = [\n"
+        + "".join(f'  "{dep}",\n' for dep in configs._quality_deps())
+        + "]\n"
+        + 'dev = [{ include-group = "repo-tasks-quality" }]\n'
+    )
+    (tmp_cwd / "pyproject.toml").write_text(original, encoding="utf-8")
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
+    assert (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8") == original
+
+
+def test_ensure_deps_ignores_a_dev_array_outside_dependency_groups(tmp_cwd):
+    # `dev` is not a unique key in a pyproject.toml — pdm and poetry both spell dev groups under
+    # their own tables. Splicing into one of those would put the entries where nothing reads them.
+    (tmp_cwd / "pyproject.toml").write_text(
+        '[project]\nname = "c"\nversion = "0.1.0"\n\n'
+        '[tool.pdm.dev-dependencies]\ndev = [\n  "something-else",\n]\n\n'
+        '[dependency-groups]\ndev = [\n  "ruff",\n]\n',
+        encoding="utf-8",
+    )
+    configs.ensure_deps.body(MockContext(run=Result(exited=1)))
+    text = (tmp_cwd / "pyproject.toml").read_text(encoding="utf-8")
+    assert _dev_names(text, "tool.pdm.dev-dependencies") == {"something-else"}
+    assert "basedpyright" in _dev_names(text)
 
 
 # ---------------------------------------------------------------------------
