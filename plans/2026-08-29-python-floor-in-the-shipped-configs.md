@@ -247,10 +247,27 @@ same depth and no further:
   own values before a root file is written back, so this repo's floor cannot become everyone's by
   the promote path. That was a hole the derivation itself opened.
 
-[UNVERIFIED: that the editor half actually pays off — that a language server picks up the derived
-`pythonVersion` and flags floor-violating syntax live. It follows from the value being in the config
-file rather than on a command line, which is the documented difference between routes A and B, but
-nothing here has watched an editor do it.]
+~~[UNVERIFIED: that the editor half actually pays off~~ — **verified 2026-09-26, basedpyright
+1.39.10.** The language server picks up the derived `pythonVersion` and flags floor-violating syntax
+in an unsaved buffer. Measured by driving `basedpyright-langserver --stdio` the way an editor does:
+`initialize` on a workspace root, `didOpen` a buffer that exists nowhere on disk, then read the
+`publishDiagnostics` it pushes. The buffer imports `typing.override` and uses a `type` alias and
+`def f[T]`, all 3.12+.
+
+| workspace                             | `pythonVersion` | floor errors published                     |
+| ------------------------------------- | --------------- | ------------------------------------------ |
+| this repo, its real derived config    | 3.11            | 3 — the import, the alias, the type params |
+| scratch, config holding only that key | 3.11            | the same 3                                 |
+| scratch, config holding only that key | 3.14            | **0**                                      |
+
+The third row is the control, and it is what makes this evidence about the **config** rather than
+the interpreter. This venv has been on 3.11 since route C, so errors in the first row alone could
+have come from the interpreter. All three runs resolved that same 3.11 interpreter, and the 3.14
+config silenced every error, so the value in the file is what the server checks against.
+`lsp-floor-probe.py`, attached, is the probe.
+
+Not covered: an editor running a **different** server, such as Pylance in VS Code. It reads
+`pyrightconfig.json` by the same rules as upstream pyright, but that was not run here.
 
 ## Route C happened anyway, two weeks after being rejected (2026-09-13)
 
@@ -333,3 +350,7 @@ and proceeds.]
 `[UNVERIFIED:]` about the editor half is either checked or dropped. The reasoning about routes A/B/C
 is the part worth keeping and has no home yet outside this file; the tier question it kept deferring
 is answered elsewhere now, and two files describing one rule is how the rule drifts.]
+
+## Attachments
+
+- `lsp-floor-probe.py` — committed, 3 KB, attached 2026-09-26
