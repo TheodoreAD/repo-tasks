@@ -47,7 +47,8 @@ repo-tasks-quality = [
   # Inertness is measured, not assumed: each was run against this repo's full unit tier with
   # nothing else changed, under a pty, because a piped run cannot detect an output plugin. The
   # survey that settled the set — one adoption, nine recommendations, thirteen recorded rejections
-  # — is plans/2026-08-27-pytest-plugin-survey.md.
+  # — is in contributing/test-tiers.md, "Pytest plugins: what ships, what is recommended, what
+  # was rejected".
   "pytest-cov",
   "pytest-socket",
   # The integration tier drives real subprocesses, Docker and a package index. A hang there ends as
