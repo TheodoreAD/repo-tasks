@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-08
+status: planned
+updated: 2026-09-26
 source_repo: github.com-personal/scaffoldapy
 source_session: 7a3f34e6-b0c7-4532-8c89-ec43239414e7.jsonl
 source_moment: 2026-09-07T21:20:00Z
@@ -113,31 +113,40 @@ inv configs.diff                          # in that consumer: silent about the g
 
 ## Open questions
 
-[NEEDS CLARIFICATION: pin the rev in the manifest, or keep it unpinned and detect the drift? Pinning
-(`@ git+…@f70ff01`) makes this repo the single version authority: a bump is one edit here, and every
-consumer moves when it re-runs `configs.ensure-deps` — but `ensure-deps` is additive and ignores
-version, so it would have to learn to _update_ an entry it already placed, which is a real change to
-a task whose whole contract today is that it never disturbs an existing line. Detecting instead
-keeps consumers free to resolve on their own schedule and adds a report, which is the shape
+[DECISION: **detect, for the whole class, settled by the user 2026-09-26.** A report-only,
+network-requiring check compares every `repo-tasks-quality` entry in a consumer's lock against its
+latest release: the index for PyPI names, the branch head for the git entry. It lives beside
+`deps.audit` as its own task (`deps.check-currency` or similar), not as a network mode of
+`configs.diff`, which stays offline. `configs.ensure-deps` keeps its additive-only contract, and no
+entry is pinned. This is the `ci.check-actions` shape, for the same reason: a detector automates the
+part that gets forgotten and leaves the judgement with the reader. Tagging `repo-tasks` does not
+change it, since the manifest entries stay names. The four questions this answers follow.]
+
+~~[NEEDS CLARIFICATION:~~ pin the rev in the manifest, or keep it unpinned and detect the drift?
+Pinning (`@ git+…@f70ff01`) makes this repo the single version authority: a bump is one edit here,
+and every consumer moves when it re-runs `configs.ensure-deps` — but `ensure-deps` is additive and
+ignores version, so it would have to learn to _update_ an entry it already placed, which is a real
+change to a task whose whole contract today is that it never disturbs an existing line. Detecting
+instead keeps consumers free to resolve on their own schedule and adds a report, which is the shape
 `ci.check-actions` already took for a structurally identical question: currency needs the network,
 so it cannot be a gate step.]
 
-[NEEDS CLARIFICATION: is this specific to the one git-sourced entry, or does it generalise? Every
-other entry in `repo-tasks-quality` is a PyPI name, mostly unversioned, so the same argument applies
-to all of them — a consumer locked to an eight-month-old `ruff` is the same failure with a slower
-clock and a louder eventual symptom. The git entry is merely where it shows first, because its
-"latest" moves on a personal timetable and its releases carry no version anyone reads. Deciding this
-for `invoke-stubs` alone would be answering the instance rather than the class.]
+~~[NEEDS CLARIFICATION:~~ is this specific to the one git-sourced entry, or does it generalise?
+Every other entry in `repo-tasks-quality` is a PyPI name, mostly unversioned, so the same argument
+applies to all of them — a consumer locked to an eight-month-old `ruff` is the same failure with a
+slower clock and a louder eventual symptom. The git entry is merely where it shows first, because
+its "latest" moves on a personal timetable and its releases carry no version anyone reads. Deciding
+this for `invoke-stubs` alone would be answering the instance rather than the class.]
 
-[NEEDS CLARIFICATION: if detection, where does it live and what does it read? `configs.diff` is the
-natural home — it is already the "are you behind the family" command and consumers already run it in
-the sweep — but it is offline today, and answering "is this lock behind" for a git dependency means
-asking GitHub for the branch head, and for a PyPI one means asking the index. That would give
+~~[NEEDS CLARIFICATION:~~ if detection, where does it live and what does it read? `configs.diff` is
+the natural home — it is already the "are you behind the family" command and consumers already run
+it in the sweep — but it is offline today, and answering "is this lock behind" for a git dependency
+means asking GitHub for the branch head, and for a PyPI one means asking the index. That would give
 `configs.diff` a network mode, or split a `deps.check-currency` off beside `deps.audit`, which is
 already network-only and report-only for a related question.]
 
-[NEEDS CLARIFICATION: does the answer change once this repo tags a release? Tagging is settled since
-2026-09-26: `v0.2.0` and `v0.3.0` exist, and a consumer sweep now ends by stamping
+~~[NEEDS CLARIFICATION:~~ does the answer change once this repo tags a release? Tagging is settled
+since 2026-09-26: `v0.2.0` and `v0.3.0` exist, and a consumer sweep now ends by stamping
 `bootstrap-repo-tasks.sh` to a tag (`contributing/consumer-sweep.md`). A tagged `repo-tasks` gives
 consumers a version to pin _to the tool_, but the manifest entries are still names inside it — so
 this question survives tagging rather than being answered by it. Worth confirming that reading

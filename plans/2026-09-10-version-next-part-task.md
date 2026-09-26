@@ -44,6 +44,20 @@ half it can measure and says so, or those contracts need a mechanical form too.]
 reachable from `HEAD`? The default is what makes it usable inside `trunkflow.cut`; the explicit form
 is what makes it auditable after the fact.]
 
+## The count
+
+[DECISION: **keep counting, settled by the user 2026-09-26**, over abandoning it on three clean
+releases or making the surface list data first. Each release cut adds a row here, written at the
+time: which part, and whether choosing it needed judgement or was read straight off the surface
+list. A row that needed judgement is the design's real requirement and reopens the task; if several
+more do not, abandon it.]
+
+| release  | cut        | part  | needed judgement?                                         |
+| -------- | ---------- | ----- | --------------------------------------------------------- |
+| `v0.2.0` |            | minor | no — under a minute, unambiguous                          |
+| `v0.3.0` | 2026-09-08 | minor | no — under a minute, unambiguous                          |
+| `v0.4.0` | 2026-09-26 | minor | not recorded at the time — which is why this table exists |
+
 ## Recommended direction
 
 Rough, and deliberately not started. **The evidence so far argues against building it, not for.**

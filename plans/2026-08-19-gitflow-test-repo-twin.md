@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-08-25
+status: planned
+updated: 2026-09-26
 ---
 
 ## Context
@@ -35,27 +35,46 @@ messages get improved.]
 
 ## Open questions
 
-[NEEDS CLARIFICATION: repo name and visibility — under `TheodoreAD`, public or private? Naming that
-signals "this is a permanent scratch target, not a real project" (something like
+[DECISION: **all five questions below settled by the user 2026-09-26**, each as the recommended
+direction had it:
+
+- **`TheodoreAD/repo-tasks-gitflow-twin`, public.** Public because branch protection and rulesets
+  are only available on public repos under GitHub Free; a private twin would need GitHub Pro to be
+  protected, and protection is the point.
+- **Seeded** with `pyproject.toml` plus a `tasks.py` importing `repo_tasks.ns`, so `inv gitflow.*`
+  and `inv version.*` run end to end, the same shape as the manual dry runs.
+- **Real branch protection on `main` and `develop`**, so a stray direct push is rejected the way a
+  real protected repo would reject it. That is the case a bare local remote structurally cannot
+  test.
+- **Found through an env var and a doc:** an opt-in test tier (it needs `gh auth` and the network)
+  reads the twin's name from an environment variable and skips when it is unset, and
+  `contributing/release-flow.md` names the repo.
+- **An automated test, not a manual dry run**, marked out of the fast default suite.
+
+Creating the repo is still not started, and is a separate step the user approves, since it is a new
+public repo under their account. The questions this answers follow.]
+
+~~[NEEDS CLARIFICATION:~~ repo name and visibility — under `TheodoreAD`, public or private? Naming
+that signals "this is a permanent scratch target, not a real project" (something like
 `repo-tasks-gitflow-twin`) probably matters more than usual, so nobody mistakes it for real work
 later.]
 
-[NEEDS CLARIFICATION: seed content — does it need a real `pyproject.toml` + `tasks.py` wired to
+~~[NEEDS CLARIFICATION:~~ seed content — does it need a real `pyproject.toml` + `tasks.py` wired to
 `from repo_tasks import ns` (so `inv gitflow.*`/`inv version.*` actually run against it end to end,
 same shape as the scratch repos used in the manual dry runs), or is a bare repo with just `main`
 enough since we're only exercising `gh pr create`'s mechanics, not the version-bump content itself?]
 
-[NEEDS CLARIFICATION: does it need real branch protection rules on `main`/`develop` (mirroring an
-actual protected team repo), so a stray `local=True` run or a bug can't silently succeed with a
+~~[NEEDS CLARIFICATION:~~ does it need real branch protection rules on `main`/`develop` (mirroring
+an actual protected team repo), so a stray `local=True` run or a bug can't silently succeed with a
 direct push that a real protected repo would have rejected? Without protection, the twin only proves
 `gh pr create`'s command construction is correct — it can't catch "this accidentally pushed directly
 instead of opening a PR."]
 
-[NEEDS CLARIFICATION: how do future sessions/agents find and reuse it — a note in this repo's
+~~[NEEDS CLARIFICATION:~~ how do future sessions/agents find and reuse it — a note in this repo's
 `AGENTS.md`/`CONTRIBUTING.md` naming the repo directly, or something more structured (an env var a
 test file reads, skipped when unset)?]
 
-[NEEDS CLARIFICATION: does verification against it become an actual automated test (skipped by
+~~[NEEDS CLARIFICATION:~~ does verification against it become an actual automated test (skipped by
 default, opt-in via an env var or marker, since it needs `gh auth` and network), or does it stay a
 manual "run this by hand occasionally" dry run like the two rounds already done?]
 

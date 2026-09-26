@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-08
+status: planned
+updated: 2026-09-26
 ---
 
 # Detect a tracked Python tree no pyright `include` entry covers
@@ -66,12 +66,21 @@ spelled as.]
 
 ## Open questions
 
-[NEEDS CLARIFICATION: is it worth a gate step, or a diagnostic? A check that every tracked `*.py`
-(`tracked_files(c, "*.py")`) is matched by some `include` entry would catch a new tree the moment it
-appears. Against: one instance ever, and a consumer with a deliberate untyped tree (a `scripts/` of
-throwaway one-offs, a vendored directory) would be red on correct input with no opt-out short of
-editing a config `configs.pull` overwrites. That argues for a `quality.*-check`-shaped diagnostic
-that is not in `check`'s chain, or for the check reporting rather than failing.
+[DECISION: **a declared key plus a diagnostic, settled by the user 2026-09-26.** A consumer lists
+its extra trees in `repo-tasks.toml` and `configs.pull` splices them into `include`; a check outside
+`quality.check`'s chain reports any tracked `*.py` no entry covers, and names the one-line fix.
+Chosen over deriving `include` from every tracked tree, which closes the gap by construction but
+leaves a deliberately untyped tree no opt-out except per-file pyright comments. So option 2 of the
+recommended direction below, and the order it gives stands: the key first, then the check that
+points at it. The question this answers follows.]
+
+~~[NEEDS CLARIFICATION: is it worth a gate step, or a diagnostic?~~ A check that every tracked
+`*.py` (`tracked_files(c, "*.py")`) is matched by some `include` entry would catch a new tree the
+moment it appears. Against: one instance ever, and a consumer with a deliberate untyped tree (a
+`scripts/` of throwaway one-offs, a vendored directory) would be red on correct input with no
+opt-out short of editing a config `configs.pull` overwrites. That argues for a
+`quality.*-check`-shaped diagnostic that is not in `check`'s chain, or for the check reporting
+rather than failing.
 
 **Still open, but on different premises than when it was written** — see the 2026-09-08 measurement
 above. "One instance ever" is now two. "Red on correct input" is measured and does not happen on the

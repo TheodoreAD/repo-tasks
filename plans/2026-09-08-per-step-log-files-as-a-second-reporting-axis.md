@@ -34,16 +34,21 @@ inline, which is exactly what report mode already does.]
 
 ## Open questions
 
-[NEEDS CLARIFICATION: what would count as the reason to build it? The honest candidates are a gate
-step whose failure output is genuinely too large to replay inline — nothing in the current gate is
-close — or a consumer running the gate somewhere the terminal output is not kept at all. Neither has
-appeared. Worth deciding whether this plan should simply be abandoned if a year passes without one,
-rather than sitting as a permanent idea.]
+[DECISION: **kept, with an expiry: retire it on 2027-09-08 if no reason to build it has appeared**,
+settled by the user 2026-09-26. A reason means one of the two candidates below actually occurring.
+The CI-artifact question below is not folded in; it stays a separate feature nobody has asked for.
+The question this answers follows.]
 
-[NEEDS CLARIFICATION: does CI change the answer? The gate runs stock invoke in CI by decision, so
-report mode is off there and this axis would be too — but CI is the one place where per-step logs
-could become artifacts. That is a different feature with a different trigger, and folding it in here
-would be answering a question nobody has asked.]
+~~[NEEDS CLARIFICATION:~~ what would count as the reason to build it? The honest candidates are a
+gate step whose failure output is genuinely too large to replay inline — nothing in the current gate
+is close — or a consumer running the gate somewhere the terminal output is not kept at all. Neither
+has appeared. Worth deciding whether this plan should simply be abandoned if a year passes without
+one, rather than sitting as a permanent idea.]
+
+~~[NEEDS CLARIFICATION:~~ does CI change the answer? **No, per the decision above.** The gate runs
+stock invoke in CI by decision, so report mode is off there and this axis would be too — but CI is
+the one place where per-step logs could become artifacts. That is a different feature with a
+different trigger, and folding it in here would be answering a question nobody has asked.]
 
 ## Recommended direction
 

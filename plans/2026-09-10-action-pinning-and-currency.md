@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-10
+status: planned
+updated: 2026-09-26
 ---
 
 # Pins that rot, and a checker with a floor
@@ -25,12 +25,18 @@ about what those decisions left open.
 
 ### Does `ci.check-actions` make pinning-everywhere maintainable after all?
 
-[NEEDS CLARIFICATION: the SHA-pin decision weighed exactly two options — pin everywhere and let the
-pins rot, or pin everywhere plus dependabot and take a PR stream nobody reads. `ci.check-actions` is
-a third option that decision did not have: a checker that reports a stale pin without opening a PR.
-Whether that is enough to carry hash pins across every workflow, or whether "someone remembers to
-run it" is the same rot in a different place, is unmeasured. The honest test is how long a known
-stale pin actually survives here — `security-reusable.yml`'s consumer pins are the live specimen.]
+[DECISION: **the floor first, and pinning waits on the pilot**, settled by the user 2026-09-26 as
+the recommended direction's order. `ci.check-actions` gains the comment check (the DEFERRED below)
+before anything widens pinning, and whether to pin beyond `publish.yml` is answered by the
+reusable-workflow pin, not decided now. The question this answers follows.]
+
+~~[NEEDS CLARIFICATION:~~ the SHA-pin decision weighed exactly two options — pin everywhere and let
+the pins rot, or pin everywhere plus dependabot and take a PR stream nobody reads.
+`ci.check-actions` is a third option that decision did not have: a checker that reports a stale pin
+without opening a PR. Whether that is enough to carry hash pins across every workflow, or whether
+"someone remembers to run it" is the same rot in a different place, is unmeasured. The honest test
+is how long a known stale pin actually survives here — `security-reusable.yml`'s consumer pins are
+the live specimen.]
 
 The pins that exist today are `publish.yml`'s two `actions/checkout` sites and each consumer's
 `security-reusable.yml` ref. That second set already has a known hole, recorded in

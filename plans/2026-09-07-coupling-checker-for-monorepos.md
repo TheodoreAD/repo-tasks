@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-07
+status: planned
+updated: 2026-09-26
 ---
 
 # Does the quality manifest gain a coupling checker, and on what evidence
@@ -113,18 +113,25 @@ not be noticed.]
 
 ## Open questions
 
-[NEEDS CLARIFICATION: does the fixture live in the repo or get generated per run? A committed
+[DECISION: **both questions below settled by the user 2026-09-26.** The fixture is generated into
+`tmp_path` by a builder function, keeping this repo's root lock alone. Any tool the experiments
+favour becomes a dependency of a task that runs it, not of `repo-tasks-quality`, so no consumer
+resolves it unless it runs the task and the manifest gains no optional half. The run order in the
+recommended direction stands: experiment 2 first. The questions this answers follow.]
+
+~~[NEEDS CLARIFICATION:~~ does the fixture live in the repo or get generated per run? A committed
 `tests/fixtures/monorepo/` is readable and diffable and becomes a second workspace this repo's own
 `uv.lock` has to resolve — which is either useful dogfooding or a permanent tax on every `uv lock`
 here. Generating it into `tmp_path` costs a builder function and keeps the root lock alone. The
 existing `tests/fixtures/sample-service` is the precedent for committing one, and it is also the
 reason to hesitate: it is already a member of this repo's workspace.]
 
-[NEEDS CLARIFICATION: if the answer turns out to be "adopt one", does it go in `repo-tasks-quality`
-(every consumer resolves it, whether or not they have two packages) or in a new optional extra that
-a monorepo consumer opts into? The manifest has never had an optional half, and inventing one for a
-single tool is a mechanism this family would then have to maintain. The alternative is that the tool
-is a task's dependency rather than the gate's, installed only where the task runs.]
+~~[NEEDS CLARIFICATION:~~ if the answer turns out to be "adopt one", does it go in
+`repo-tasks-quality` (every consumer resolves it, whether or not they have two packages) or in a new
+optional extra that a monorepo consumer opts into? The manifest has never had an optional half, and
+inventing one for a single tool is a mechanism this family would then have to maintain. The
+alternative is that the tool is a task's dependency rather than the gate's, installed only where the
+task runs.]
 
 ## Recommended direction
 
