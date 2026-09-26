@@ -27,8 +27,8 @@ anything would run unprompted. Nothing here writes into a consumer's tree — no
 manual and stays a session in that repo, because sweeping a consumer means running its tasks in its
 tree.
 
-See plans/2026-08-25-consumer-transitions.md for why the list of consumers is declared rather than
-derived, and contributing/consumer-sweep.md for what to do about what this prints.
+See contributing/consumer-sweep.md, "What counts as a consumer", for why the list of consumers is
+declared rather than derived, and the rest of that file for what to do about what this prints.
 """
 
 import contextlib

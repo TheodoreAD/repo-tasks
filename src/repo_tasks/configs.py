@@ -223,7 +223,8 @@ def _self_referential_dep() -> str | None:
     This repo is unaffected and always was: it solves the same problem a different way, with
     `dev = [{ include-group = "repo-tasks-quality" }]`, so the manifest never names it. The case was
     understood one layer down — `_declared_dev_specs`' docstring records exactly that shape — and
-    unhandled one layer up until 2026-09-13. See plans/2026-08-25-consumer-transitions.md."""
+    unhandled one layer up until 2026-09-13. See contributing/type-checking.md, "`invoke-stubs`, and
+    why it is a separate distribution"."""
     own = _own_project_name()
     if own is None:
         return None
@@ -313,7 +314,7 @@ def _missing_quality_deps() -> list[str]:
     """`repo-tasks-quality` entries this project's dev group does not declare — the drift that
     makes an additive change here a breaking change there. `ensure_deps` is one-shot and nothing
     re-runs it, so a consumer's group is a snapshot from whenever it was last bootstrapped while
-    the gate reading it is live (see plans/2026-08-25-consumer-transitions.md)."""
+    the gate reading it is live (see contributing/consumer-sweep.md)."""
     canonical = _applicable_quality_deps()
     pyproject_path = Path("pyproject.toml")
     declared = _declared_dev_names(pyproject_path) if pyproject_path.exists() else set[str]()

@@ -51,8 +51,8 @@ construction.]
 **It is not only this repo.** `power-user-linux-setup` takes `repo-tasks` as a project dependency
 with a pinned `uv.lock`, so `inv repo-tasks.status` there reports the **locked** version while
 claiming to report the global one — and the gap between a consumer's lock and the global tool is
-precisely the drift [`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)
-records as "two different lags, both invisible from a green terminal".
+precisely the drift [`../contributing/consumer-sweep.md`](../contributing/consumer-sweep.md) records
+as "two lags, both invisible from a green terminal".
 
 ## The sharper case, which is not a report
 

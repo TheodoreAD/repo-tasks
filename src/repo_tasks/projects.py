@@ -335,8 +335,8 @@ def projects_root() -> Path:
     checked out side by side.
 
     Resolving *where* a declared repo lives from a path shape is not the thing
-    plans/2026-08-25-consumer-transitions.md forbids — deriving *which repos are consumers* from one
-    is, and that stays declared. The difference is that a wrong answer here is loud: a name whose
+    contributing/consumer-sweep.md, "What counts as a consumer", forbids — deriving *which repos are
+    consumers* from one is, and that stays declared. The difference is that a wrong answer here is loud: a name whose
     directory is absent is reported as missing, never skipped."""
     override = os.environ.get("REPO_TASKS_PROJECTS_ROOT")
     return Path(override).expanduser() if override else Path.cwd().parent

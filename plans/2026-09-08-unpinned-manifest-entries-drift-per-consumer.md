@@ -46,13 +46,12 @@ the commit that introduced the line and silently hides every later rev change.]
 | `power-user-linux-setup` | `ad052ca`          | **0.1.0** |
 
 **The central claim is confirmed independently in the same pass.** `configs.diff` was run against
-both consumers on 2026-09-08 (recorded in
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md)) and reported config-file
-drift on three files plus one unconstrained `hadolint-py` entry — and **said nothing whatever**
-about `power-user-linux-setup` sitting two releases back on `invoke-stubs`. That is the plan's
-thesis demonstrated rather than argued: the drift is invisible to the command whose whole job is
-reporting how far behind a consumer is, and it is invisible correctly, because that command asks a
-different question.
+both consumers on 2026-09-08 (recorded in the now-retired `2026-08-25-consumer-transitions.md`) and
+reported config-file drift on three files plus one unconstrained `hadolint-py` entry — and **said
+nothing whatever** about `power-user-linux-setup` sitting two releases back on `invoke-stubs`. That
+is the plan's thesis demonstrated rather than argued: the drift is invisible to the command whose
+whole job is reporting how far behind a consumer is, and it is invisible correctly, because that
+command asks a different question.
 
 Two corrections, and together they move the plan's evidence rather than weakening its argument.
 
@@ -77,11 +76,10 @@ the manifest entry reaches it the same way, through `configs.ensure-deps`, and i
 earlier and has not re-resolved since. Any future measurement of manifest drift enumerates every
 consumer, not the ones the question is phrased around.]
 
-**This is a sibling of the drift this plan's own item 2 closed, not the same one.**
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) added dev-group drift to
-`configs.diff` (`e169837`, 2026-08-26), which catches an entry a consumer is **missing**. An entry
-that is present but locked three versions back is invisible to it, by construction — `ensure_deps`'
-own docstring says so:
+**This is a sibling of the drift the now-retired `2026-08-25-consumer-transitions.md` closed in its
+item 2, not the same one.** That item added dev-group drift to `configs.diff` (`e169837`,
+2026-08-26), which catches an entry a consumer is **missing**. An entry that is present but locked
+three versions back is invisible to it, by construction — `ensure_deps`' own docstring says so:
 
 > Additive only: never touches an entry already present (by bare package name, ignoring version) …
 > this task never touches `uv.lock` itself.
@@ -138,11 +136,12 @@ asking GitHub for the branch head, and for a PyPI one means asking the index. Th
 `configs.diff` a network mode, or split a `deps.check-currency` off beside `deps.audit`, which is
 already network-only and report-only for a related question.]
 
-[NEEDS CLARIFICATION: does the answer change once this repo tags a release?
-`2026-08-25-consumer-transitions.md` item 5 leaves tagging open, and `bootstrap-repo-tasks.sh` is
-unpinned until a real tag exists. A tagged `repo-tasks` gives consumers a version to pin _to the
-tool_, but the manifest entries are still names inside it — so this question survives tagging rather
-than being answered by it. Worth confirming that reading before deferring anything to the release.]
+[NEEDS CLARIFICATION: does the answer change once this repo tags a release? Tagging is settled since
+2026-09-26: `v0.2.0` and `v0.3.0` exist, and a consumer sweep now ends by stamping
+`bootstrap-repo-tasks.sh` to a tag (`contributing/consumer-sweep.md`). A tagged `repo-tasks` gives
+consumers a version to pin _to the tool_, but the manifest entries are still names inside it — so
+this question survives tagging rather than being answered by it. Worth confirming that reading
+before deferring anything to the release.]
 
 ## Recommended direction
 

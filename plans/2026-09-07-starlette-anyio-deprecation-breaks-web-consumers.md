@@ -107,11 +107,10 @@ running `scaffoldapy`'s e2e tier, and only that.
 
 [PITFALL: the struck note also said to run `inv repo-tasks.update` **"in that repo"**, which is
 wrong independently of the ordering. It is a single global step that moves one `uv tool` install for
-the whole machine, not a per-consumer one —
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md) records the 2026-08-26
-walk-through correcting `contributing/consumer-sweep.md` on exactly this. Two errors in one
-sentence, both of which would have sent the next session doing unnecessary work before the real
-step.]
+the whole machine, not a per-consumer one — `contributing/consumer-sweep.md` says so, corrected on
+exactly this by the 2026-08-26 walk-through the now-retired `2026-08-25-consumer-transitions.md`
+recorded. Two errors in one sentence, both of which would have sent the next session doing
+unnecessary work before the real step.]
 
 ## Verification (2026-09-08)
 
@@ -144,7 +143,8 @@ rather than there.** `scaffoldapy`'s `main` (`b2690c6`) was cloned into a sandbo
 ran: **10 of 10 combinations passed in 88.53s**, `web_service-no-fetch` — the one that was red on
 2026-09-07 — included. That was the local replica of the consumer canary, landed the same day as
 `.github/workflows/canary.yml`; see
-[`2026-08-25-consumer-transitions.md`](2026-08-25-consumer-transitions.md), "The canary landed".
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md), "The consumer canary runs as
+its own workflow too".
 
 Two things about the shape of that verification are worth keeping, because the obvious version of it
 would have been weaker:
