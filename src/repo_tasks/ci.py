@@ -201,6 +201,10 @@ class ActionUse:
 
     where: str
 
+    sha: str | None = None
+    """The commit a SHA pin names, None for a tag or branch ref. Kept because a pin's comment is
+    only a claim about it — see `_tag_commit`."""
+
 
 def _parts(text: str) -> tuple[int, ...] | None:
     match = _VERSION.match(text)
@@ -232,10 +236,12 @@ def _uses_in(text: str, where: str) -> list[ActionUse]:
             continue
         path, _, version = ref.partition("@")
         action = "/".join(path.split("/")[:2])
+        sha = None
         if _SHA.match(version):
+            sha = version
             comment = match["comment"]
             version = comment if comment and _parts(comment) else ""
-        uses.append(ActionUse(action=action, version=version or None, where=where))
+        uses.append(ActionUse(action=action, version=version or None, where=where, sha=sha))
     return uses
 
 
@@ -270,6 +276,44 @@ def _latest_tag(c: Context, action: str) -> str | None:
     return result.stdout.strip() if result.ok else None
 
 
+def _tag_commit(c: Context, action: str, tag: str) -> str | None:
+    """The commit `tag` resolves to in `action`'s repo, or None when there is no such tag.
+
+    The commits endpoint rather than `git/ref/tags/<tag>`: for an annotated tag the ref points at a
+    tag object, not a commit, so comparing it with a pinned SHA would report a mismatch on every
+    honest pin to an annotated release. `commits/<ref>` peels through to the commit, which is what a
+    `uses:` SHA names. Measured 2026-09-26 on `pypa/gh-action-pypi-publish` `v1.12.4`, an annotated
+    tag: `git/ref` answered the tag object `7f25271a`, `commits/` the commit `76f52bc8`, and
+    `git ls-remote` agrees with the second as `v1.12.4^{}`. `actions/checkout` and `setup-uv` tag
+    lightweight, so this repo's own pins cannot tell the two endpoints apart."""
+    result = c.run(f"gh api repos/{action}/commits/{tag} --jq .sha", hide=True, warn=True)
+    return result.stdout.strip() if result.ok and result.stdout.strip() else None
+
+
+def _report_untrue_pin_comments(c: Context, uses: list[ActionUse]) -> int:
+    """Check each SHA pin's version comment against the commit its tag actually names, and report
+    the ones that do not match. Returns how many did not.
+
+    Without this, a `# v7.0.1` comment beside a SHA that is something else reads as current — the
+    currency verdict trusts the comment, and the comment is the one part of a pin nothing verifies.
+    This is the floor `pinact` covers and the check here lacked; one call per distinct pin, the same
+    lookup a human makes re-resolving a pin by hand."""
+    pins: dict[tuple[str, str, str], set[str]] = {}
+    for u in uses:
+        if u.sha and u.version:
+            pins.setdefault((u.action, u.version, u.sha), set()).add(u.where)
+    untrue = 0
+    for (action, version, sha), sites in sorted(pins.items()):
+        where = ", ".join(sorted(sites))
+        actual = _tag_commit(c, action, version)
+        if actual == sha:
+            continue
+        untrue += 1
+        found = f"{version} is {actual[:12]}" if actual else f"{version} is not a tag of {action}"
+        print(f"[ci.check-actions] {action}@{sha[:12]}  UNTRUE COMMENT — says {version}, but {found}  [{where}]")
+    return untrue
+
+
 @requires(GH, NETWORK)
 @task(
     help={
@@ -294,7 +338,11 @@ def check_actions(c: Context, path: str = ".github/workflows"):
     contributing/quality-gate.md, "Workflow hardening".
 
     `--path` because the highest-value call site in this family is a template's workflows rather
-    than a repo's own — a generated repo inherits whatever the template pins."""
+    than a repo's own — a generated repo inherits whatever the template pins.
+
+    A SHA pin's currency is read from its `# vX.Y.Z` comment, so each such comment is also checked
+    against the commit its tag names; an untrue one is reported beside the currency lines. See
+    `_report_untrue_pin_comments`."""
     _require_gh()
     files = tracked_files(c, f"{path}/*.yml", f"{path}/*.yaml")
     if not files:
@@ -326,4 +374,6 @@ def check_actions(c: Context, path: str = ".github/workflows"):
             verdict = f"current (latest {newest})"
         print(f"[ci.check-actions] {action}@{version or '?'}  {verdict}  [{where}]")
 
-    print(f"[ci.check-actions] {behind} of {len(latest)} action(s) behind")
+    untrue = _report_untrue_pin_comments(c, uses)
+    tail = f"; {untrue} SHA pin(s) whose version comment is untrue" if untrue else ""
+    print(f"[ci.check-actions] {behind} of {len(latest)} action(s) behind{tail}")

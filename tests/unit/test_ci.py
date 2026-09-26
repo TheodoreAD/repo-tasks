@@ -302,6 +302,66 @@ def test_check_actions_reports_an_action_that_publishes_no_releases(tmp_path, ca
     assert "publishes no releases" in capsys.readouterr().out
 
 
+_CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+_OTHER_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
+def _pinned_repo(tmp_path, body: str, tag_commits: dict[str, Result]) -> MockContext:
+    workflow = tmp_path / "ci.yml"
+    workflow.write_text(body, encoding="utf-8")
+    return MockContext(
+        run={
+            f"git ls-files --cached --others --exclude-standard -- '{tmp_path}/*.yml' '{tmp_path}/*.yaml'": Result(
+                stdout=f"{workflow}\n", exited=0
+            ),
+            "gh api repos/actions/checkout/releases/latest --jq .tag_name": Result(stdout="v7.0.1\n", exited=0),
+            **tag_commits,
+        }
+    )
+
+
+def test_uses_keeps_the_sha_a_pin_names():
+    uses = ci._uses_in(f"      - uses: actions/checkout@{_CHECKOUT_SHA} # v7.0.1\n      - uses: a/b@v1\n", "ci.yml")
+    assert [u.sha for u in uses] == [_CHECKOUT_SHA, None]
+
+
+def test_check_actions_is_silent_about_a_true_pin_comment(tmp_path, capsys):
+    c = _pinned_repo(
+        tmp_path,
+        f"      - uses: actions/checkout@{_CHECKOUT_SHA} # v7.0.1\n",
+        {"gh api repos/actions/checkout/commits/v7.0.1 --jq .sha": Result(stdout=f"{_CHECKOUT_SHA}\n", exited=0)},
+    )
+    ci.check_actions.body(c, path=str(tmp_path))
+    out = capsys.readouterr().out
+    assert "UNTRUE" not in out
+    assert "0 of 1 action(s) behind\n" in out
+
+
+def test_check_actions_reports_a_comment_that_names_another_commit(tmp_path, capsys):
+    """The case the currency verdict alone reads as current: the comment says the latest release,
+    and the SHA beside it is something else."""
+    c = _pinned_repo(
+        tmp_path,
+        f"      - uses: actions/checkout@{_OTHER_SHA} # v7.0.1\n",
+        {"gh api repos/actions/checkout/commits/v7.0.1 --jq .sha": Result(stdout=f"{_CHECKOUT_SHA}\n", exited=0)},
+    )
+    ci.check_actions.body(c, path=str(tmp_path))
+    out = capsys.readouterr().out
+    expected = f"UNTRUE COMMENT — says v7.0.1, but v7.0.1 is {_CHECKOUT_SHA[:12]}"
+    assert f"actions/checkout@{_OTHER_SHA[:12]}  {expected}" in out
+    assert "1 SHA pin(s) whose version comment is untrue" in out
+
+
+def test_check_actions_reports_a_comment_naming_a_tag_that_does_not_exist(tmp_path, capsys):
+    c = _pinned_repo(
+        tmp_path,
+        f"      - uses: actions/checkout@{_CHECKOUT_SHA} # v7.9.9\n",
+        {"gh api repos/actions/checkout/commits/v7.9.9 --jq .sha": Result(stderr="HTTP 422", exited=1)},
+    )
+    ci.check_actions.body(c, path=str(tmp_path))
+    assert "says v7.9.9, but v7.9.9 is not a tag of actions/checkout" in capsys.readouterr().out
+
+
 def test_check_actions_does_not_stop_on_a_behind_action(tmp_path):
     # Report-only by design: nobody's commit runs this, so a non-zero exit blocks nothing and would
     # only train its reader to ignore it.

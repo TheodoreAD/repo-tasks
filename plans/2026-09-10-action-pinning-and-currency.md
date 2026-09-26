@@ -46,8 +46,16 @@ turns out to cost.
 
 ### The checker cannot tell a truthful pin comment from a lying one
 
-[DEFERRED: `ci.check-actions` reads a SHA pin's version out of its trailing `# v7.0.1` comment and
-never checks that the comment is _true_ — a comment naming one version beside a SHA that is
+**Done 2026-09-26.** `ci.check-actions` now resolves each SHA pin's comment through
+`gh api repos/<action>/commits/<tag>` and reports an `UNTRUE COMMENT` line when the tag names
+another commit or does not exist. That endpoint rather than `git/ref/tags/`, because for an
+annotated tag the latter answers the tag object: measured on `pypa/gh-action-pypi-publish`
+`v1.12.4`, where `git/ref` gave `7f25271a` and `commits/` gave the pinned-able commit `76f52bc8`,
+which `git ls-remote` shows as `v1.12.4^{}`. Live on this repo, both `publish.yml` pins came back
+true. Three tests, all failing against the previous code. The original entry follows.
+
+~~[DEFERRED:~~ `ci.check-actions` reads a SHA pin's version out of its trailing `# v7.0.1` comment
+and never checks that the comment is _true_ — a comment naming one version beside a SHA that is
 something else reads as current. `pinact` does verify this. It was not worth a Go-binary install
 method in `setup.toml` on its own, but the check has a floor and this is it. A cheap in-house
 version is one `gh api repos/<action>/git/ref/tags/<version>` call per SHA pin, which is the same
