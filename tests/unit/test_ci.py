@@ -235,6 +235,29 @@ def test_uses_reduces_a_reusable_workflow_to_its_repo():
     assert uses[0].action == "octo/org"
 
 
+def test_reusable_pins_keeps_the_path_that_uses_in_deliberately_drops():
+    """The two readers answer different questions off one grammar: `_uses_in` wants whose releases to
+    track, so it reduces a ref to `owner/repo`; this wants *which workflow* is being called."""
+    text = """
+jobs:
+  security:
+    uses: TheodoreAD/repo-tasks/.github/workflows/security-reusable.yml@11d5960a326750d5838078e36cf38b85af677262
+  other:
+    uses: someone/else/.github/workflows/security-reusable.yml@v1
+  build:
+    steps:
+      - uses: actions/checkout@v7
+"""
+    pins = ci.reusable_pins(text, ".github/workflows/security-reusable.yml")
+    assert pins == ["11d5960a326750d5838078e36cf38b85af677262", "v1"]
+    assert ci.reusable_pins(text, ".github/workflows/absent.yml") == []
+
+
+def test_reusable_pins_ignores_a_matching_path_with_no_ref():
+    # `uses:` without `@<ref>` is not a pin, and `_uses_in` skips it for the same reason.
+    assert ci.reusable_pins("    uses: octo/org/.github/workflows/release.yml\n", "release.yml") == []
+
+
 def test_check_actions_noops_cleanly_in_a_repo_with_no_workflows(capsys):
     c = MockContext(run=Result(stdout="", exited=0))
     ci.check_actions.body(c)

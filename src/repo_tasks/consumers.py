@@ -6,11 +6,19 @@ repo I am standing in behind", which is the question a consumer's own session as
 `ingesta` and `invoke-stubs` each drifted for weeks with nothing looking at them, and both were
 found by hand on 2026-09-13 rather than by anything that runs.
 
-It reports one thing `configs.diff` cannot: **the bootstrap pin.** That command compares shipped
-config files and the dev group, and the pin is in neither — it is in a shell script at a known path —
-so a consumer swept without the stamp step looked identical to one swept with it until 2026-09-26.
-Which is the state that made a push here a deploy: an unpinned `bootstrap-repo-tasks.sh` installs
-whatever `main` is at CI run time, however recently that repo's configs were pulled.
+It also reports the two things `configs.diff` cannot, both of which are files at known paths rather
+than anything it compares:
+
+- **The bootstrap pin.** An unpinned `bootstrap-repo-tasks.sh` installs whatever `main` is at CI run
+  time however recently that repo's configs were pulled, which is the state that makes a push here a
+  deploy. Until 2026-09-26 a consumer swept without the stamp step looked identical to one swept with
+  it.
+- **The security-workflow caller.** An *addition* to a consumer rather than a `configs.pull`, so
+  nothing compares it — and where it does exist, its SHA pin goes stale in silence.
+
+Both are read by content rather than by looking for an expected filename. That is not fastidiousness:
+letting a filename stand in for what it usually contains is how this family's consumer set came to be
+miscounted three times in three weeks, and a caller in `audit.yml` is a caller.
 
 Read-only by construction, and that is a contract rather than a description: `diff` is one of the
 names this machine's Claude Code allowlist auto-approves, so a task called `diff` that mutated
@@ -24,6 +32,8 @@ derived, and contributing/consumer-sweep.md for what to do about what this print
 """
 
 import contextlib
+import re
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _installed_version
 from pathlib import Path
@@ -31,9 +41,15 @@ from pathlib import Path
 from invoke import Context, task
 from invoke.exceptions import Exit
 
+from .ci import reusable_pins
 from .configs import Drift, drift_summary
 from .projects import Consumer, discover_consumers, projects_root
 from .selfinstall import read_pin
+
+_SECURITY_REUSABLE = ".github/workflows/security-reusable.yml"
+"""This repo's own path for the workflow a consumer calls — matched as a suffix of the `uses:` ref."""
+
+_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _measured_version() -> str:
@@ -61,6 +77,55 @@ def _measure(consumer: Consumer, source: str | None) -> Drift:
         return drift_summary(source)
 
 
+@dataclass(frozen=True)
+class _Finding:
+    """One clause of a consumer's report line, and whether it means that consumer is behind.
+
+    Most findings do, and `behind=True` is the default for that reason. The exception is a consumer
+    with **no CI at all**: that is an open question about the repo rather than drift from this one —
+    `invoke-stubs` has no `.github/` directory, and the plan records that the security-caller item
+    cannot be done there until somebody decides whether that repo has CI. Reporting it as behind
+    would be asserting the answer, and staying silent would lose the one place where a green local
+    gate is the whole of the evidence. So it is said and not counted."""
+
+    text: str
+    behind: bool = True
+
+
+def _security_finding(consumer: Consumer, head: str | None) -> _Finding | None:
+    """Whether this consumer calls the shipped reusable security workflow, and at what commit.
+
+    The last mechanical item on the complement list. It is an **addition** to a consumer rather than
+    a `configs.pull`, so no config comparison can see it — the file does not exist in four of the six
+    repos, and where it does exist nothing checks that the SHA it pins is still the current one.
+
+    `head` is the newest commit touching `security-reusable.yml` in this repo, read once by the
+    caller. None where that read failed (a shallow clone, or not a git checkout), in which case the
+    presence half still answers and the currency half is skipped rather than guessed."""
+    workflows = consumer.path / ".github" / "workflows"
+    if not workflows.is_dir():
+        return _Finding("no CI at all, so nothing calls the security workflow", behind=False)
+
+    pins = [
+        pin
+        for path in sorted(workflows.iterdir())
+        if path.is_file()
+        for pin in reusable_pins(path.read_text(encoding="utf-8", errors="replace"), _SECURITY_REUSABLE)
+    ]
+    if not pins:
+        return _Finding(f"no caller for {_SECURITY_REUSABLE}")
+    # Read by content across every workflow rather than by looking for `security.yml`: this plan's
+    # own recurring mistake is letting a filename stand in for the thing it usually contains.
+    if head is not None:
+        stale = next((pin for pin in pins if _SHA.match(pin) and pin != head), None)
+        if stale is not None:
+            return _Finding(f"security caller pinned to {stale[:7]}, the reusable workflow is at {head[:7]}")
+    loose = next((pin for pin in pins if not _SHA.match(pin)), None)
+    if loose is not None:
+        return _Finding(f"security caller pinned to {loose!r}, not a 40-character SHA")
+    return None
+
+
 def _pin_line(consumer: Consumer, measured: str) -> str | None:
     """What to say about this consumer's bootstrap pin, or None when there is nothing to say.
 
@@ -84,7 +149,19 @@ def _pin_line(consumer: Consumer, measured: str) -> str | None:
     return None
 
 
-def _report(consumer: Consumer, source: str | None, measured: str) -> bool:
+def _security_head(c: Context) -> str | None:
+    """The newest commit touching this repo's `security-reusable.yml`, so a consumer's pin can be
+    compared against something real.
+
+    A local `git log`, not the GitHub API: the reporter takes no network, and the answer is in this
+    checkout. `warn=True` because a caller outside a git checkout is a reason to skip the currency
+    half, never to fail the whole report."""
+    result = c.run(f"git log -1 --format=%H -- {_SECURITY_REUSABLE}", hide=True, warn=True)
+    head = result.stdout.strip() if result.ok else ""
+    return head if _SHA.match(head) else None
+
+
+def _report(consumer: Consumer, source: str | None, measured: str, security_head: str | None) -> bool:
     """One consumer's line, and whether it is behind. Prints the absent case rather than skipping
     it: a declared name with no checkout is the failure mode the declared list exists to make
     visible, and a reporter that quietly passed over it would be back to reporting success for a
@@ -95,7 +172,9 @@ def _report(consumer: Consumer, source: str | None, measured: str) -> bool:
 
     drift = _measure(consumer, source)
     pin = _pin_line(consumer, measured)
-    if drift.clean and pin is None:
+    security = _security_finding(consumer, security_head)
+    findings = [f for f in (_Finding(pin) if pin else None, security) if f is not None]
+    if drift.clean and not findings:
         print(f"[consumers.diff] {consumer.name}: up to date")
         return False
 
@@ -106,12 +185,14 @@ def _report(consumer: Consumer, source: str | None, measured: str) -> bool:
         parts.append(f"dev group missing: {', '.join(drift.missing_deps)}")
     if drift.unconstrained_deps:
         parts.append(f"declared without the manifest's constraint: {', '.join(drift.unconstrained_deps)}")
-    if pin is not None:
-        parts.append(pin)
+    parts.extend(finding.text for finding in findings)
     print(f"[consumers.diff] {consumer.name}: {'; '.join(parts)}")
     if drift.skipped_self is not None:
         print(f"[consumers.diff]   (skipped an entry naming {consumer.name} itself — it is that package)")
-    return True
+    # A finding carrying `behind=False` is said without being counted — see `_Finding`. So a consumer
+    # whose only line is "no CI at all" is reported and still exits clean, and one that is also
+    # drifted exits 1 on the drift rather than on the open question.
+    return not drift.clean or any(finding.behind for finding in findings)
 
 
 @task(
@@ -122,9 +203,13 @@ def _report(consumer: Consumer, source: str | None, measured: str) -> bool:
 )
 def diff(c: Context, source: str | None = None, name: str | None = None):
     """Report what every repo declared as a consumer of this package is behind on — drifted config
-    files, dev-group entries the manifest has grown, constraints it declares without, and an
-    unpinned or stale `bootstrap-repo-tasks.sh` — without writing anything anywhere. Exits nonzero if
-    any of them is behind or any declared checkout is absent.
+    files, dev-group entries the manifest has grown, constraints it declares without, an unpinned or
+    stale `bootstrap-repo-tasks.sh`, and a missing or stale caller for the shipped reusable security
+    workflow — without writing anything anywhere. Exits nonzero if any of them is behind or any
+    declared checkout is absent.
+
+    A consumer with no CI at all is reported without counting as behind: whether that repo should have
+    workflows is an open question about it, not drift from here.
 
     The consumers are `repo-tasks.toml`'s `[[consumer]]` entries, resolved under
     `$REPO_TASKS_PROJECTS_ROOT` or this repo's parent directory. Acting on the result is manual and
@@ -139,8 +224,9 @@ def diff(c: Context, source: str | None = None, name: str | None = None):
         return
 
     measured = _measured_version()
+    security_head = _security_head(c)
     print(f"[consumers.diff] measured with repo-tasks {measured} from {Path(__file__).parent}")
     print(f"[consumers.diff] under {projects_root()}")
-    behind = [consumer.name for consumer in consumers if _report(consumer, source, measured)]
+    behind = [consumer.name for consumer in consumers if _report(consumer, source, measured, security_head)]
     if behind:
         raise Exit(code=1)

@@ -239,6 +239,30 @@ def _uses_in(text: str, where: str) -> list[ActionUse]:
     return uses
 
 
+def reusable_pins(text: str, path_suffix: str) -> list[str]:
+    """Every ref a `uses:` in this workflow text pins for a reusable workflow whose path ends in
+    `path_suffix` — `[]` when it calls none.
+
+    Reuses `_USES` rather than growing a second `uses:` parser, since that grammar has exactly one
+    correct reading and `check_actions` already encodes it. What differs is what gets kept: this
+    keeps the **path**, because the question is which workflow is being called, where `_uses_in`
+    deliberately reduces a ref to `owner/repo` since a currency check only cares whose releases to
+    track.
+
+    Added for `consumers.diff`, which asks whether each consumer calls this repo's
+    `security-reusable.yml` and at what SHA — an addition to a consumer rather than a `configs.pull`,
+    so nothing compares it and a stale pin goes unremarked (see contributing/quality-gate.md)."""
+    pins: list[str] = []
+    for line in text.splitlines():
+        match = _USES.match(line)
+        if match is None:
+            continue
+        path, _, ref = match["ref"].partition("@")
+        if path.endswith(path_suffix) and ref:
+            pins.append(ref)
+    return pins
+
+
 def _latest_tag(c: Context, action: str) -> str | None:
     """The action's latest release tag, or None when it publishes no releases at all — several
     popular actions tag without releasing, and that is not an error to report as one."""

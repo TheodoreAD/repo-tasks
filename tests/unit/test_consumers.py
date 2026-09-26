@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from invoke import MockContext
+from invoke import MockContext, Result
 from invoke.exceptions import Exit
 
 from repo_tasks import consumers, projects
@@ -18,14 +18,49 @@ from repo_tasks.configs import Drift  # where it is defined; `consumers` only re
 
 _REPO_TASKS_TOML = '[[consumer]]\nname = "alpha"\n\n[[consumer]]\nname = "beta"\n'
 
+_SECURITY_HEAD = "a" * 40
+_GIT_LOG = f"git log -1 --format=%H -- {consumers._SECURITY_REUSABLE}"
+
+
+def _ctx(head: str = _SECURITY_HEAD) -> MockContext:
+    """A context answering the one command `diff` shells out to.
+
+    That is the local `git log` reading this repo's own `security-reusable.yml` head, so a consumer's
+    caller pin can be compared against something real. A dict-valued `run` is deliberate: anything
+    else this task starts shelling out to fails loudly here rather than being absorbed, which is the
+    property that caught this call being added in the first place."""
+    return MockContext(run={_GIT_LOG: Result(stdout=f"{head}\n", exited=0)})
+
 
 def _declare(root: Path, toml: str) -> None:
     (root / "repo-tasks.toml").write_text(toml, encoding="utf-8")
 
 
-def _consumer_tree(parent: Path, name: str) -> Path:
+def _snapshot(root: Path) -> dict[str, str]:
+    """Every file under `root`, by relative path and content — the read-only contract as one value.
+
+    Stronger than listing the top level, and it survives the reporter learning to read a new file:
+    the assertion is that nothing *changed*, not that the tree holds a particular set of names."""
+    return {
+        str(path.relative_to(root)): path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _consumer_tree(parent: Path, name: str, *, security: str | None = _SECURITY_HEAD) -> Path:
+    """A scratch consumer. `security` gives it a workflow calling the shipped reusable security
+    workflow at that ref — the default, because a tree with no `.github/` at all is its own reported
+    finding and would otherwise show up in every test that only means "nothing to report"."""
     path = parent / name
     path.mkdir(parents=True)
+    if security is not None:
+        workflows = path / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "security.yml").write_text(
+            f"jobs:\n  security:\n    uses: TheodoreAD/repo-tasks/{consumers._SECURITY_REUSABLE}@{security}\n",
+            encoding="utf-8",
+        )
     return path
 
 
@@ -86,7 +121,7 @@ def test_a_declared_consumer_with_no_checkout_is_named_not_skipped(tmp_cwd, monk
     _declare(tmp_cwd, '[[consumer]]\nname = "gone"\n')
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     with pytest.raises(Exit) as excinfo:
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert excinfo.value.code == 1
     assert "gone: NOT FOUND" in capsys.readouterr().out
 
@@ -95,7 +130,7 @@ def test_nothing_declared_is_not_a_failure(tmp_cwd, capsys):
     """Every consumer of this package publishes the task and declares no entries, so the empty case
     is the common one and must not be an error there."""
     _declare(tmp_cwd, "")
-    consumers.diff.body(MockContext())
+    consumers.diff.body(_ctx())
     assert "nothing to measure" in capsys.readouterr().out
 
 
@@ -104,7 +139,7 @@ def test_an_unknown_name_is_an_error_not_an_empty_run(tmp_cwd, monkeypatch):
     _declare(tmp_cwd, _REPO_TASKS_TOML)
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     with pytest.raises(Exit, match=r"entry named 'gamma' in repo-tasks\.toml"):
-        consumers.diff.body(MockContext(), name="gamma")
+        consumers.diff.body(_ctx(), name="gamma")
 
 
 def test_the_report_names_the_version_it_measured_with(tmp_cwd, monkeypatch, capsys):
@@ -113,7 +148,7 @@ def test_the_report_names_the_version_it_measured_with(tmp_cwd, monkeypatch, cap
     _declare(tmp_cwd, '[[consumer]]\nname = "gone"\n')
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert "measured with repo-tasks" in capsys.readouterr().out
 
 
@@ -121,10 +156,11 @@ def test_a_consumer_carrying_the_shipped_configs_reports_up_to_date(tmp_cwd, mon
     _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     alpha = _consumer_tree(tmp_cwd, "alpha")
+    before = _snapshot(alpha)
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
-    consumers.diff.body(MockContext())
+    consumers.diff.body(_ctx())
     assert "alpha: up to date" in capsys.readouterr().out
-    assert list(alpha.iterdir()) == [], "read-only: nothing written into the consumer's tree"
+    assert _snapshot(alpha) == before, "read-only: nothing written into the consumer's tree"
 
 
 def test_a_drifted_consumer_reports_each_kind_of_drift(tmp_cwd, monkeypatch, capsys):
@@ -134,7 +170,7 @@ def test_a_drifted_consumer_reports_each_kind_of_drift(tmp_cwd, monkeypatch, cap
     drift = Drift(["ruff.toml"], ["pytest-socket"], ["hadolint-py!=2.15.1.2"], None)
     monkeypatch.setattr(consumers, "_measure", lambda *_: drift)
     with pytest.raises(Exit) as excinfo:
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert excinfo.value.code == 1
     out = capsys.readouterr().out
     assert "config files behind: ruff.toml" in out
@@ -151,7 +187,7 @@ def test_the_self_referential_skip_is_reported_where_it_applies(tmp_cwd, monkeyp
     drift = Drift(["ruff.toml"], [], [], "invoke-stubs @ git+https://example.invalid/invoke-stubs")
     monkeypatch.setattr(consumers, "_measure", lambda *_: drift)
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert "skipped an entry naming invoke-stubs itself" in capsys.readouterr().out
 
 
@@ -164,7 +200,7 @@ def test_one_consumer_being_clean_does_not_hide_another_being_behind(tmp_cwd, mo
     drifts = {"alpha": Drift([], [], [], None), "beta": Drift(["pytest.ini"], [], [], None)}
     monkeypatch.setattr(consumers, "_measure", lambda consumer, _source: drifts[consumer.name])
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     out = capsys.readouterr().out
     assert "alpha: up to date" in out
     assert "beta: config files behind: pytest.ini" in out
@@ -189,7 +225,7 @@ def test_a_consumer_with_no_bootstrap_script_is_not_reported_unpinned(tmp_cwd, m
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     _consumer_tree(tmp_cwd, "alpha")
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
-    consumers.diff.body(MockContext())
+    consumers.diff.body(_ctx())
     out = capsys.readouterr().out
     assert "alpha: up to date" in out
     assert "bootstrap" not in out
@@ -204,7 +240,7 @@ def test_an_unpinned_bootstrap_is_behind_even_with_every_config_current(tmp_cwd,
     _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned=None)
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
     with pytest.raises(Exit) as excinfo:
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert excinfo.value.code == 1
     assert "alpha: bootstrap unpinned" in capsys.readouterr().out
 
@@ -215,7 +251,7 @@ def test_a_bootstrap_pinned_to_the_measured_version_is_up_to_date(tmp_cwd, monke
     _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned="9.9.9")
     monkeypatch.setattr(consumers, "_measured_version", lambda: "9.9.9")
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
-    consumers.diff.body(MockContext())
+    consumers.diff.body(_ctx())
     assert "alpha: up to date" in capsys.readouterr().out
 
 
@@ -228,7 +264,7 @@ def test_a_bootstrap_pinned_to_an_older_version_names_both(tmp_cwd, monkeypatch,
     monkeypatch.setattr(consumers, "_measured_version", lambda: "0.3.0")
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert "bootstrap pinned to v0.2.0, behind the v0.3.0 this was measured with" in capsys.readouterr().out
 
 
@@ -238,7 +274,7 @@ def test_the_pin_is_reported_alongside_config_drift_not_instead_of_it(tmp_cwd, m
     _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned=None)
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift(["ruff.toml"], [], [], None))
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     out = capsys.readouterr().out
     assert "config files behind: ruff.toml" in out
     assert "bootstrap unpinned" in out
@@ -249,12 +285,104 @@ def test_reading_the_pin_writes_nothing_into_the_consumer(tmp_cwd, monkeypatch):
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     alpha = _consumer_tree(tmp_cwd, "alpha")
     _bootstrap(alpha, pinned=None)
-    before = (alpha / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8")
+    before = _snapshot(alpha)
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
-    assert [p.name for p in alpha.iterdir()] == ["bootstrap-repo-tasks.sh"]
-    assert (alpha / "bootstrap-repo-tasks.sh").read_text(encoding="utf-8") == before
+        consumers.diff.body(_ctx())
+    assert _snapshot(alpha) == before, "the unpinned script is read and never corrected"
+
+
+# ---------------------------------------------------------------------------
+# the security-workflow caller: an addition to a consumer, so nothing compares it
+# ---------------------------------------------------------------------------
+
+
+def test_a_consumer_with_workflows_but_no_caller_is_behind(tmp_cwd, monkeypatch, capsys):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha", security=None)
+    workflows = alpha / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text("jobs:\n  ci:\n    steps:\n      - uses: actions/checkout@v7\n", encoding="utf-8")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert f"no caller for {consumers._SECURITY_REUSABLE}" in capsys.readouterr().out
+
+
+def test_the_caller_is_found_by_content_not_by_filename(tmp_cwd, monkeypatch, capsys):
+    """This plan's own recurring mistake is letting a filename stand in for what it usually holds —
+    the consumer set was miscounted three times that way. A caller in `audit.yml` counts."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha", security=None)
+    workflows = alpha / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "audit.yml").write_text(
+        f"jobs:\n  audit:\n    uses: TheodoreAD/repo-tasks/{consumers._SECURITY_REUSABLE}@{_SECURITY_HEAD}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(_ctx())
+    assert "alpha: up to date" in capsys.readouterr().out
+
+
+def test_a_caller_pinned_to_an_older_commit_names_both(tmp_cwd, monkeypatch, capsys):
+    """The silent-staleness case: the file exists, the pin is a proper SHA, and nothing anywhere
+    compares it against the workflow it names."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx(head="c" * 40))
+    assert "security caller pinned to bbbbbbb, the reusable workflow is at ccccccc" in capsys.readouterr().out
+
+
+def test_a_caller_pinned_to_a_tag_is_reported_as_not_a_sha(tmp_cwd, monkeypatch, capsys):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security="main")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "security caller pinned to 'main', not a 40-character SHA" in capsys.readouterr().out
+
+
+def test_no_ci_at_all_is_said_but_not_counted_as_behind(tmp_cwd, monkeypatch, capsys):
+    """`invoke-stubs` has no `.github/` and the plan records that the caller cannot be added there
+    until somebody decides whether that repo has CI. Calling it behind would assert the answer;
+    saying nothing would lose the one repo where a green local gate is the whole of the evidence."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security=None)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(_ctx())  # no Exit: reported, not counted
+    assert "alpha: no CI at all, so nothing calls the security workflow" in capsys.readouterr().out
+
+
+def test_no_ci_does_not_mask_real_drift_in_the_same_consumer(tmp_cwd, monkeypatch, capsys):
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security=None)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift(["ruff.toml"], [], [], None))
+    with pytest.raises(Exit) as excinfo:
+        consumers.diff.body(_ctx())
+    assert excinfo.value.code == 1
+    out = capsys.readouterr().out
+    assert "config files behind: ruff.toml" in out
+    assert "no CI at all" in out
+
+
+def test_the_currency_half_is_skipped_when_the_git_read_fails(tmp_cwd, monkeypatch, capsys):
+    """A shallow clone or a non-git checkout is a reason to skip the comparison, never to fail the
+    report — the presence half still answers, which is the more valuable of the two."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(MockContext(run={_GIT_LOG: Result(stdout="", exited=128)}))
+    assert "alpha: up to date" in capsys.readouterr().out
 
 
 def test_the_canary_workflow_checks_out_a_declared_consumer():
@@ -293,5 +421,5 @@ def test_measuring_restores_the_working_directory(tmp_cwd, monkeypatch):
     _consumer_tree(tmp_cwd, "alpha")
     before = Path.cwd()
     with pytest.raises(Exit):
-        consumers.diff.body(MockContext())
+        consumers.diff.body(_ctx())
     assert Path.cwd() == before
