@@ -1,6 +1,6 @@
 ---
 status: in-progress
-updated: 2026-09-13
+updated: 2026-09-26
 depends_on: [scaffoldapy, power-user-linux-setup]
 ---
 
@@ -1152,11 +1152,13 @@ thing that will notice when it stops being.** It is still the only commit ever t
 accident of that file never having changed rather than by anyone maintaining them. The first edit to
 it makes two consumers stale at once, silently, and the reporter is now what says so.]
 
-[UNVERIFIED: **`canary.yml`'s header comment becomes wrong when `scaffoldapy` is pinned**, and it is
-load-bearing prose rather than decoration — lines 7–9 justify the whole workflow by that consumer's
-CI installing `main` at run time. Pinning does not weaken the canary; it makes it the only thing
-testing the generated half, since that repo's own CI stops being a post-push check on `main`. But
-the comment has to be rewritten in the same change, and nothing will fail if it is not.]
+~~[UNVERIFIED: **`canary.yml`'s header comment becomes wrong when `scaffoldapy` is pinned**~~ —
+**rewritten 2026-09-26 ahead of the pin rather than with it**, since the pin lands in `scaffoldapy`
+and no change here would carry both. The header and `contributing/quality-gate.md` now describe both
+states: unpinned, the consumer's CI tests `main` on its own schedule; pinned, it tests a tag and the
+canary is the only test of unreleased code against a generated repo. The header also stopped citing
+this plan's item 4 and points at `quality-gate.md` instead, so retiring this file leaves it nothing
+to dangle on.
 
 ## Attachments
 
