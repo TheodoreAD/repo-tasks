@@ -123,8 +123,8 @@ with no secret means a login through the helper, not a leftover.**]
 
 ## What is left here
 
-Nothing to build, and as of 2026-09-26 nothing left to verify: both login paths put the credential
-in the OS keyring. Only the DEFERRED nicety at the end remains.
+Nothing left, as of 2026-09-26: both login paths put the credential in the OS keyring, and the
+same-host hint is built. The plan is ready to retire.
 
 **The docker half, verified 2026-09-26.** `docker login ghcr.io` against the machine's explicit
 `credsStore: secretservice`, then both places a credential could land were read:
@@ -176,11 +176,31 @@ through the docker fallback whatever helm's own store did. The same shape answer
 did this credential go" question for an OCI tool: a host nothing else has a credential for, a push
 that must authenticate, and a logout-then-push control.]
 
-[DEFERRED: whether `helm.login` should notice that its chart registry host matches a `[[docker]]`
-entry's host and say that one login covers both. Useful, and pure output — but it is guidance about
-a machine state this repo cannot see. The verification above proved helm's **own** store; the docker
-fallback read is still known from source only (`NewStoreWithFallbacks`), since proving it needs a
-chart to pull from a host that has only a docker credential.]
+~~[DEFERRED: whether `helm.login` should notice that its chart registry host matches a `[[docker]]`
+entry's host.~~ **Built 2026-09-26, the user's call, after measuring the shared path first.**
+`helm.login` says when an image registry shares the host, and still logs in; `helm.logout` says the
+same and names `inv docker.logout` as the next step. The host match reuses `docker.py`'s own
+`registry_host`, made public for it, so a bare `org/web` image counts as Docker Hub exactly as
+docker would read it.
+
+The measurement, against a local htpasswd `registry:2` with only a **docker** login:
+
+- `helm push` with helm's own config succeeded, and so did `helm push --registry-config` pointing at
+  a file-store config whose only `auths` entry was an unrelated host. The second is the fallback,
+  proved rather than read from `NewStoreWithFallbacks`: helm's primary store had nothing for the
+  host.
+- `helm registry logout localhost:5000` then **erased docker's credential from the keyring**, and
+  the fallback push failed with `basic credential not found`. `~/.docker/config.json` was left
+  holding a secretless `localhost:5000` entry that pointed at nothing, which `docker logout`
+  cleared.
+
+[PITFALL: **the logout docstrings pushed earlier the same day were wrong, and only this measurement
+caught it.** They said each tool's logout clears its own store and not the other's. With both
+configs naming `credsStore: secretservice`, which is this machine's state since helm's first login
+wrote it, the keyring holds **one** entry per host and both tools read and erase it. Each tool's
+logout therefore ends both tools' access, and helm's also strands a dangling entry in docker's file.
+Corrected in both docstrings. The hint is worded for either machine state: which one applies depends
+on config the task does not read, and `inv docker.logout` is the right next step in both.]
 
 ## Recommended direction
 
@@ -189,8 +209,7 @@ chart to pull from a host that has only a docker credential.]
    helper package, the explicit `credsStore`, the round-trip verification, and migrating the one
    plaintext credential that existed.
 2. ~~Run the verification above~~ — both halves done 2026-09-26, recorded above.
-3. **Only then consider the deferred nicety.** It is guidance about a machine state this repo cannot
-   see, and the verification is what says whether the guidance would be true.
+3. ~~Only then consider the deferred nicety~~ — built 2026-09-26, recorded above.
 
 The CI half is deliberately not here: no keyring and no credential file belongs on a runner, and how
 a secret reaches CI for a store without OIDC is its own design —
