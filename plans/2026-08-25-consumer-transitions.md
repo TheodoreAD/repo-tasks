@@ -1105,6 +1105,43 @@ read it. `scaffoldapy` and `agent-skills` are unpinned too, exactly as the decis
 The complement list is now four items rather than six, and the remaining mechanical one is the
 security-workflow caller.]
 
+### The security caller is reported too, and the template route is confirmed (2026-09-26)
+
+`6de6a50`, the other half of the same deferral and the last mechanical item on the complement list.
+Same shape as the pin: an addition to a consumer rather than a `configs.pull`, so nothing compares
+it, plus the staleness half that
+[`../contributing/quality-gate.md`](../contributing/quality-gate.md) records as silent — a pin is
+compared against the newest commit touching `security-reusable.yml` in this repo, read with a local
+`git log` so the reporter still takes no network.
+
+**Measured, and it changes two claims in this file:**
+
+| consumer                 | caller                                                     |
+| ------------------------ | ---------------------------------------------------------- |
+| `power-user-linux-setup` | **none** — 5 workflows, not one of them calls it           |
+| `scaffoldapy`            | present, pinned `d17c607`, current                         |
+| `agent-skills`           | **none** — 2 workflows                                     |
+| `ingesta`                | present, pinned `d17c607`, current — **from the template** |
+| `invoke-stubs`           | no `.github/` at all, so the question is upstream of this  |
+
+**The template route worked, which this plan predicted and never confirmed.** The complement entry
+says `scaffoldapy` "is excluded from this item and is the highest-leverage repo of the set — its
+template would hand the caller to every generated repo for free". `ingesta`'s caller was copied from
+that template at `d17c607`, so the leverage is actual rather than potential. What is left is the two
+repos the template cannot reach because it did not generate them.
+
+**And `power-user-linux-setup` is the finding.** It is the most-swept consumer in the family —
+twice, 2026-09-05 and 2026-09-10, both recorded above as closing every item then measurable — and it
+has no caller at all. Nothing was missed by either sweep: the item was on the complement list, which
+is precisely the list no command read. That is the same lesson as `agent-skills`' unmeasured drift
+and `ingesta`'s unread pin, arriving for the third time in the one repo that looked finished.
+
+[PITFALL: **`d17c607` being current is a fact about today, and the check that says so is the only
+thing that will notice when it stops being.** It is still the only commit ever to touch
+`security-reusable.yml` — verified locally, not recalled — so both existing callers are correct by
+accident of that file never having changed rather than by anyone maintaining them. The first edit to
+it makes two consumers stale at once, silently, and the reporter is now what says so.]
+
 [UNVERIFIED: **`canary.yml`'s header comment becomes wrong when `scaffoldapy` is pinned**, and it is
 load-bearing prose rather than decoration — lines 7–9 justify the whole workflow by that consumer's
 CI installing `main` at run time. Pinning does not weaken the canary; it makes it the only thing
