@@ -22,12 +22,12 @@ own machine and CI never calls it.
 re-auth cycle, and not even a printed pointer at `docker.login`/`helm.login`. Closed as abandoned
 2026-09-05 (the now-retired `plans/2026-08-23-registry-auth-retry.md`), after its original design
 was overtaken three times: CI turned out never to need it; the `login` tasks landed, dividing the
-problem with the OS secret store (`plans/2026-08-30-registry-credentials-in-the-os-store.md`); and a
-re-auth cycle would have this package drive an interactive login on the user's behalf, the opposite
-of the stance both `login` tasks take. The residual print was rejected on its own terms: it would
-key off string-matching another tool's human-readable, locale-sensitive output, helm's failure text
-had never been measured, and `denied: unauthorized` is not actually a bad last word. Revisit only if
-a real stale-credential failure turns out to confuse someone.]
+problem with the OS secret store ([below](#local-registry-credentials-live-in-the-os-keyring)); and
+a re-auth cycle would have this package drive an interactive login on the user's behalf, the
+opposite of the stance both `login` tasks take. The residual print was rejected on its own terms: it
+would key off string-matching another tool's human-readable, locale-sensitive output, helm's failure
+text had never been measured, and `denied: unauthorized` is not actually a bad last word. Revisit
+only if a real stale-credential failure turns out to confuse someone.]
 
 The image ref comes entirely from `repo-tasks.toml`'s `[[docker]]` entry; the workflow
 (`docker-release.yml`) only logs in and runs `inv docker.release --project <name>`.
@@ -52,6 +52,22 @@ either; the real-index job is skipped for any tag containing `rc`, so a candidat
 approval click away from pypi.org, where a version number can never be reused. `docker.release`
 gates itself the same way: an rc or dev build is pushed under its own tag and never as `latest`.
 
+## Local registry credentials live in the OS keyring
+
+`docker.login` and `helm.login` never touch a credential: each resolves the host from
+`repo-tasks.toml` and hands off to the tool's own login, which puts it in the OS secret store
+wherever the machine has a credential helper and its config names a `credsStore`. `docker.logout`
+and `helm.logout` remove the local copy and revoke nothing. Verified 2026-09-26 against a local
+htpasswd `registry:2`, with a push that authenticated from the keyring and failed after logout.
+
+**On a host both tools use, one login covers both and one logout ends both**, by two routes: helm
+reads docker's credentials as a fallback, and where both configs name the same `credsStore` the
+keyring holds a single entry per host that either tool reads and erases. The docstrings on those
+four tasks carry the detail, and `helm.login`/`helm.logout` say so at run time. The measurements,
+and the docker/oras source reading behind the machine setup, are in the retired
+`plans/2026-08-30-registry-credentials-in-the-os-store.md`
+(`plans.py archive --search registry-credentials`).
+
 ## How a credential reaches CI: OIDC first, an env var second, a file never
 
 Both sections above solve this the same way without saying so generally, and the general rule is
@@ -66,7 +82,7 @@ second copy of the same value on disk where a later step or a cached artifact ca
 exposure and buys nothing. Stated 2026-08-30.]
 
 This is the exact inverse of the local rule, where every tool reaches the OS secret store through
-its own native integration (`plans/2026-08-30-registry-credentials-in-the-os-store.md`). Local and
+its own native integration ([above](#local-registry-credentials-live-in-the-os-keyring)). Local and
 CI disagree on purpose.
 
 | target                         | OIDC available              | fallback when it is not                                  |
