@@ -162,6 +162,8 @@ def test_check_include_names_an_uncovered_tree_and_the_line_that_fixes_it(tmp_cw
     out = capsys.readouterr().out
     assert "template: 2 tracked .py file(s), never checked" in out
     assert '[pyright] extra-include = ["template*"]' in out
+    # And the opt-out, since a probe script under plans/ is the other common finding.
+    assert '[pyright] unchecked = ["template*"]' in out
     assert "inv configs.pull" in out
 
 

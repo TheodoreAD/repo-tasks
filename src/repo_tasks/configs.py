@@ -759,12 +759,17 @@ def check_include(c: Context):
         state = "declared in repo-tasks.toml but not pulled yet" if f"{segment}*" in declared else "never checked"
         print(f"[configs.check-include] {segment}: {count} tracked .py file(s), {state}")
     missing = [f"{segment}*" for segment in sorted(uncovered) if f"{segment}*" not in declared]
-    steps: list[str] = []
-    if missing:
-        entries_toml = ", ".join(json.dumps(entry) for entry in missing)
-        steps.append(f"add to repo-tasks.toml:  [pyright] extra-include = [{entries_toml}]")
-    steps.append("inv configs.pull")
-    next_steps(*steps)
+    if not missing:
+        next_steps("inv configs.pull")
+        raise Exit(code=1)
+    # Both keys, not just the one that checks the tree: the first consumer run found a `plans/`
+    # probe script in three repos out of five, where leaving it out is the right answer and a
+    # suggestion naming only `extra-include` would have turned the gate red on it.
+    entries_toml = ", ".join(json.dumps(entry) for entry in missing)
+    next_steps(
+        f"to check them: add [pyright] extra-include = [{entries_toml}] to repo-tasks.toml, then inv configs.pull",
+        f"or, for any left out on purpose: [pyright] unchecked = [{entries_toml}] (nothing to pull)",
+    )
     raise Exit(code=1)
 
 
