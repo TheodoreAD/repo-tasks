@@ -93,12 +93,24 @@ three days earlier whose drift nobody had ever measured.
 
 ## The sweep
 
-Once, from anywhere — the tool install is global, not per-repo, so this is not part of the
+**First, a release, whenever what the sweep is for is not tagged yet.** Check with
+`git log --oneline <latest tag>..main -- src/`: anything listed there reaches no consumer, because
+both the update below and the stamp at the end work from tags.
+
+Then once, from anywhere — the tool install is global, not per-repo, so this is not part of the
 per-consumer loop:
 
 ```shell
-inv repo-tasks.update       # move the global uv tool install forward to what you just pushed
+inv repo-tasks.update       # move the global uv tool install forward to the latest *tag*
 ```
+
+[PITFALL: **`update` installs the latest release, not what you just pushed.** Measured 2026-09-26:
+`v0.3.0` was the latest tag while seventeen source commits sat on `main` after it, including the fix
+for `ensure-deps` corrupting a `"pkg[extra]"` dev group and the self-reference skip for
+`invoke-stubs`. Every sweep then would have run the tool with both bugs, and its closing `stamp`
+would have pinned that consumer's CI to it. This file's own advice for both bugs was "`update`
+first", which was no advice at all until a tag carried the fixes. The comment on that line used to
+say "to what you just pushed", which is where the misreading came from.]
 
 Then in each consumer's own checkout:
 
@@ -161,8 +173,9 @@ gate regardless; that is what says the new tool works here. `ensure-deps` is add
 One consumer is also a `repo-tasks-quality` entry (`invoke-stubs`), and since 2026-09-13 both
 `configs.diff` and `ensure-deps` skip the entry naming the project they are running in, printing
 why. Nothing to do by hand there any more — but a consumer still running an older `repo-tasks` will
-be told to splice that package into its own dev group, so if the skip line is absent, the pin bump
-above has not landed yet and that one next step must be ignored.
+be told to splice that package into its own dev group. `v0.3.0` is such a version, since the skip
+landed after it. So if the skip line is absent, the tool is older than the skip, and that one next
+step must be ignored.
 
 In `scaffoldapy`, `inv quality.precommit` is only half the sweep: finish with `inv test.integration`
 (~80s), which renders every combination and runs the _generated_ repo's own gate. See the two-gates
@@ -198,8 +211,10 @@ between that and a commit. **Fixed 2026-09-26**: membership now comes from tomll
 
 Kept because the sweep runs whatever tool the consumer has, not this working tree. The tell is the
 two commands disagreeing in one run — `diff` naming two missing entries while `ensure-deps` prints
-"added" for all of them — and if you see it, the global tool predates the fix.
-`inv repo-tasks.update` first, which the sweep already does.]
+"added" for all of them — and if you see it, the global tool predates the fix. The fix is in the
+first release after `v0.3.0`; `inv repo-tasks.update` reaches it only once that tag exists. A file
+already corrupted by it now gets a sentence naming this cause from both commands, instead of a
+`TOMLDecodeError` traceback.]
 
 [PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
 _constraint_ is a hand edit.** It is additive by contract — never touches an entry already present —
