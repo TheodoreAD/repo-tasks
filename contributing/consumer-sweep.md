@@ -160,15 +160,18 @@ broken bump — the one explanation that sends you to re-resolve a dependency th
 cannot be split into separately-gated commits at all in such a repo, and that is a property of the
 repo rather than a mistake in the split.]
 
-[PITFALL: **`ensure-deps` corrupts a consumer whose `dev` group names an extra before its last
-entry.** Its array regex stops at the first `]`, which in `"pkg[extra]"` is inside the string, so it
-reads the group as declaring nothing, reports every manifest entry as added, and splices all of them
-into the middle of that string — leaving a `pyproject.toml` that no longer parses as TOML. Hit live
-in `ingesta` on 2026-09-13. `configs.diff` reads the same list with tomllib and is right, so the
-tell is the two commands disagreeing in one run: `diff` naming two missing entries and `ensure-deps`
-printing "added" for all fourteen. Of the five declared consumers only `ingesta` is exposed today
-(measured 2026-09-18), and its hand-repair left the exposure in place. Check before running the step
-there; `plans/2026-09-13-ensure-deps-splices-into-an-extras-bracket.md` owns the fix.]
+[PITFALL: **`ensure-deps` used to corrupt a consumer whose `dev` group names an extra, and an older
+`repo-tasks` still will.** Its array regex stopped at the first `]`, which in `"pkg[extra]"` is
+inside the string, so it read the group as declaring nothing, reported every manifest entry as
+added, and spliced all of them into the middle of that string — leaving a `pyproject.toml` that no
+longer parsed as TOML. Hit live in `ingesta` on 2026-09-13, where only `uv lock --check` stood
+between that and a commit. **Fixed 2026-09-26**: membership now comes from tomllib, the same reader
+`configs.diff` always used, and the write offsets from a scan that skips strings and comments.
+
+Kept because the sweep runs whatever tool the consumer has, not this working tree. The tell is the
+two commands disagreeing in one run — `diff` naming two missing entries while `ensure-deps` prints
+"added" for all of them — and if you see it, the global tool predates the fix.
+`inv repo-tasks.update` first, which the sweep already does.]
 
 [PITFALL: **`ensure-deps` will not update an entry the consumer already declares, so a manifest
 _constraint_ is a hand edit.** It is additive by contract — never touches an entry already present —
@@ -267,7 +270,11 @@ Nothing about whether to pin: that was settled 2026-09-26 as the `repo-tasks.sta
 the canary made a consumer's own unpinned CI stop being the family's only detector for a break
 pushed from here. `plans/2026-08-25-consumer-transitions.md` carries the reasoning and the cost.
 
-What is open is that **nothing reports which consumers are still unpinned.** `consumers.diff` reads
-config files and dev groups; the pin lives in `bootstrap-repo-tasks.sh`, and only
-`inv repo-tasks.status` reads it — inside the one repo a sweep does not need telling. Until the
-reporter grows it, a consumer swept without the stamp step looks identical to one swept with it.
+Nor about which consumers are unpinned: `inv consumers.diff` reports that too since 2026-09-26, as
+`bootstrap unpinned` or as a pin behind the version the run measured with. Its first run named
+`scaffoldapy`, `agent-skills` and `ingesta` — the last of which had been swept hours earlier and
+reported up to date, because until then nothing looked at the pin.
+
+What is open is the rest of the complement list in `plans/2026-08-25-consumer-transitions.md`: the
+security-workflow caller is greppable from outside a consumer and still is not reported, and the
+four items below it are readings rather than checks.
