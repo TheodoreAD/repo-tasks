@@ -171,3 +171,21 @@ four minutes, and the twin again ended with only `main` and `develop` and no ope
 Nothing this plan set out to verify is left open. Rebase merge was not driven, and nothing here
 depends on it. The gitflow bug the run surfaced is its own plan,
 `plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md`.
+
+## Migrated to
+
+- `contributing/release-flow.md`, "What has and hasn't been exercised for real" and its new "Why the
+  twin is shaped this way". It takes all five `DECISION`s (permanent, public, ruleset without
+  bypass, derived state with fresh clones, no tag rule), the annotated/lightweight tag `PITFALL`,
+  and the findings on squash-sync, name reuse and rebase.
+- `contributing/release-flow.md`, "Version-line merge conflict during a hotfix redirect": the
+  PR-mode recovery sequence.
+- `contributing/test-tiers.md`: the twin as a row in the tier table.
+- `tests/integration/test_gitflow_twin_integration.py`: its module docstring and helpers carry the
+  env var, the fresh-clone reason and the peeling.
+- `plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md`: the `_start`-never-fetches
+  `PITFALL`, which is live work rather than rationale.
+
+Deliberately not migrated: the five struck-through `NEEDS CLARIFICATION`s, since their answers are
+the decisions above; the setup-sequence checklist and its evidence (seed SHA, ruleset id, rejection
+message), which is a verification log also recorded in this plan's commits; and the run tallies.
