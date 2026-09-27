@@ -86,10 +86,16 @@ _TREE_LINE_RE = re.compile(
     r"[├└]── (?P<name>\S+) v(?P<version>\S+)(?: \([^)]*\))*?(?: \(latest: v(?P<latest>[^)]+)\))?$"
 )
 
-_CURRENCY_TREE_CMD = "uv tree --outdated --depth 1 --locked --only-group dev --quiet"
+# `--color never` on both commands this module parses. uv honours `FORCE_COLOR` even into a pipe, and
+# wraps the `(latest: …)` clause in escapes the line regex cannot match, so exactly the behind
+# entries dropped out and were reported as undeclared. The task still exited 0 and read as a clean
+# bill of health. Found 2026-09-28 in a Claude Code session, whose Bash tool exported `FORCE_COLOR=3`.
+# Last rather than after `uv`, so each command still starts with the words the requirements test
+# reads it by (`uv lock` means the network).
+_CURRENCY_TREE_CMD = "uv tree --outdated --depth 1 --locked --only-group dev --quiet --color never"
 
 # What `inv deps.lock --package <name>` would actually do, without writing the lock.
-_CURRENCY_CONFIRM_CMD = "uv lock --dry-run --upgrade-package {name}"
+_CURRENCY_CONFIRM_CMD = "uv lock --dry-run --upgrade-package {name} --color never"
 
 
 def _git_sources() -> dict[str, tuple[str, str]]:

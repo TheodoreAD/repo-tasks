@@ -34,7 +34,9 @@ _INSTALL_CMD = "uv tool install --force --with-executables-from invoke"
 # Reading the global install's version, which `importlib.metadata` structurally cannot do: it can
 # only answer for the interpreter running it. No new dependency — `update` already shells out to
 # `uv tool install`, and this module exists to manage a uv tool.
-_TOOL_LIST_CMD = "uv tool list"
+# `--color never` because the output is parsed: uv honours `FORCE_COLOR` even into a pipe, and a bold
+# escape in front of each tool name fails the alphanumeric test below, so every tool reads as absent.
+_TOOL_LIST_CMD = "uv tool list --color never"
 
 # Must stay shfmt-clean under the shipped .editorconfig (`space_redirects = true`: `> /dev/null`,
 # never `>/dev/null`) — otherwise `configure` writes it and `quality.fix` rewrites it, forever.

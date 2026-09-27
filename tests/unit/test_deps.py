@@ -149,7 +149,7 @@ def _currency_repo(
         run={
             deps._CURRENCY_TREE_CMD: Result(stdout=_TREE, exited=0),
             f"git ls-remote {_STUBS_URL} HEAD": head,
-            "uv lock --dry-run --upgrade-package ruff": ruff_upgrade,
+            "uv lock --dry-run --upgrade-package ruff --color never": ruff_upgrade,
         }
     )
 
@@ -213,6 +213,21 @@ def test_check_currency_does_not_invent_a_verdict_when_the_dry_run_fails(tmp_cwd
     out = capsys.readouterr().out
     assert "ruff 0.16.2  latest 0.16.9 — could not confirm" in out
     assert "0 of 4 manifest entries behind" in out
+
+
+def test_check_currency_asks_uv_for_uncoloured_output(tmp_cwd, monkeypatch):
+    """uv colours into a pipe under `FORCE_COLOR`, which wraps the `(latest: …)` clause in escapes
+    the line regex cannot match. Every behind entry then dropped out as "not in this project's dev
+    group", and the task still exited 0. Both commands whose output is parsed must ask for none."""
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD)
+    deps.check_currency.body(c)
+    uv_calls = [
+        call.args[0]
+        for call in c.run.call_args_list  # pyright: ignore[reportAttributeAccessIssue]
+        if call.args[0].startswith("uv ")
+    ]
+    assert uv_calls
+    assert all(command.endswith(" --color never") for command in uv_calls)
 
 
 def test_check_currency_noops_without_a_lock(tmp_cwd, capsys):

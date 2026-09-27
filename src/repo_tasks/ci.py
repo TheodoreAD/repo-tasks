@@ -74,6 +74,13 @@ def _require_gh() -> None:
     raise Exit(code=1)
 
 
+# For every `gh` call whose raw JSON is parsed. gh colours JSON into a pipe when `CLICOLOR_FORCE` is
+# set, and `json.loads` cannot read it. `NO_COLOR` does not override that, and neither does piping
+# through `--jq .`; an explicit `CLICOLOR_FORCE=0` does. Measured against gh 2.101.0, 2026-09-28.
+# `--jq` calls that return a bare scalar come back plain either way and need nothing.
+_PLAIN_GH = {"CLICOLOR_FORCE": "0"}
+
+
 def _runs(stdout: str) -> list[Run]:
     """`gh run list --json`'s payload, or an empty list when it produced nothing parseable — a repo
     with no runs yet answers `[]`, and a `gh` that failed answers with nothing at all."""
@@ -97,7 +104,9 @@ def _annotations(c: Context, job_id: int) -> list[Annotation]:
     """One job's annotations, or nothing if the call failed. Never raises: this is the reporting
     half of a task whose real job is the run's conclusion, and a token without the scope to read
     check runs must not turn a working status report into an error."""
-    result = c.run(f"gh api repos/{{owner}}/{{repo}}/check-runs/{job_id}/annotations", hide=True, warn=True)
+    result = c.run(
+        f"gh api repos/{{owner}}/{{repo}}/check-runs/{job_id}/annotations", hide=True, warn=True, env=_PLAIN_GH
+    )
     text = result.stdout.strip() if result.ok else ""
     if not text:
         return []
@@ -157,7 +166,8 @@ def status(c: Context, branch: str | None = None, limit: int = 10):
     on an annotation."""
     _require_gh()
     branch = branch or trunk_branch()
-    result = c.run(f"gh run list --branch {branch} --limit {limit} --json {_FIELDS}", echo=True, warn=True, hide=True)
+    command = f"gh run list --branch {branch} --limit {limit} --json {_FIELDS}"
+    result = c.run(command, echo=True, warn=True, hide=True, env=_PLAIN_GH)
     if not result.ok:
         raise Exit(f"[ci.status] gh run list failed: {result.stderr.strip()}", code=result.exited)
 

@@ -16,8 +16,12 @@ def _ls_remote(*refs: str) -> dict[str, Result]:
 
 def _tool_list(*lines: str) -> dict[str, Result]:
     """`uv tool list` output: one `<name> v<version>` line per tool, its executables under it as
-    `- <name>`."""
-    return {selfinstall._TOOL_LIST_CMD: Result(stdout="".join(f"{line}\n" for line in lines), exited=0)}
+    `- <name>`.
+
+    Keyed by the literal command rather than the module's constant, so every test using it pins
+    `--color never`. uv colours into a pipe under `FORCE_COLOR`, and a bold escape in front of each
+    tool name fails the parse's alphanumeric test, so every tool read as absent."""
+    return {"uv tool list --color never": Result(stdout="".join(f"{line}\n" for line in lines), exited=0)}
 
 
 _REPO_TASKS_ALONE = ("repo-tasks v1.4.2", "- inv", "- invoke", "- repo-tasks")

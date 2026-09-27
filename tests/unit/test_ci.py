@@ -45,6 +45,8 @@ def test_status_builds_the_gh_command_with_branch_and_limit():
         echo=True,
         warn=True,
         hide=True,
+        # gh colours JSON into a pipe under CLICOLOR_FORCE, which json.loads cannot read.
+        env={"CLICOLOR_FORCE": "0"},
     )
 
 
@@ -125,6 +127,20 @@ def test_status_prints_a_warning_annotation_on_a_green_run(capsys):
     assert "warning: Node.js 20 is deprecated." in out
     # Re-wrapped onto one line, so a multi-line upstream message stays greppable.
     assert "deprecated. The following actions" in out
+
+
+def test_status_asks_gh_for_uncoloured_json_wherever_it_parses_json():
+    """gh colours JSON into a pipe under `CLICOLOR_FORCE`, and `json.loads` cannot read the result.
+    The two calls whose raw JSON is parsed must switch that off; the `--jq` call returns bare ids and
+    does not need to."""
+    c = _annotated(jobs="11\n", annotations=[_DEPRECATION])
+    ci.status.body(c)
+    envs = {
+        call.args[0]: call.kwargs.get("env")
+        for call in c.run.call_args_list  # pyright: ignore[reportAttributeAccessIssue]
+    }
+    assert envs[f"gh run list --branch main --limit 10 --json {ci._FIELDS}"] == {"CLICOLOR_FORCE": "0"}
+    assert envs["gh api repos/{owner}/{repo}/check-runs/11/annotations"] == {"CLICOLOR_FORCE": "0"}
 
 
 def test_status_says_a_matrix_deprecation_once(capsys):
