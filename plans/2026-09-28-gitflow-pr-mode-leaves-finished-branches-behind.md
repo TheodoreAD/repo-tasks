@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-28
 ---
 
@@ -26,8 +26,10 @@ listing **local** `refs/heads/release/*`:
 Any clone that has finalized one release in PR mode is in the first state. The twin test avoids it
 only because each test takes a fresh clone.
 
-[UNVERIFIED: the failure as described. Read from the code, not reproduced. A twin test finalizing a
-release and then a hotfix in one clone would show it.]
+Reproduced 2026-09-28 against the twin, with the old `gitflow.py` and the new same-clone test.
+Release 0.8.0 was finished and finalized, and then hotfix 0.8.1's sync PR (#30) opened with base
+`release/0.8.0`. The twin was recovered by retargeting #30 to `develop` and merging it, and
+`develop` then contained `v0.8.1`.
 
 A second, smaller finding from the same run: `_start` branches off the **local** base (`develop` for
 a release, the trunk for a hotfix) and never fetches, so a clone that is behind cuts from an old
@@ -35,14 +37,47 @@ commit silently.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: should `_finalize` delete the local `release/*`/`hotfix/*` branch once the tag
-is pushed, matching local mode? Or should `_open_release_branch` ask the remote
+~~[NEEDS CLARIFICATION:~~ should `_finalize` delete the local `release/*`/`hotfix/*` branch once the
+tag is pushed, matching local mode? Or should `_open_release_branch` ask the remote
 (`git ls-remote origin 'refs/heads/release/*'`) rather than local refs? The first fixes the cause
 and the second is robust to clones that already hold stale branches. Both may be wanted.]
 
-[NEEDS CLARIFICATION: should `_start` fetch and fast-forward its base before branching, or refuse
-when the local base is behind `origin/<base>`? nvie's git-flow has `-F`/`--fetch` for this, off by
-default.]
+[DECISION: **both, plus deleting on origin**, chosen by the user 2026-09-28. Asking the remote alone
+only moves the problem, since GitHub keeps a PR's head branch by default and origin collects
+finished releases too. So `_finalize` deletes the branch locally (`-D`) and on origin when it is
+still there, and `_open_release_branch(remote=True)` asks origin in PR mode. Origin is then
+accurate, covers other people's clones, and is the only place a PR can target. Local mode keeps
+local refs: it deletes its own branches and may have no remote. `support_hotfix_finalize` got the
+same cleanup. Deliberately not done: deleting the local `sync/<tag>` branch. Finalize leaves you
+standing on it, and it cannot affect routing.]
+
+~~[NEEDS CLARIFICATION:~~ should `_start` fetch and fast-forward its base before branching, or
+refuse when the local base is behind `origin/<base>`? nvie's git-flow has `-F`/`--fetch` for this,
+off by default.]
+
+[DECISION: **refuse when behind**, chosen by the user 2026-09-28. Auto fast-forward moves a branch
+the task does not own, and an opt-in flag leaves the unsafe path as the default. The check degrades
+rather than blocks: with no `origin` it is skipped, and a failed fetch is reported and skipped, so
+an offline start still works. That degradation is this session's call, since the question did not
+cover offline. The three start tasks now declare `NETWORK`.]
+
+Landed in `a5fb2d4` (fix and unit tests, six of them failing against the previous code), `163fcc1`
+(twin tests: same-clone reproduction, stale-base refusal, finalize-deletes assertions, tag-exists
+rewritten) and `4fb5152` (release-flow). The twin run had nine tests green before the last two were
+rewritten, and those two green after.
+
+## Migrated to
+
+- `src/repo_tasks/gitflow.py`: the docstrings of `_open_release_branch`, `_delete_finished_branch`
+  and `_require_base_current` carry the failure, the choice and its reasons.
+- `contributing/release-flow.md`, "Known bad states": the misrouted-sync-PR entry, with the recovery
+  for consumers on older versions, and the stale-base refusal entry. The twin section's coverage
+  list and fresh-clone rationale are updated to match.
+- `tests/unit/test_gitflow.py` and `tests/integration/test_gitflow_twin_integration.py`: the
+  regressions.
+
+Deliberately not migrated: the reasoning about the gap between the two questions' options, which is
+settled by the decisions above.
 
 ## Recommended direction
 
