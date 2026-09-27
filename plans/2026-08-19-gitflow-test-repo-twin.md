@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 updated: 2026-09-28
 ---
 
@@ -19,15 +19,18 @@ release-candidate cycle ran with it: `release_start` to rc1, `release_candidate`
 rc2, `release_finish` dropping the rc, and `release_finalize` tagging the final on main's tip. The
 `gh pr view` merge guard refused a finalize before the merge and allowed it after.
 
-[UNVERIFIED: the hotfix-redirect variant of the second PR, where `hotfix_finalize` targets an open
-`release/*` branch instead of `develop`. The twin test runs each flow in a fresh clone with no local
-release branch, so the redirect never fires. Driving it means a release left open across a hotfix,
-which is also where the stale-local-branch bug filed in
-`plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md` would show up.]
+A second round the same day closed the rest, and all nine twin tests passed together.
 
-[UNVERIFIED: the `git tag --list` guard (`_require_tag_absent`) has not fired against the twin.
-Every run cut a fresh version, and the one leftover rc tag, from a test bug, was deleted by hand
-rather than left to trip it. It is unit-tested against command strings.]
+- **The hotfix redirect.** With a release open in the same clone, `hotfix_finalize` opened its sync
+  PR into `release/<v>`. The version-line conflict `contributing/release-flow.md` calls expected
+  happened. Resolved on the sync branch in favour of the release's version, the release then
+  finished and carried the hotfix's tag into `develop`. The PR-mode recovery is now written into
+  release-flow.md's "Known bad states".
+- **The tag-absent guard.** It fired on a tag fetched from the remote when a local trunk was wound
+  back to an earlier release.
+- **Head-branch name reuse.** One feature name was used for a merged PR and then a new open one, and
+  `gh pr view <branch>` resolved to the **open** one. That is the safe answer for
+  `_require_merged_pr`: an older merged PR cannot make finalize proceed past an unmerged newer one.
 
 [DECISION: a **permanent** test-repo twin, not a throwaway repo created and deleted per run.
 Repeated create/delete cycles risk GitHub's own soft-deletion and rename-cooldown quirks becoming
@@ -119,10 +122,9 @@ The test merges its own PRs with `gh pr merge` between `*_finish` and `*_finaliz
 merge strategy held for both the squash and the merge-commit release run, 2026-09-28. Rebase merge
 was not driven.
 
-[UNVERIFIED: `gh pr view <branch>` resolves a PR by head-branch name, and a permanent twin reuses
-names across runs: every feature run, and every `sync/<tag>`, if a tag is ever deleted and recut.
-Which PR it picks when an older merged or closed PR shares the name is unknown, so unique feature
-names are the working assumption until a run shows the behaviour.]
+`gh pr view <branch>` resolves a PR by head-branch name, and a permanent twin reuses names across
+runs. Settled by the second round, above: it prefers the open PR over an older merged one of the
+same name.
 
 A squash-merged release's `sync/<tag>` PR did **not** conflict with develop, 2026-09-28. Develop's
 version line is untouched between syncs, because the bump commits live only on the release branch,
@@ -163,5 +165,9 @@ already outside the default run. It ran 6 of 6 green, feature and the push-rejec
 then release ×2 and hotfix in about two minutes. The twin ended with only `main` and `develop`,
 seven merged PRs, tags `v0.2.0` and `v0.3.0` with their `rc2` tags, and `v0.3.1`.
 
-What is left is three `UNVERIFIED` tags above: the hotfix redirect, the tag-absent guard, and
-head-branch name reuse.
+The second round added the redirect, tag-guard and name-reuse tests. It ran 9 of 9 green in about
+four minutes, and the twin again ended with only `main` and `develop` and no open PRs.
+
+Nothing this plan set out to verify is left open. Rebase merge was not driven, and nothing here
+depends on it. The gitflow bug the run surfaced is its own plan,
+`plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md`.
