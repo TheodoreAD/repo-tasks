@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-26
+status: in-progress
+updated: 2026-09-28
 ---
 
 ## Context
@@ -31,8 +31,6 @@ branches, an unmerged PR, a weird conflict — is a feature rather than somethin
 inspecting and fixing a real messy repo is itself how `gitflow.py`'s recovery paths and guidance
 messages get improved.]
 
-**Not to be started now** — this is purely a placeholder for when that verification work resumes.
-
 ## Open questions
 
 [DECISION: **all five questions below settled by the user 2026-09-26**, each as the recommended
@@ -51,8 +49,8 @@ direction had it:
   `contributing/release-flow.md` names the repo.
 - **An automated test, not a manual dry run**, marked out of the fast default suite.
 
-Creating the repo is still not started, and is a separate step the user approves, since it is a new
-public repo under their account. The questions this answers follow.]
+Creating the repo was approved by the user 2026-09-28, after the three amendments under "Recommended
+direction" were written in. The questions this answers follow.]
 
 ~~[NEEDS CLARIFICATION:~~ repo name and visibility — under `TheodoreAD`, public or private? Naming
 that signals "this is a permanent scratch target, not a real project" (something like
@@ -86,3 +84,52 @@ from local source when testing a not-yet-released change). Document its name/URL
 once created. Real branch protection on `main` and `develop` is probably worth the setup cost — it's
 the one thing a local bare-repo stand-in structurally can't test, and it's exactly the scenario PR
 mode exists for.
+
+Three amendments, written in 2026-09-28 before the repo was created, each closing a gap between the
+settled answers above and what they have to achieve:
+
+[DECISION: **a ruleset with an empty bypass list, not classic branch protection.** The test runs as
+the repo's owner, since `gh auth` is TheodoreAD, and classic protection lets an admin through by
+default. That is exactly what this user's other personal repos already do: the push prints
+"bypassing branch protection" and lands. A twin protected that way would let a stray direct push
+succeed silently, which is the one failure the protection is there to catch. So `main` and `develop`
+carry a ruleset requiring a pull request with **0 required approvals**, since a sole account cannot
+approve its own PR, plus no deletion and no force-push, with nobody on the bypass list. The first
+thing verified after setup is that a direct push to `main` is **rejected**.]
+
+[DECISION: **the automated test derives its starting state from the twin; it does not assume a clean
+one.** "Leftover mess is a feature" and "an automated test" pull opposite ways. A permanent repo
+accumulates tags, `release/*` branches and open PRs, and `_require_tag_absent` or
+`_open_release_branch` would then fail the next run for reasons unrelated to the code under test.
+The test reads the current version off `develop`, works in a fresh clone under `tmp_path`, names
+feature branches uniquely per run, and merges, finalizes and cleans up what it opened. Manual
+messing around stays legitimate and separate, and a run that finds leftovers it did not create
+reports them rather than deleting them.]
+
+[DECISION: **no tag ruleset.** `_finalize` pushes the tag directly (`git push origin <tag>`), with
+no PR, so a tag rule would reject the step that is working as designed. Branch rules only.]
+
+[UNVERIFIED: the test has to merge its own PRs with `gh pr merge` between `*_finish` and
+`*_finalize`, because `_require_merged_pr` refuses until `gh pr view` reports MERGED. That guard's
+docstring claims the PR state "survives every merge strategy", and the claim is untested. Drive both
+a squash merge and a merge commit.]
+
+[UNVERIFIED: `gh pr view <branch>` resolves a PR by head-branch name, and a permanent twin reuses
+names across runs: every feature run, and every `sync/<tag>`, if a tag is ever deleted and recut.
+Which PR it picks when an older merged or closed PR shares the name is unknown, so unique feature
+names are the working assumption until a run shows the behaviour.]
+
+[UNVERIFIED: after a **squash** merge of a release PR, main's tip is a commit outside develop's
+ancestry, so the `sync/<tag>` PR from main into develop may conflict on the version field. Local
+mode only ever used `--no-ff` merges, so this has never come up.]
+
+### Setup sequence
+
+1. `gh repo create TheodoreAD/repo-tasks-gitflow-twin --public`, with a description saying it is a
+   test target for repo-tasks' gitflow tasks and not a project. Issues and wiki disabled.
+2. Seed: `pyproject.toml` (a `[project]` with name and version `0.1.0`), `tasks.py` doing
+   `from repo_tasks import ns`, and a README repeating the description. Push `main`, then branch and
+   push `develop`.
+3. Apply the ruleset to `main` and `develop`.
+4. Verify a direct push to `main` is rejected, and record the result here.
+5. Name the repo in `contributing/release-flow.md`'s verification section.
