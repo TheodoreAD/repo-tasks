@@ -13,16 +13,21 @@ step (push, fetch, ff-only merge, tag, sync-branch push) but stopped right at th
 (`none of the git remotes configured for this repository point to a known
 GitHub host`).
 
-[UNVERIFIED: `gh pr create` itself has never run against a real GitHub-linked repo — in either the
-`*_finish` or the `*_finalize` path, nor the hotfix-redirect variant of the second PR. Everything
-around it is confirmed; this one call is the gap, and closing it is this plan's entire purpose.]
+`gh pr create` has now run against the twin in the `*_finish` and `*_finalize` paths of feature,
+release and hotfix, 2026-09-28, through `tests/integration/test_gitflow_twin_integration.py`. The
+release-candidate cycle ran with it: `release_start` to rc1, `release_candidate` tagging and pushing
+rc2, `release_finish` dropping the rc, and `release_finalize` tagging the final on main's tip. The
+`gh pr view` merge guard refused a finalize before the merge and allowed it after.
 
-[UNVERIFIED: the release-candidate cycle (`release_start` → rc1, `release-candidate` tagging and
-pushing `vX.Y.0rcN` on the branch, `release_finish` dropping the rc, `*_finalize` tagging the final)
-against a real remote — landed 2026-08-25 from the now-retired
-`plans/2026-08-25-prerelease-versions.md`, unit-tested against exact command strings only, like the
-rest of `gitflow.py`. The twin is where it gets driven for real; the `gh pr view` merge guard and
-the `git tag --list` guard belong to the same run.]
+[UNVERIFIED: the hotfix-redirect variant of the second PR, where `hotfix_finalize` targets an open
+`release/*` branch instead of `develop`. The twin test runs each flow in a fresh clone with no local
+release branch, so the redirect never fires. Driving it means a release left open across a hotfix,
+which is also where the stale-local-branch bug filed in
+`plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md` would show up.]
+
+[UNVERIFIED: the `git tag --list` guard (`_require_tag_absent`) has not fired against the twin.
+Every run cut a fresh version, and the one leftover rc tag, from a test bug, was deleted by hand
+rather than left to trip it. It is unit-tested against command strings.]
 
 [DECISION: a **permanent** test-repo twin, not a throwaway repo created and deleted per run.
 Repeated create/delete cycles risk GitHub's own soft-deletion and rename-cooldown quirks becoming
@@ -109,19 +114,31 @@ reports them rather than deleting them.]
 [DECISION: **no tag ruleset.** `_finalize` pushes the tag directly (`git push origin <tag>`), with
 no PR, so a tag rule would reject the step that is working as designed. Branch rules only.]
 
-[UNVERIFIED: the test has to merge its own PRs with `gh pr merge` between `*_finish` and
-`*_finalize`, because `_require_merged_pr` refuses until `gh pr view` reports MERGED. That guard's
-docstring claims the PR state "survives every merge strategy", and the claim is untested. Drive both
-a squash merge and a merge commit.]
+The test merges its own PRs with `gh pr merge` between `*_finish` and `*_finalize`, since
+`_require_merged_pr` refuses until `gh pr view` reports MERGED. The guard's claim to survive every
+merge strategy held for both the squash and the merge-commit release run, 2026-09-28. Rebase merge
+was not driven.
 
 [UNVERIFIED: `gh pr view <branch>` resolves a PR by head-branch name, and a permanent twin reuses
 names across runs: every feature run, and every `sync/<tag>`, if a tag is ever deleted and recut.
 Which PR it picks when an older merged or closed PR shares the name is unknown, so unique feature
 names are the working assumption until a run shows the behaviour.]
 
-[UNVERIFIED: after a **squash** merge of a release PR, main's tip is a commit outside develop's
-ancestry, so the `sync/<tag>` PR from main into develop may conflict on the version field. Local
-mode only ever used `--no-ff` merges, so this has never come up.]
+A squash-merged release's `sync/<tag>` PR did **not** conflict with develop, 2026-09-28. Develop's
+version line is untouched between syncs, because the bump commits live only on the release branch,
+so the squash commit's version change applies cleanly. A develop that edited that line itself would
+conflict, and should.
+
+[PITFALL: bump-my-version's rc tags are **annotated** while `_finalize`'s `git tag` is
+**lightweight**, so `git ls-remote origin refs/tags/<tag>` returns a tag object's SHA for one and a
+commit's for the other. The twin test's first run failed on exactly that, comparing an rc tag to
+`HEAD`. It peels (`<ref>^{}`) now. The mix is harmless to consumers, but anything comparing tags to
+commits has to peel.]
+
+[PITFALL: `_start` branches off the **local** base and never fetches it, so a clone whose `develop`
+is behind cuts the release from an old commit, with nothing saying so. The twin test pulls first,
+the way a developer would. Whether `_start` should fetch is a question for the new plan named above,
+not for this one.]
 
 ### Setup sequence
 
@@ -140,6 +157,11 @@ The API reports `bypass_actors: []` and `current_user_can_bypass: never`. As the
 push of an empty commit to `main` and to `develop` was each refused with
 `GH013: Repository rule violations found … Changes must be made through a pull request.`
 
-What is left is the opt-in test tier itself: the env var, the marker, and the run driving feature,
-release with rc, and hotfix through `*_finish` → `gh pr merge` → `*_finalize`. It also has to settle
-the three `UNVERIFIED` tags above.
+The test tier followed the same day: `tests/integration/test_gitflow_twin_integration.py`, skipped
+unless `REPO_TASKS_GITFLOW_TWIN` is set, with no new marker, since the integration directory is
+already outside the default run. It ran 6 of 6 green, feature and the push-rejection checks first,
+then release ×2 and hotfix in about two minutes. The twin ended with only `main` and `develop`,
+seven merged PRs, tags `v0.2.0` and `v0.3.0` with their `rc2` tags, and `v0.3.1`.
+
+What is left is three `UNVERIFIED` tags above: the hotfix redirect, the tag-absent guard, and
+head-branch name reuse.
