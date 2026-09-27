@@ -52,5 +52,8 @@ clones also stop misrouting. For `_start`, refuse when the local base is behind 
 print the pull to run. That follows the module's print-what-to-run-next convention, rather than
 fetching behind the user's back.
 
-Extend the twin test with a hotfix finalized while a release is open in the same clone. That covers
-the redirect the twin plan still lists as unverified.
+Reproduce it first with a twin test that finalizes a release and then a hotfix in **one** clone. The
+existing twin tests take a fresh clone each, which is exactly why none of them hit it. The redirect
+into a genuinely open release branch is already covered by
+`test_hotfix_during_an_open_release_syncs_into_the_release_branch`, and the fix must keep that test
+green.
