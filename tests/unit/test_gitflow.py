@@ -14,7 +14,14 @@ from invoke import MockContext, Result
 from repo_tasks import gitflow
 
 FOR_EACH_REF = "git for-each-ref --format='%(refname:short)' refs/heads/release/*"
+LS_REMOTE_RELEASES = "git ls-remote --heads origin 'refs/heads/release/*'"
 PR_URL = "https://github.com/example/repo/pull/42"
+SHA = "0" * 40
+
+
+def _heads(*branches):
+    """`git ls-remote --heads` output naming each branch."""
+    return "".join(f"{SHA}\trefs/heads/{branch}\n" for branch in branches)
 
 
 def _rev_parse(branch):
@@ -107,33 +114,84 @@ def test_feature_finish_local_merges_directly(c):
 # ---------------------------------------------------------------------------
 
 
+# The blanket `c` fixture answers `git remote` with nothing, so these start tests run as a clone with
+# no origin: the stale-base check has nothing to compare and the sequence goes straight on. The
+# check itself is covered with an origin further down.
+
+
 def test_release_start_branches_off_develop_before_bumping_to_rc1(c):
     gitflow.release_start.body(c, bump="minor")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout develop"
-    assert call_strings[1] == "git tag --list v0.2.0"  # the final version's tag, which is the branch's name
-    assert call_strings[2] == "git checkout -b release/0.2.0"
+    assert call_strings[1] == "git remote"
+    assert call_strings[2] == "git tag --list v0.2.0"  # the final version's tag, which is the branch's name
+    assert call_strings[3] == "git checkout -b release/0.2.0"
     # rc1 is bump-my-version's own arithmetic for `minor` under the rc scheme — no --new-version.
-    assert call_strings[3].startswith("bump-my-version bump minor --config-file ")
-    assert "--new-version" not in call_strings[3]
+    assert call_strings[4].startswith("bump-my-version bump minor --config-file ")
+    assert "--new-version" not in call_strings[4]
 
 
 def test_hotfix_start_branches_off_main_and_bumps_straight_to_final(c):
     gitflow.hotfix_start.body(c, bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout main"
-    assert call_strings[1] == "git tag --list v0.1.1"
-    assert call_strings[2] == "git checkout -b hotfix/0.1.1"
-    assert call_strings[3].startswith("bump-my-version bump patch --config-file ")
-    assert call_strings[3].endswith(" --new-version 0.1.1")
+    assert call_strings[2] == "git tag --list v0.1.1"
+    assert call_strings[3] == "git checkout -b hotfix/0.1.1"
+    assert call_strings[4].startswith("bump-my-version bump patch --config-file ")
+    assert call_strings[4].endswith(" --new-version 0.1.1")
 
 
 def test_hotfix_start_rc_opts_into_the_candidate_cycle(c, capsys):
     gitflow.hotfix_start.body(c, bump="patch", rc=True)
     call_strings = [call[0][0] for call in c.run.call_args_list]
-    assert call_strings[2] == "git checkout -b hotfix/0.1.1"  # still named after the final
-    assert "--new-version" not in call_strings[3]
+    assert call_strings[3] == "git checkout -b hotfix/0.1.1"  # still named after the final
+    assert "--new-version" not in call_strings[4]
     assert "release-candidate" in capsys.readouterr().out
+
+
+def _start_context(behind: str, fetch_ok: bool = True) -> MockContext:
+    """A clone with an origin, `behind` commits behind it on develop, everything after the check
+    answered so a start that passes it can run to the end."""
+    return MockContext(
+        run={
+            **_ok("git checkout develop", "git checkout -b release/0.2.0"),
+            "git remote": Result(stdout="origin\n", exited=0),
+            "git fetch origin develop": Result(exited=0 if fetch_ok else 128, stderr="" if fetch_ok else "fatal"),
+            "git rev-list --count develop..origin/develop": Result(stdout=f"{behind}\n", exited=0),
+            **_tag_list("v0.2.0"),
+            re.compile(r"bump-my-version bump minor .*"): Result(exited=0),
+        }
+    )
+
+
+def test_start_refuses_a_base_that_is_behind_origin():
+    """Found by the gitflow twin test: a start branches off the local base, so a clone that had not
+    pulled cut its release from an old commit, silently. Refused before any branch exists."""
+    c = _start_context(behind="3")
+    with pytest.raises(ValueError, match=re.escape("develop is 3 commit(s) behind origin/develop")):
+        gitflow.release_start.body(c, bump="minor")
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert "git fetch origin develop" in call_strings
+    assert not any(s.startswith("git checkout -b") for s in call_strings)
+
+
+def test_start_goes_on_from_a_base_that_is_current():
+    c = _start_context(behind="0")
+    gitflow.release_start.body(c, bump="minor")
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert call_strings.index("git rev-list --count develop..origin/develop") < call_strings.index(
+        "git checkout -b release/0.2.0"
+    )
+
+
+def test_start_says_what_it_could_not_check_when_the_fetch_fails(capsys):
+    """Offline is not a reason to refuse a start, only a reason to say the check was skipped."""
+    c = _start_context(behind="0", fetch_ok=False)
+    gitflow.release_start.body(c, bump="minor")
+    assert "could not fetch origin/develop" in capsys.readouterr().out
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert "git rev-list --count develop..origin/develop" not in call_strings
+    assert "git checkout -b release/0.2.0" in call_strings
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +261,13 @@ def test_release_candidate_refuses_a_final_version(monkeypatch):
 def test_start_raises_before_branching_when_the_versions_tag_already_exists():
     """develop still carrying the pre-release version — a sync/<tag> PR closed unmerged — makes
     the arithmetic land on a version main already shipped. Refused before any branch is cut."""
-    c = MockContext(run={**_ok("git checkout develop"), **_tag_list("v0.2.0", exists=True)})
+    c = MockContext(
+        run={
+            **_ok("git checkout develop"),
+            "git remote": Result(stdout="", exited=0),
+            **_tag_list("v0.2.0", exists=True),
+        }
+    )
     with pytest.raises(ValueError, match=re.escape("v0.2.0 already exists")):
         gitflow.release_start.body(c, bump="minor")
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
@@ -399,7 +463,7 @@ def test_finish_local_raises_when_not_on_expected_branch_kind():
 # ---------------------------------------------------------------------------
 
 
-def _finalize_context(current_branch, tag, open_release_branch=None):
+def _finalize_context(current_branch, tag, open_release_branch=None, still_on_origin=True):
     sync_branch = f"sync/{tag}"
     target = open_release_branch or "develop"
     return MockContext(
@@ -411,15 +475,19 @@ def _finalize_context(current_branch, tag, open_release_branch=None):
             "git merge --ff-only origin/main": Result(exited=0),
             f"git tag {tag}": Result(exited=0),
             f"git push origin {tag}": Result(exited=0),
-            FOR_EACH_REF: Result(stdout=f"{open_release_branch}\n" if open_release_branch else "", exited=0),
+            LS_REMOTE_RELEASES: Result(stdout=_heads(open_release_branch) if open_release_branch else "", exited=0),
             f"git checkout -b {sync_branch}": Result(exited=0),
             **_ok(f"git push -u origin {sync_branch}"),
             **_gh_pr(target, sync_branch, f"Sync {tag} into {target}", f"Merging {tag} (main) into {target}."),
+            **_ok(f"git branch -D {current_branch}", f"git push origin --delete {current_branch}"),
+            f"git ls-remote --heads origin {current_branch}": Result(
+                stdout=_heads(current_branch) if still_on_origin else "", exited=0
+            ),
         }
     )
 
 
-def test_release_finalize_fetches_tags_and_opens_a_develop_pr(capsys):
+def test_release_finalize_fetches_tags_opens_a_develop_pr_and_deletes_the_branch(capsys):
     c = _finalize_context("release/0.2.0", "v0.2.0")
     gitflow.release_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
@@ -434,27 +502,56 @@ def test_release_finalize_fetches_tags_and_opens_a_develop_pr(capsys):
         "git checkout -b sync/v0.2.0",
         "git push -u origin sync/v0.2.0",
         _gh_pr_command("develop", "sync/v0.2.0", "Sync v0.2.0 into develop", "Merging v0.2.0 (main) into develop."),
+        # -D: after a squash merge git sees no ancestry, and the PR state already proved it merged.
+        "git branch -D release/0.2.0",
+        "git ls-remote --heads origin release/0.2.0",
+        "git push origin --delete release/0.2.0",
     ]
     # release_finalize never checks for another open release branch — the redirect rule is
     # hotfix-only, same as local mode.
-    assert FOR_EACH_REF not in call_strings
+    assert LS_REMOTE_RELEASES not in call_strings
     out = capsys.readouterr().out
     assert PR_URL in out
+
+
+def test_finalize_skips_the_remote_delete_when_github_already_removed_the_branch():
+    c = _finalize_context("release/0.2.0", "v0.2.0", still_on_origin=False)
+    gitflow.release_finalize.body(c)
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert call_strings[-2:] == ["git branch -D release/0.2.0", "git ls-remote --heads origin release/0.2.0"]
 
 
 def test_hotfix_finalize_targets_develop_when_no_release_is_open():
     c = _finalize_context("hotfix/0.1.1", "v0.1.1")
     gitflow.hotfix_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
-    assert FOR_EACH_REF in call_strings
-    assert call_strings[-1].startswith("gh pr create --base develop")
+    assert LS_REMOTE_RELEASES in call_strings
+    assert any(s.startswith("gh pr create --base develop") for s in call_strings)
 
 
 def test_hotfix_finalize_redirects_into_an_open_release_branch():
     c = _finalize_context("hotfix/0.1.1", "v0.1.1", open_release_branch="release/0.2.0")
     gitflow.hotfix_finalize.body(c)
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
-    assert call_strings[-1].startswith("gh pr create --base release/0.2.0")
+    assert any(s.startswith("gh pr create --base release/0.2.0") for s in call_strings)
+
+
+def test_hotfix_finalize_ignores_release_branches_left_in_the_clone():
+    """The bug this pins: PR mode's finalize used to leave the finished release branch in the clone,
+    and hotfix_finalize read local refs, so the next hotfix's sync PR went into a release that had
+    already shipped and never reached develop. Origin is asked instead, and local refs are never
+    read in PR mode — `_finalize_context` does not even answer the local query."""
+    c = _finalize_context("hotfix/0.1.1", "v0.1.1")
+    gitflow.hotfix_finalize.body(c)
+    call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
+    assert FOR_EACH_REF not in call_strings
+
+
+def test_hotfix_finalize_raises_when_origin_holds_several_release_branches():
+    c = _finalize_context("hotfix/0.1.1", "v0.1.1")
+    c.set_result_for("run", LS_REMOTE_RELEASES, Result(stdout=_heads("release/0.2.0", "release/0.3.0"), exited=0))
+    with pytest.raises(ValueError, match="multiple release"):
+        gitflow.hotfix_finalize.body(c)
 
 
 def test_finalize_raises_when_not_on_expected_branch_kind():
@@ -500,9 +597,10 @@ def test_support_hotfix_start_branches_off_the_support_branch_before_bumping(c):
     gitflow.support_hotfix_start.body(c, support="1.4.x", bump="patch")
     call_strings = [call[0][0] for call in c.run.call_args_list]
     assert call_strings[0] == "git checkout support/1.4.x"
-    assert call_strings[1] == "git tag --list v0.1.1"
-    assert call_strings[2] == "git checkout -b support-hotfix/1.4.x/0.1.1"
-    assert "--config-file" in call_strings[3]
+    assert call_strings[1] == "git remote"  # the stale-base check, which a support line gets too
+    assert call_strings[2] == "git tag --list v0.1.1"
+    assert call_strings[3] == "git checkout -b support-hotfix/1.4.x/0.1.1"
+    assert "--config-file" in call_strings[4]
 
 
 def test_support_hotfix_finish_pr_mode_opens_a_pr_against_the_support_branch(capsys):
@@ -563,27 +661,32 @@ def test_support_hotfix_finish_local_pushes_when_requested():
 
 
 def test_support_hotfix_finalize_tags_the_support_branch_with_no_second_pr():
+    branch = "support-hotfix/1.4.x/0.1.1"
     c = MockContext(
         run={
-            **_rev_parse("support-hotfix/1.4.x/0.1.1"),
-            **_pr_state("support-hotfix/1.4.x/0.1.1"),
+            **_rev_parse(branch),
+            **_pr_state(branch),
             "git fetch origin support/1.4.x": Result(exited=0),
             "git checkout support/1.4.x": Result(exited=0),
             "git merge --ff-only origin/support/1.4.x": Result(exited=0),
             "git tag v0.1.1": Result(exited=0),
-            **_ok("git push origin v0.1.1"),
+            **_ok("git push origin v0.1.1", f"git branch -D {branch}", f"git push origin --delete {branch}"),
+            f"git ls-remote --heads origin {branch}": Result(stdout=_heads(branch), exited=0),
         }
     )
     gitflow.support_hotfix_finalize.body(c, support="1.4.x")
     call_strings = [call[0][0] for call in c.run.call_args_list]  # pyright: ignore[reportAttributeAccessIssue]
     assert call_strings == [
         "git rev-parse --abbrev-ref HEAD",
-        _pr_state_command("support-hotfix/1.4.x/0.1.1"),
+        _pr_state_command(branch),
         "git fetch origin support/1.4.x",
         "git checkout support/1.4.x",
         "git merge --ff-only origin/support/1.4.x",
         "git tag v0.1.1",
         "git push origin v0.1.1",
+        f"git branch -D {branch}",
+        f"git ls-remote --heads origin {branch}",
+        f"git push origin --delete {branch}",
     ]
     assert not any(s.startswith("gh pr create") for s in call_strings)  # never carries into develop
 

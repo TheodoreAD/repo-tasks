@@ -187,11 +187,14 @@ with a message naming the task.
 | `inv gitflow.feature-finish`          | gh, network     |
 | `inv gitflow.hotfix-finalize`         | gh, network     |
 | `inv gitflow.hotfix-finish`           | gh, network     |
+| `inv gitflow.hotfix-start`            | network         |
 | `inv gitflow.release-candidate`       | network         |
 | `inv gitflow.release-finalize`        | gh, network     |
 | `inv gitflow.release-finish`          | gh, network     |
+| `inv gitflow.release-start`           | network         |
 | `inv gitflow.support-hotfix-finalize` | gh, network     |
 | `inv gitflow.support-hotfix-finish`   | gh, network     |
+| `inv gitflow.support-hotfix-start`    | network         |
 | `inv helm.login`                      | network         |
 | `inv helm.push`                       | network         |
 | `inv release.create`                  | gh, network     |

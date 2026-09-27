@@ -36,8 +36,22 @@ from .requirements import GH, NETWORK, requires
 from .version import Version, bump_version, current_version, next_version
 
 
-def _open_release_branch(c: Context) -> str | None:
-    names = c.run("git for-each-ref --format='%(refname:short)' refs/heads/release/*", hide=True).stdout.split()
+def _open_release_branch(c: Context, remote: bool = False) -> str | None:
+    """The release branch still in flight, if any — the one a hotfix merges back into instead of
+    develop.
+
+    PR mode asks origin (`remote=True`) rather than the clone. A clone's local `release/*` refs are
+    not a record of what is in flight: anyone who checked a release out to test it keeps the branch
+    after it ships, and `_finalize` left the finisher's own copy behind too until 2026-09-28, so the
+    next hotfix's sync PR went into a finished release and never reached develop. Origin is accurate
+    because `_finalize` now deletes the branch there, and it is also the only place a PR can target:
+    a release that exists only locally could not receive the sync PR anyway. Local mode keeps local
+    refs, since it deletes its own branches as it goes and may have no remote at all."""
+    if remote:
+        refs = c.run("git ls-remote --heads origin 'refs/heads/release/*'", hide=True).stdout.splitlines()
+        names = [line.split()[1].removeprefix("refs/heads/") for line in refs if line.strip()]
+    else:
+        names = c.run("git for-each-ref --format='%(refname:short)' refs/heads/release/*", hide=True).stdout.split()
     if len(names) > 1:
         raise ValueError(
             f"multiple release/* branches exist ({names!r}) — finish or delete the extra one before retrying"
@@ -128,8 +142,33 @@ def feature_finish(c: Context, name: str, local: bool = False):
     )
 
 
+def _require_base_current(c: Context, base: str, task_name: str) -> None:
+    """Refuse to cut a branch from a local base that is behind origin's.
+
+    A start task branches off whatever the local base holds, so a clone that had not pulled cut its
+    release from an old commit, with nothing saying so. Found writing the gitflow twin test, which
+    has to pull before every start. Refusing and printing the pull, rather than fast-forwarding
+    behind the caller's back, is this package's rule for state a task does not own.
+
+    It fetches, so it needs the network, but it degrades rather than blocks: with no `origin` there
+    is nothing to be behind, and a failed fetch is reported and skipped, so an offline start still
+    works and says what it could not check."""
+    if "origin" not in c.run("git remote", hide=True).stdout.split():
+        return
+    if not c.run(f"git fetch origin {base}", echo=True, warn=True).ok:
+        print(f"[gitflow.{task_name}] could not fetch origin/{base}, so not checking whether {base} is behind it")
+        return
+    behind = int(c.run(f"git rev-list --count {base}..origin/{base}", hide=True).stdout.strip())
+    if behind:
+        raise ValueError(
+            f"{base} is {behind} commit(s) behind origin/{base}, so the branch would be cut from an old commit — "
+            f"run `git pull --ff-only origin {base}`, then re-run this"
+        )
+
+
 def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: bool) -> str:
     c.run(f"git checkout {base}", echo=True)
+    _require_base_current(c, base, f"{kind}-start")
     # The branch is named after the *final* version it will ship, whether or not the bump lands
     # on rc1 first — the rc cycle happens on the branch, the name is what main gets.
     version = next_version(current_version(c, group=group), bump, rc=False)
@@ -140,6 +179,7 @@ def _start(c: Context, kind: str, base: str, bump: str, group: str | None, rc: b
     return branch
 
 
+@requires(NETWORK)
 @task(
     help={
         "bump": "major, minor, or patch",
@@ -157,6 +197,7 @@ def release_start(c: Context, bump: str, group: str | None = None):
     )
 
 
+@requires(NETWORK)
 @task(
     help={
         "bump": "major, minor, or patch",
@@ -303,6 +344,20 @@ def hotfix_finish(c: Context, push: bool = False, local: bool = False, group: st
     _pr_finish(c, "hotfix", group)
 
 
+def _delete_finished_branch(c: Context, branch: str) -> None:
+    """Remove a branch whose PR has merged, locally and on origin — what local mode's
+    `git branch -d` always did and PR mode never did.
+
+    `-D`, not `-d`: after a squash or rebase merge git sees no ancestry between the branch and the
+    trunk and would refuse `-d` on a branch that did merge. `_require_merged_pr` has already
+    established that from the PR state, which is the one signal that survives every strategy. The
+    remote half is checked first, because GitHub may already have deleted the head branch itself,
+    and a delete of a missing ref fails. The merged PR keeps its commits either way."""
+    c.run(f"git branch -D {branch}", echo=True)
+    if c.run(f"git ls-remote --heads origin {branch}", hide=True).stdout.strip():
+        c.run(f"git push origin --delete {branch}", echo=True)
+
+
 def _finalize(c: Context, kind: str) -> None:
     prefix = f"{kind}/"
     branch = _require_branch(c, prefix, f"checkout the {prefix}* branch whose PR you just merged, then re-run this")
@@ -318,13 +373,15 @@ def _finalize(c: Context, kind: str) -> None:
 
     target = develop_branch()
     if kind == "hotfix":
-        release_branch = _open_release_branch(c)
+        release_branch = _open_release_branch(c, remote=True)
         if release_branch is not None:
             target = release_branch
 
     sync_branch = f"sync/{tag}"
     c.run(f"git checkout -b {sync_branch}", echo=True)
     url = _open_pr(c, sync_branch, target, f"Sync {tag} into {target}", f"Merging {tag} ({trunk}) into {target}.")
+    # Last, so a failure anywhere above leaves the branch where it was for whoever investigates.
+    _delete_finished_branch(c, branch)
     next_steps(
         f"PR opened: {url}",
         f"Once it's approved and merged on GitHub, the {kind} is fully finished — nothing else to run.",
@@ -370,6 +427,7 @@ def support_start(c: Context, version: str, base: str):
 def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None) -> str:
     target = f"support/{support}"
     c.run(f"git checkout {target}", echo=True)
+    _require_base_current(c, target, "support-hotfix-start")
     version = next_version(current_version(c, group=group), bump, rc=False)
     _require_tag_absent(c, f"v{version}")
     branch = f"support-hotfix/{support}/{version}"
@@ -378,6 +436,7 @@ def _support_hotfix_start(c: Context, support: str, bump: str, group: str | None
     return branch
 
 
+@requires(NETWORK)
 @task
 def support_hotfix_start(c: Context, support: str, bump: str, group: str | None = None):
     """Branch a patch off support/<support> to fix something on that maintenance line, then bump
@@ -440,4 +499,5 @@ def support_hotfix_finalize(c: Context, support: str):
     c.run(f"git merge --ff-only origin/{target}", echo=True)
     c.run(f"git tag {tag}", echo=True)
     c.run(f"git push origin {tag}", echo=True)
+    _delete_finished_branch(c, branch)
     next_steps(f"{tag} tagged on {target} — this support patch is fully finished, nothing else to run.")
