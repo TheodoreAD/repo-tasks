@@ -43,7 +43,12 @@ It was **not** invoke leaking through `allowedUntypedLibraries`. Three separate 
    on names _imported from_ invoke, so a bare `c` is never associated with invoke at all. `c.run`,
    `.stdout`, `.ok` were all Unknown and everything built from them cascaded. Measured: adding
    `c: Context` to `quality.py`'s 15 functions and nothing else took that file 75 → 21 warnings.
-   (The setting is still in the config; it is harmless, and removing it was never the fix.)
+   Removing the setting was never the fix. It was dropped from the canonical config 2026-09-28, once
+   invoke-stubs declared a `.pyi` for every module the family imports from invoke (`collection`,
+   `exceptions`, `runners`, and the `invoke` package itself). A consumer probe of the whole surface
+   had type-checked at 0 errors and 0 warnings without it, per invoke-stubs'
+   `contributing/stub-decisions.md`. A consumer whose lock still resolves invoke-stubs older than
+   0.2.0 is the one expected to go red when it pulls the change.
 2. **Tests never annotate fixtures.** Handled by the tests tier above rather than by annotating
    every fixture in every consumer.
 3. **Two upstream invoke typing gaps** — see the next section.
