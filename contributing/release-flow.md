@@ -297,3 +297,11 @@ expected arguments and then stopped at
 to a known GitHub host`, which is the
 correct boundary for a non-GitHub remote. They are covered by unit tests only. Closing this gap is
 what `plans/2026-08-19-gitflow-test-repo-twin.md` exists for.
+
+The target for that is
+[`TheodoreAD/repo-tasks-gitflow-twin`](https://github.com/TheodoreAD/repo-tasks-gitflow-twin), a
+permanent public repo seeded with a `pyproject.toml` and a `tasks.py` importing `repo_tasks.ns`.
+`main` and `develop` carry a ruleset with an **empty bypass list**: changes go through a pull
+request, with no required approvals, and deletion and force-push are blocked. A direct push is
+therefore rejected even for the owner, unlike classic branch protection, which lets an admin through
+with a warning. Tags carry no rule, because `*_finalize` pushes its tag directly.
