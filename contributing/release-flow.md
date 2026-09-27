@@ -196,6 +196,24 @@ Recover the way a human running real `git-flow` would: resolve the conflict keep
 branch's own, higher version**, then finish the remaining steps (branch deletion and so on) by hand.
 There is no "resume this task" mechanism — the task does not track where it stopped.
 
+In PR mode the conflict shows up as a `sync/<tag>` PR into the release branch that GitHub cannot
+merge. `hotfix_finalize` leaves you on the sync branch, so resolve it there:
+
+```shell
+git fetch origin release/<v>
+git merge origin/release/<v>             # conflicts on the version line
+git checkout --theirs pyproject.toml     # keep the release's version
+git add pyproject.toml
+git commit --no-edit
+git push origin sync/<tag>
+```
+
+Do the same for every other file the bump wrote and git reports as conflicted: `uv.lock`, and each
+`Chart.yaml` in the version group. The twin has neither, so only `pyproject.toml` is exercised. The
+PR then merges cleanly, and the fix reaches develop when the release ships.
+`test_hotfix_during_an_open_release_syncs_into_the_release_branch` drives exactly this sequence
+against the twin.
+
 ### Abandoning a release or hotfix branch
 
 The cheap one, by construction: branch-then-bump means `develop`/`main` never received anything.
@@ -294,14 +312,18 @@ push → `sync/<tag>` sequence, and `support_hotfix` in both modes.
 Those dry runs stopped at the `gh pr create` calls, since `gh` refuses a bare remote with
 `none of the git remotes configured for this repository point
 to a known GitHub host`.
-`tests/integration/test_gitflow_twin_integration.py` closes that gap. It drives feature, release
-with a candidate, and hotfix through `*_finish`, a real `gh pr merge` and `*_finalize`, against a
-protected GitHub repo, and it runs the release twice, squash-merged and merge-committed. First run
-green 2026-09-28. Set `REPO_TASKS_GITFLOW_TWIN=TheodoreAD/repo-tasks-gitflow-twin` to run it;
-without that it skips, because it needs `gh auth` and leaves PRs and tags in a public repo.
+`tests/integration/test_gitflow_twin_integration.py` closes that gap against a protected GitHub
+repo. It covers:
 
-**Still not exercised for real:** the hotfix redirect in PR mode, where the sync PR targets an open
-`release/*` branch instead of `develop`. See `plans/2026-08-19-gitflow-test-repo-twin.md`.
+- feature, release with a candidate, and hotfix, each through `*_finish`, a real `gh pr merge` and
+  `*_finalize`;
+- the release twice, squash-merged and merge-committed;
+- the hotfix redirect into an open release branch, including its conflict;
+- the tag-exists guard, against tags fetched from the remote;
+- a reused feature name resolving to its newer open PR.
+
+All nine green 2026-09-28. Set `REPO_TASKS_GITFLOW_TWIN=TheodoreAD/repo-tasks-gitflow-twin` to run
+it; without that it skips, because it needs `gh auth` and leaves PRs and tags in a public repo.
 
 The twin is
 [`TheodoreAD/repo-tasks-gitflow-twin`](https://github.com/TheodoreAD/repo-tasks-gitflow-twin), a
