@@ -13,13 +13,13 @@ repo — PRs, tags and merge commits that stay there. It derives its starting st
 rather than assuming a clean one: the version comes off `develop`/`main` as they stand, feature
 names are unique per run, and leftovers from an earlier failed run are left for a human to read.
 
-Each test takes a fresh clone, never a shared one. A developer's long-lived clone accumulates local
-`release/*` branches that PR mode never deletes, and `hotfix_finalize` reads exactly those to decide
-where its sync PR goes — so sharing a clone would make one test's outcome depend on which ran first.
+Each test takes a fresh clone, never a shared one, so no test's outcome depends on which ran first.
+The one test that needs a long-lived clone's history, a release finished and then a hotfix, builds
+it inside itself.
 """
 
-import itertools
 import os
+import re
 import subprocess
 import time
 import tomllib
@@ -29,7 +29,6 @@ from pathlib import Path
 import pytest
 
 from repo_tasks import gitflow
-from repo_tasks.version import Version, next_version
 
 _TWIN = os.environ.get("REPO_TASKS_GITFLOW_TWIN", "")
 
@@ -112,14 +111,10 @@ def _delete_remote_branches(root: Path, *branches: str) -> None:
     _ = _git(root, "push", "origin", "--delete", *branches)
 
 
-def _final_versions(root: Path) -> list[Version]:
-    tags = [tag.removeprefix("v") for tag in _git(root, "tag", "--list", "v*").splitlines()]
-    finals = [version for version in map(Version.parse, tags) if version.rc is None]
-    return sorted(finals, key=lambda v: (v.major, v.minor, v.patch))
-
-
-def _spell(version: Version) -> str:
-    return f"{version.major}.{version.minor}.{version.patch}"
+def _assert_deleted(root: Path, branch: str) -> None:
+    """`*_finalize` removes the branch it finished, in the clone and on origin."""
+    assert _git(root, "branch", "--list", branch) == ""
+    assert _remote_sha(root, f"refs/heads/{branch}") == ""
 
 
 @pytest.mark.parametrize("branch", ["main", "develop"])
@@ -172,9 +167,10 @@ def test_release_with_a_candidate_round_trips_through_prs(c, twin, method):
     assert _version_on(twin, "main") == version
     sync = f"sync/v{version}"
     assert _pr_state(twin, sync) == "OPEN"
+    _assert_deleted(twin, branch)
     _merge(twin, sync, "merge")
     assert _version_on(twin, "develop") == version
-    _delete_remote_branches(twin, branch, sync)
+    _delete_remote_branches(twin, sync)
 
 
 def test_hotfix_round_trips_through_prs(c, twin):
@@ -190,28 +186,35 @@ def test_hotfix_round_trips_through_prs(c, twin):
 
     assert _remote_sha(twin, f"refs/tags/v{version}") == _remote_sha(twin, "refs/heads/main")
     sync = f"sync/v{version}"
-    # A fresh clone holds no local release/* branch, so the sync PR targets develop.
+    # Origin holds no release/* branch, so the sync PR targets develop.
     assert _pr_base(twin, sync) == "develop"
+    _assert_deleted(twin, branch)
     _merge(twin, sync, "merge")
     assert _version_on(twin, "develop") == version
-    _delete_remote_branches(twin, branch, sync)
+    _delete_remote_branches(twin, sync)
 
 
 def test_start_refuses_a_version_whose_tag_already_exists(c, twin):
-    """`_require_tag_absent` against tags that came from the remote rather than ones a test made up:
-    a trunk wound back to an earlier release computes a version the twin has already shipped. Only
-    the local clone is rewound, so nothing reaches the twin."""
-    finals = _final_versions(twin)
-    for previous, shipped in itertools.pairwise(finals):
-        for part in ("major", "minor", "patch"):
-            if next_version(_spell(previous), part, rc=False) == _spell(shipped):
-                _ = _git(twin, "checkout", "main")
-                _ = _git(twin, "reset", "--hard", f"v{_spell(previous)}")
-                with pytest.raises(ValueError, match=f"tag v{_spell(shipped)} already exists"):
-                    gitflow.hotfix_start.body(c, bump=part)
-                assert _git(twin, "branch", "--list", "hotfix/*") == ""
-                return
-    pytest.skip("the twin has no two consecutive final releases yet — run the release test first")
+    """`_require_tag_absent` in the state it was written for: a release finalized, its sync PR not
+    yet merged, so develop still carries the version before it and the next release_start computes
+    a version main already shipped. Refused before any branch is cut, then the sync PR is merged so
+    the twin is left as it was found."""
+    _checkout_latest(twin, "develop")
+    gitflow.release_start.body(c, bump="minor")
+    release = _git(twin, "branch", "--show-current")
+    version = release.removeprefix("release/")
+    gitflow.release_finish.body(c)
+    _merge(twin, release, "squash")
+    gitflow.release_finalize.body(c)
+
+    _checkout_latest(twin, "develop")  # current with origin, so only the tag check can refuse
+    with pytest.raises(ValueError, match=re.escape(f"tag v{version} already exists")):
+        gitflow.release_start.body(c, bump="minor")
+    assert _git(twin, "branch", "--list", "release/*") == ""
+
+    sync = f"sync/v{version}"
+    _merge(twin, sync, "merge")
+    _delete_remote_branches(twin, sync)
 
 
 def test_a_reused_feature_name_resolves_to_its_open_pr(c, twin):
@@ -282,4 +285,48 @@ def test_hotfix_during_an_open_release_syncs_into_the_release_branch(c, twin):
     _merge(twin, release_sync, "merge")
     assert _version_on(twin, "develop") == release_version
     assert _run(twin, "git", "merge-base", "--is-ancestor", f"v{hotfix_version}", "origin/develop").returncode == 0
-    _delete_remote_branches(twin, release, hotfix, sync, release_sync)
+    _assert_deleted(twin, hotfix)
+    _assert_deleted(twin, release)
+    _delete_remote_branches(twin, sync, release_sync)
+
+
+def test_hotfix_after_a_finished_release_in_the_same_clone_syncs_into_develop(c, twin):
+    """The bug the fresh-clone tests could not see: PR mode's finalize left the finished release
+    branch in the clone, and hotfix_finalize read local refs, so a later hotfix in the same clone
+    opened its sync PR into a release that had already shipped. The fix never reached develop. One
+    clone, a release finished end to end, then a hotfix."""
+    _checkout_latest(twin, "develop")
+    gitflow.release_start.body(c, bump="minor")
+    release = _git(twin, "branch", "--show-current")
+    release_version = release.removeprefix("release/")
+    gitflow.release_finish.body(c)
+    _merge(twin, release, "squash")
+    gitflow.release_finalize.body(c)
+    _assert_deleted(twin, release)
+    release_sync = f"sync/v{release_version}"
+    _merge(twin, release_sync, "merge")
+
+    gitflow.hotfix_start.body(c, bump="patch")  # same clone; finalize left main current
+    hotfix = _git(twin, "branch", "--show-current")
+    hotfix_version = hotfix.removeprefix("hotfix/")
+    _ = _git(twin, "commit", "--allow-empty", "-m", f"twin test: hotfix {hotfix_version} after {release}")
+    gitflow.hotfix_finish.body(c)
+    _merge(twin, hotfix, "squash")
+    gitflow.hotfix_finalize.body(c)
+
+    hotfix_sync = f"sync/v{hotfix_version}"
+    assert _pr_base(twin, hotfix_sync) == "develop"
+    _merge(twin, hotfix_sync, "merge")
+    assert _version_on(twin, "develop") == hotfix_version
+    _delete_remote_branches(twin, release_sync, hotfix_sync)
+
+
+def test_start_refuses_a_base_behind_origin(c, twin):
+    """A clone whose develop is behind origin's refuses to cut a release from it. Only the local
+    branch is wound back, so nothing reaches the twin. The count is not pinned: develop's tip is
+    usually a sync merge, so one step back along the first parent drops more than one commit."""
+    _ = _git(twin, "checkout", "develop")
+    _ = _git(twin, "reset", "--hard", "HEAD~1")
+    with pytest.raises(ValueError, match=r"develop is \d+ commit\(s\) behind origin/develop"):
+        gitflow.release_start.body(c, bump="minor")
+    assert _git(twin, "branch", "--list", "release/*") == ""
