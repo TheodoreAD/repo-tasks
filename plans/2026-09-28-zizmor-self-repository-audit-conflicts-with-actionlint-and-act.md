@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-28
 source_repo: github.com-personal/power-user-linux-setup
 source_session: b73129dd-6136-41c3-a026-8e871581bc14.jsonl
@@ -40,10 +40,34 @@ the gate red with four `help[self-repository]` findings, on `ci.yml:18`, `ci.yml
 
 ## Open questions
 
-[NEEDS CLARIFICATION: disable the audit in the shipped `zizmor.yml` family-wide, or leave each
+~~[NEEDS CLARIFICATION:~~ disable the audit in the shipped `zizmor.yml` family-wide, or leave each
 consumer to suppress inline? Shipped is one edit and covers consumers not yet swept, but it hides
 the audit in every repo until someone remembers to lift it; inline puts the reason next to the line
 but repeats in every consumer.]
+
+[DECISION: **disabled in the shipped config**, chosen by the user 2026-09-28. Capping zizmor below
+1.30 was also weighed and rejected: it holds back every later release of a security tool to avoid
+one audit. What made central disabling cheap is that the audit's two benefits barely apply here. The
+runtime-clone risk needs a step-level local action after an earlier step wrote to the workspace, and
+every hit in the family is a job-level reusable-workflow call. The pinning benefit needs org
+policies, which personal repos lack. The audit is marked not configurable in zizmor's
+`docs/audits.md`, so off is the only narrowing available.]
+
+Landed in `069f3d6`. It was verified on repo-tasks' own `.github/workflows/security.yml:36`, which
+was about to go red on its next zizmor bump: 1.30.1 fails without the disable and passes with it,
+and 1.29.0 accepts the unknown audit id, so consumers not yet swept are unaffected. The lock moved
+to 1.30.1 in the same commit.
+
+## Migrated to
+
+- `src/repo_tasks/configs/zizmor.yml`, and this repo's pulled copy: the setting, the two blockers
+  with file references, the reason little is lost, and the condition to lift it.
+- `power-user-linux-setup`: its four now-redundant inline ignores, filed there as
+  `2026-09-28-drop-inline-zizmor-self-repository-ignores.md` in the plans store.
+
+Deliberately not migrated: the actionlint and act commit hashes checked. The lift condition is what
+matters, and it is re-checked against current upstream when someone lifts it, not against a recorded
+hash.
 
 ## Recommended direction
 
