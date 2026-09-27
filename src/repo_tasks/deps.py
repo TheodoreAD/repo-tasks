@@ -88,6 +88,9 @@ _TREE_LINE_RE = re.compile(
 
 _CURRENCY_TREE_CMD = "uv tree --outdated --depth 1 --locked --only-group dev --quiet"
 
+# What `inv deps.lock --package <name>` would actually do, without writing the lock.
+_CURRENCY_CONFIRM_CMD = "uv lock --dry-run --upgrade-package {name}"
+
 
 def _git_sources() -> dict[str, tuple[str, str]]:
     """Every git-sourced package in uv.lock, bare name -> (repository URL, locked commit).
@@ -125,6 +128,32 @@ def _locked_tree(c: Context) -> dict[str, tuple[str, str | None]]:
     return tree
 
 
+def _registry_verdict(c: Context, name: str, latest: str | None) -> tuple[str, bool]:
+    """A registry entry's verdict line, and whether it is behind.
+
+    `uv tree --outdated`'s latest is the newest release on the index, whatever this project's
+    constraints allow. A consumer declaring `hadolint-py!=2.15.1.2` was told it was behind 2.15.1.2
+    forever, and the `deps.lock --package` it was sent to changed nothing. So an entry uv tree flags
+    is confirmed against a dry-run lock upgrade, which resolves under the project's own constraints
+    and index configuration. That answers the question the report exists for: would the suggested
+    command move it? Only flagged entries pay for the extra resolve."""
+    if latest is None:
+        return "current", False
+    result = c.run(_CURRENCY_CONFIRM_CMD.format(name=name), hide=True, warn=True)
+    if not result.ok:
+        return f"latest {latest} — could not confirm: `uv lock --dry-run` failed", False
+    update = re.search(
+        rf"^Update {re.escape(name)} v\S+ -> v(?P<to>\S+)$",
+        f"{result.stdout}\n{result.stderr}",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if update is None:
+        return f"current — latest {latest} is excluded by this project's constraints", False
+    if update["to"] == latest:
+        return f"BEHIND — latest {latest}", True
+    return f"BEHIND — {update['to']} allowed, latest {latest} is excluded by this project's constraints", True
+
+
 def _git_verdict(c: Context, url: str, locked: str) -> tuple[str, bool]:
     """A git entry's verdict line, and whether it is behind — against its default-branch head,
     the only "latest" a git source has."""
@@ -150,7 +179,9 @@ def check_currency(c: Context):
     additive-only, and the judgement of when to move stays with whoever reads this.
 
     PyPI entries go through `uv tree --outdated`, so a consumer's own index configuration is
-    honoured rather than pypi.org assumed. A git entry is invisible to that — uv does not look one up
+    honoured rather than pypi.org assumed, and each one it flags is confirmed with a dry-run lock
+    upgrade, so a release the project's own constraints exclude is reported as excluded, not as a
+    lag nothing can close. A git entry is invisible to that — uv does not look one up
     — so its locked commit is compared with the remote's default-branch head, which is the only
     "latest" such an entry has. Never in `quality.check`: the answer moves when an index does, the
     same reason `deps.audit` stands alone."""
@@ -170,7 +201,7 @@ def check_currency(c: Context):
         if name in git:
             verdict, is_behind = _git_verdict(c, *git[name])
         else:
-            verdict, is_behind = ("current", False) if latest is None else (f"BEHIND — latest {latest}", True)
+            verdict, is_behind = _registry_verdict(c, name, latest)
         if is_behind:
             behind.append(name)
         print(f"[deps.check-currency] {name} {version}  {verdict}")

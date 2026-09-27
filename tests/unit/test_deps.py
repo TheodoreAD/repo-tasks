@@ -130,7 +130,15 @@ consumer v1.0.0
 """
 
 
-def _currency_repo(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, head: Result) -> MockContext:
+# Real `uv lock --dry-run --upgrade-package` output, on stderr: the update line when the project's
+# constraints allow one, and only the resolve line when they do not.
+_RUFF_UPGRADES = Result(stderr="Resolved 64 packages in 1.14s\nUpdate ruff v0.16.2 -> v0.16.9\n", exited=0)
+_NO_CHANGE = Result(stderr="Resolved 64 packages in 265ms\nNo lockfile changes detected\n", exited=0)
+
+
+def _currency_repo(
+    tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, head: Result, ruff_upgrade: Result = _RUFF_UPGRADES
+) -> MockContext:
     (tmp_cwd / "uv.lock").write_text(
         f'[[package]]\nname = "invoke-stubs"\nversion = "0.1.0"\nsource = {{ git = "{_STUBS_URL}#{_LOCKED}" }}\n\n'
         '[[package]]\nname = "ruff"\nversion = "0.16.2"\nsource = { registry = "https://pypi.org/simple" }\n',
@@ -138,8 +146,15 @@ def _currency_repo(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, head: Result)
     )
     monkeypatch.setattr(deps, "quality_dep_names", lambda: ["invoke-stubs", "pytest", "ruff", "zizmor"])
     return MockContext(
-        run={deps._CURRENCY_TREE_CMD: Result(stdout=_TREE, exited=0), f"git ls-remote {_STUBS_URL} HEAD": head}
+        run={
+            deps._CURRENCY_TREE_CMD: Result(stdout=_TREE, exited=0),
+            f"git ls-remote {_STUBS_URL} HEAD": head,
+            "uv lock --dry-run --upgrade-package ruff": ruff_upgrade,
+        }
     )
+
+
+_AT_HEAD = Result(stdout=f"{_LOCKED}\tHEAD\n", exited=0)
 
 
 def test_check_currency_names_what_the_lock_holds_behind(tmp_cwd, monkeypatch, capsys):
@@ -169,6 +184,35 @@ def test_check_currency_does_not_invent_a_verdict_for_an_unreachable_remote(tmp_
     out = capsys.readouterr().out
     assert f"could not read {_STUBS_URL}'s head" in out
     assert "1 of 4 manifest entries behind" in out  # ruff only
+
+
+def test_check_currency_calls_a_latest_the_constraints_exclude_current(tmp_cwd, monkeypatch, capsys):
+    """The false positive that asked for the confirm step: `hadolint-py!=2.15.1.2` excludes the only
+    newer release, uv tree still names it as latest, and the lock upgrade it suggests changes nothing."""
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD, ruff_upgrade=_NO_CHANGE)
+    deps.check_currency.body(c)
+    out = capsys.readouterr().out
+    assert "ruff 0.16.2  current — latest 0.16.9 is excluded by this project's constraints" in out
+    assert "0 of 4 manifest entries behind" in out
+    assert "inv deps.lock" not in out
+
+
+def test_check_currency_names_an_allowed_release_below_an_excluded_latest(tmp_cwd, monkeypatch, capsys):
+    upgrade = Result(stderr="Resolved 64 packages in 1s\nUpdate ruff v0.16.2 -> v0.16.5\n", exited=0)
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD, ruff_upgrade=upgrade)
+    deps.check_currency.body(c)
+    out = capsys.readouterr().out
+    assert "ruff 0.16.2  BEHIND — 0.16.5 allowed, latest 0.16.9 is excluded by this project's constraints" in out
+    assert "inv deps.lock --package ruff" in out
+
+
+def test_check_currency_does_not_invent_a_verdict_when_the_dry_run_fails(tmp_cwd, monkeypatch, capsys):
+    failed = Result(stderr="error: Failed to fetch", exited=2)
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD, ruff_upgrade=failed)
+    deps.check_currency.body(c)
+    out = capsys.readouterr().out
+    assert "ruff 0.16.2  latest 0.16.9 — could not confirm" in out
+    assert "0 of 4 manifest entries behind" in out
 
 
 def test_check_currency_noops_without_a_lock(tmp_cwd, capsys):
