@@ -332,3 +332,45 @@ permanent public repo seeded with a `pyproject.toml` and a `tasks.py` importing 
 request, with no required approvals, and deletion and force-push are blocked. A direct push is
 therefore rejected even for the owner, unlike classic branch protection, which lets an admin through
 with a warning. Tags carry no rule, because `*_finalize` pushes its tag directly.
+
+### Why the twin is shaped this way
+
+[DECISION: **permanent, not created and deleted per run.** Repeated create and delete cycles would
+make GitHub's own soft-deletion and rename-cooldown behaviour a second source of failures, and
+disposability buys nothing. Leftover state from a failed run, such as a stray branch, an unmerged PR
+or an odd conflict, is kept for a human to read rather than cleaned away. Recovering a real messy
+repo is how `gitflow.py`'s recovery paths and messages get better.]
+
+[DECISION: **public**, because GitHub Free offers branch protection and rulesets on public repos
+only. A private twin would need a paid plan to be protected, and protection is the point: it is the
+one thing a bare local remote structurally cannot test. The seed is generic, so nothing sensitive is
+exposed.]
+
+[DECISION: **a ruleset with an empty bypass list, not classic branch protection.** The tests run as
+the owner, and classic protection lets an admin push straight through with a warning. That is how
+the owner's other personal repos behave, and it would let the exact failure the twin exists to
+catch, a direct push instead of a PR, succeed silently. **0 required approvals**, because a sole
+account cannot approve its own PR.]
+
+[DECISION: **the tests derive their starting state from the twin.** A permanent repo accumulates
+tags and branches, so nothing may assume a clean one. Versions are read off `develop`/`main` as they
+stand, feature names are unique per run, and each test uses a **fresh clone**. The fresh clone
+matters because PR mode leaves finished `release/*` branches behind locally, and `hotfix_finalize`
+reads them. `plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md` covers that.]
+
+What the runs showed beyond pass or fail:
+
+- A squash-merged release's `sync/<tag>` PR does **not** conflict with develop. The bump commits
+  live only on the release branch, so develop's version line is untouched between syncs, and the
+  squash commit's change applies cleanly. A develop that edited that line itself would conflict, and
+  should.
+- `gh pr view <branch>` prefers an **open** PR over an older merged one of the same name. That is
+  the safe answer for `_require_merged_pr`, since an old merge cannot let finalize proceed past an
+  unmerged new PR.
+- Rebase merge was not driven. Nothing in `gitflow.py` depends on the strategy beyond the PR state,
+  which held for squash and merge commits alike.
+
+[PITFALL: bump-my-version's rc tags are **annotated**, while `_finalize`'s `git tag` is
+**lightweight**. So `git ls-remote origin refs/tags/<tag>` returns a tag object's SHA for one and a
+commit's for the other. The twin test's first run failed on exactly that, comparing an rc tag to
+`HEAD`. Anything comparing tags to commits has to peel (`<ref>^{}`).]
