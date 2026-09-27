@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-28
 source_repo: github.com-personal/invoke-stubs
 source_session: 76d98521-8e7c-4524-bb4f-4caeb36e8cb0.jsonl
@@ -36,12 +36,29 @@ removed yet.
 
 ## Open questions
 
-[NEEDS CLARIFICATION: does anything the family imports from invoke fall outside the shipped modules?
-`invoke.env`, `invoke.completion`, `invoke.main` and the vendored packages are not declared by
-invoke-stubs. Under the `partial` marker they fall back to invoke's inline annotations, and that
+~~[NEEDS CLARIFICATION:~~ does anything the family imports from invoke fall outside the shipped
+modules? `invoke.env`, `invoke.completion`, `invoke.main` and the vendored packages are not declared
+by invoke-stubs. Under the `partial` marker they fall back to invoke's inline annotations, and that
 fallback may be exactly what `allowedUntypedLibraries` still governs. A
 `rg 'from invoke\.' -g '*.py'` across the consumers answers it. If nothing imports those modules,
 the setting is dead weight.]
+
+[DECISION: **dead weight, removed 2026-09-28.** A search for invoke submodule imports across every
+repo under the personal root finds only `invoke.collection`, `invoke.exceptions` and
+`invoke.runners`, in `repo-tasks` and `invoke-stubs`. Every one has a `.pyi` in invoke-stubs. The
+only other hits are a vendored copy of invoke's own source in a playground repo, which is not a
+consumer. `repo-tasks` locks invoke-stubs 0.3.0, and its gate ran 0 errors and 0 warnings with the
+key gone.]
+
+## Migrated to
+
+- `src/repo_tasks/configs/pyrightconfig.json` and this repo's pulled copy: the key is removed.
+- `contributing/type-checking.md`, "Where the noise came from": when it was removed, on what
+  evidence, and which consumer state is expected to go red when it pulls.
+
+Deliberately not migrated: the probe details, which live in invoke-stubs' own
+`contributing/stub-decisions.md`. Reaching the consumers is the normal sweep, and nothing extra is
+owed there.
 
 ## Recommended direction
 
