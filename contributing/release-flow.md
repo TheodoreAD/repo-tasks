@@ -214,6 +214,36 @@ PR then merges cleanly, and the fix reaches develop when the release ships.
 `test_hotfix_during_an_open_release_syncs_into_the_release_branch` drives exactly this sequence
 against the twin.
 
+### A hotfix's sync PR opened into a release that already shipped
+
+This one comes from repo-tasks before 2026-09-28, not from your own actions. PR mode's `*_finalize`
+left the finished `release/*` branch in the clone, and `hotfix_finalize` picked its sync PR's target
+from local branches. So in a clone that had finished one release, the next hotfix's sync PR went
+into that shipped release, and the fix never reached develop. Reproduced against the twin before the
+fix: hotfix 0.8.1's sync PR opened into `release/0.8.0`.
+
+Now `*_finalize` deletes the finished branch locally and on origin, and `hotfix_finalize` asks
+origin which release is in flight.
+`test_hotfix_after_a_finished_release_in_the_same_clone_syncs_into_develop` pins it. To recover a PR
+opened by an older version, retarget it before merging, then clear what was left behind:
+
+```shell
+gh pr edit <number> --base develop
+gh pr merge <number> --merge
+git branch -D release/<shipped version>
+git push origin --delete release/<shipped version>
+```
+
+The retarget was done on the twin to clean up the reproduction, and `develop` came out containing
+the hotfix tag.
+
+### A start refused because the base is behind origin
+
+`release_start`, `hotfix_start` and `support_hotfix_start` fetch their base and refuse when the
+local copy is behind origin's. Without the check, a clone that had not pulled cut its branch from an
+old commit and nothing said so. Run the `git pull --ff-only origin <base>` the message names, then
+re-run the task. Offline, or with no `origin`, the check is skipped, and a failed fetch says so.
+
 ### Abandoning a release or hotfix branch
 
 The cheap one, by construction: branch-then-bump means `develop`/`main` never received anything.
@@ -319,10 +349,13 @@ repo. It covers:
   `*_finalize`;
 - the release twice, squash-merged and merge-committed;
 - the hotfix redirect into an open release branch, including its conflict;
-- the tag-exists guard, against tags fetched from the remote;
-- a reused feature name resolving to its newer open PR.
+- the tag-exists guard, in its real state: a sync PR left unmerged, so develop is behind main;
+- a reused feature name resolving to its newer open PR;
+- finalize deleting the finished branch locally and on origin, and a hotfix after a finished release
+  in the same clone syncing into develop;
+- a start refusing a base that is behind origin.
 
-All nine green 2026-09-28. Set `REPO_TASKS_GITFLOW_TWIN=TheodoreAD/repo-tasks-gitflow-twin` to run
+All eleven green 2026-09-28. Set `REPO_TASKS_GITFLOW_TWIN=TheodoreAD/repo-tasks-gitflow-twin` to run
 it; without that it skips, because it needs `gh auth` and leaves PRs and tags in a public repo.
 
 The twin is
@@ -354,9 +387,10 @@ account cannot approve its own PR.]
 
 [DECISION: **the tests derive their starting state from the twin.** A permanent repo accumulates
 tags and branches, so nothing may assume a clean one. Versions are read off `develop`/`main` as they
-stand, feature names are unique per run, and each test uses a **fresh clone**. The fresh clone
-matters because PR mode leaves finished `release/*` branches behind locally, and `hotfix_finalize`
-reads them. `plans/2026-09-28-gitflow-pr-mode-leaves-finished-branches-behind.md` covers that.]
+stand, feature names are unique per run, and each test uses a **fresh clone**, so no test's outcome
+depends on which ran first. The fresh clones are also why the tests first missed the one bug a
+long-lived clone has: finished release branches left behind, see "Known bad states". A test now
+builds that history inside one clone on purpose.]
 
 What the runs showed beyond pass or fail:
 
