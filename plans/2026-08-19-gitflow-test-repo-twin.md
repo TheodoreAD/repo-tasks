@@ -133,3 +133,13 @@ mode only ever used `--no-ff` merges, so this has never come up.]
 3. Apply the ruleset to `main` and `develop`.
 4. Verify a direct push to `main` is rejected, and record the result here.
 5. Name the repo in `contributing/release-flow.md`'s verification section.
+
+All five done 2026-09-28. Seed commit `8ad576e` is on both branches. The ruleset is id `24085532`:
+deletion, non-fast-forward, and pull request with 0 approvals and all three merge methods allowed.
+The API reports `bypass_actors: []` and `current_user_can_bypass: never`. As the owner, a direct
+push of an empty commit to `main` and to `develop` was each refused with
+`GH013: Repository rule violations found … Changes must be made through a pull request.`
+
+What is left is the opt-in test tier itself: the env var, the marker, and the run driving feature,
+release with rc, and hotfix through `*_finish` → `gh pr merge` → `*_finalize`. It also has to settle
+the three `UNVERIFIED` tags above.
