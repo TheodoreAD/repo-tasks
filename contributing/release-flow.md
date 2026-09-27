@@ -291,14 +291,19 @@ for `origin`: branch-then-bump ordering, the hotfix redirect (including the expe
 landing on the correct commits, `main`/`develop` converging, `*_finalize`'s fetch → ff-only → tag →
 push → `sync/<tag>` sequence, and `support_hotfix` in both modes.
 
-**Not verified:** the `gh pr create` calls themselves. Every dry run reached them with exactly the
-expected arguments and then stopped at
+Those dry runs stopped at the `gh pr create` calls, since `gh` refuses a bare remote with
 `none of the git remotes configured for this repository point
-to a known GitHub host`, which is the
-correct boundary for a non-GitHub remote. They are covered by unit tests only. Closing this gap is
-what `plans/2026-08-19-gitflow-test-repo-twin.md` exists for.
+to a known GitHub host`.
+`tests/integration/test_gitflow_twin_integration.py` closes that gap. It drives feature, release
+with a candidate, and hotfix through `*_finish`, a real `gh pr merge` and `*_finalize`, against a
+protected GitHub repo, and it runs the release twice, squash-merged and merge-committed. First run
+green 2026-09-28. Set `REPO_TASKS_GITFLOW_TWIN=TheodoreAD/repo-tasks-gitflow-twin` to run it;
+without that it skips, because it needs `gh auth` and leaves PRs and tags in a public repo.
 
-The target for that is
+**Still not exercised for real:** the hotfix redirect in PR mode, where the sync PR targets an open
+`release/*` branch instead of `develop`. See `plans/2026-08-19-gitflow-test-repo-twin.md`.
+
+The twin is
 [`TheodoreAD/repo-tasks-gitflow-twin`](https://github.com/TheodoreAD/repo-tasks-gitflow-twin), a
 permanent public repo seeded with a `pyproject.toml` and a `tasks.py` importing `repo_tasks.ns`.
 `main` and `develop` carry a ruleset with an **empty bypass list**: changes go through a pull

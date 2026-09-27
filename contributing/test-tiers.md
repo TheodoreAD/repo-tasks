@@ -2,11 +2,12 @@
 
 Three tiers, with deliberately different prerequisites. The default one must stay runnable anywhere.
 
-| tier        | command                      | needs                                   | runs on every commit? |
-| ----------- | ---------------------------- | --------------------------------------- | --------------------- |
-| unit        | `inv test.unit`              | nothing beyond the dev dependency group | yes                   |
-| integration | `inv test.integration`       | Docker daemon                           | no — opt-in           |
-| clean-OS    | part of the integration tier | Docker daemon                           | no — opt-in           |
+| tier         | command                      | needs                                         | runs on every commit? |
+| ------------ | ---------------------------- | --------------------------------------------- | --------------------- |
+| unit         | `inv test.unit`              | nothing beyond the dev dependency group       | yes                   |
+| integration  | `inv test.integration`       | Docker daemon                                 | no — opt-in           |
+| clean-OS     | part of the integration tier | Docker daemon                                 | no — opt-in           |
+| gitflow twin | part of the integration tier | `gh auth`, network, `REPO_TASKS_GITFLOW_TWIN` | no — skips unless set |
 
 `inv test.all` runs the unit tier then the whole integration tier. `inv test.smoke` and
 `inv test.regression` slice the integration tier by the `smoke` marker — the fast happy-path set
