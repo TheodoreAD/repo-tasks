@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-28
 source_repo: github.com-personal/invoke-stubs
 source_session: 76d98521-8e7c-4524-bb4f-4caeb36e8cb0.jsonl
@@ -29,11 +29,14 @@ move is a product decision. Everything else here gets Python from uv (`setup-uv`
 
 ## Open questions
 
-[NEEDS CLARIFICATION: float or pin, for the uv-based repos? Floating (keep `ubuntu-latest`) is what
-the template does now and costs nothing, but a break would show up as a red run on some unrelated
-push during the rollout weeks. Pinning `ubuntu-24.04` is stable, but it is one more version that
-rots, and nothing reports it the way `ci.check-actions` reports actions. The likely answer is float,
-after one run on 26.04 to check the expectation above.]
+~~[NEEDS CLARIFICATION:~~ float or pin, for the uv-based repos? Floating (keep `ubuntu-latest`) is
+what the template does now and costs nothing, but a break would show up as a red run on some
+unrelated push during the rollout weeks. Pinning `ubuntu-24.04` is stable, but it is one more
+version that rots, and nothing reports it the way `ci.check-actions` reports actions. The likely
+answer is float, after one run on 26.04 to check the expectation above.]
+
+[DECISION: **float**, chosen by the user 2026-09-28 after the measurement below came back all green.
+Recorded in `contributing/quality-gate.md`, "Workflow hardening".]
 
 ## Measuring the risk of 26.04 over 24.04
 
@@ -134,4 +137,18 @@ scaffoldapy's own). Their jobs are the same uv-and-bootstrap shape the CI and Ca
 exercise. Canary runs scaffoldapy's generated repos' full gate, which is what every template
 consumer runs. power-user-linux-setup is its own plan.
 
-By the decision rule above, **all green with no new warnings means float**.
+By the decision rule above, **all green with no new warnings means float**, and the user confirmed
+it.
+
+## Migrated to
+
+- `contributing/quality-gate.md`, "Workflow hardening": the float decision with its evidence and the
+  rejected pin, plus two `PITFALL`s, uv using the image's own Python and actionlint not knowing the
+  26.04 label.
+- scaffoldapy: the template `ci.yml` comment the recommended direction asked for, filed there as
+  `2026-09-28-template-ci-records-the-ubuntu-26-04-measurement.md` in the plans store.
+- actions/runner-images is cloned in `$RESEARCH_HOME` for the next comparison.
+
+Deliberately not migrated: the full timing and tool-version tables. They are a snapshot of two image
+builds, and the next move gets re-measured rather than compared against them. They stay readable
+here through `plans.py archive`.
