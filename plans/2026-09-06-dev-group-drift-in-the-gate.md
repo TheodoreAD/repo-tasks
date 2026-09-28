@@ -68,3 +68,15 @@ locally first.]
 If it does move, prefer `precommit` over `check`: `precommit` is already the half that may mutate
 and the one a human runs deliberately, so a step whose answer depends on the installed package is
 less of a contradiction there than in the read-only half CI runs.
+
+## The config-files half of the same question
+
+[DEFERRED: **whether a local edit to a pulled config file should surface in the routine gate.**
+`configs.diff` already compares every pulled file with the canonical copy, and nothing in
+`quality.precommit` runs it, so a hand-edited file stays diverged silently until someone runs the
+`configs.pull` that reverts it. Found 2026-08-29 when a consumer hand-added `anyio_mode = auto` to
+its `pytest.ini`: derivation removed that case — the line is now computed from the consumer's own
+lock — but not the general hole, which the next hand-edit falls into. It is this plan's question
+applied to the other half of `configs.diff`, with the same determinism objection, since the
+canonical copy is read from the installed package. Moved here 2026-09-29 from the retired
+`plans/2026-08-29-pytest-ini-anyio-mode.md`.]
