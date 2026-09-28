@@ -472,9 +472,10 @@ def test_a_caller_pinned_to_a_tag_is_reported_as_not_a_sha(tmp_cwd, monkeypatch,
 
 
 def test_no_ci_at_all_is_said_but_not_counted_as_behind(tmp_cwd, monkeypatch, capsys):
-    """`invoke-stubs` has no `.github/` and the plan records that the caller cannot be added there
-    until somebody decides whether that repo has CI. Calling it behind would assert the answer;
-    saying nothing would lose the one repo where a green local gate is the whole of the evidence."""
+    """A consumer with no `.github/` — `invoke-stubs` until before the v0.6.0 sweep — cannot take a
+    caller until somebody decides whether that repo has CI. Calling it behind would assert the
+    answer; saying nothing would lose the one repo where a green local gate is the whole of the
+    evidence."""
     _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
     _consumer_tree(tmp_cwd, "alpha", security=None)
