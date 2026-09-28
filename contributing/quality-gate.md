@@ -745,6 +745,25 @@ the decision above did not have — is open in
 along with the checker's own floor: it reads a SHA pin's version comment without checking that the
 comment is true.
 
+[DECISION: **Linux jobs float on `ubuntu-latest`, and the move to Ubuntu 26.04 was measured rather
+than assumed.** Chosen by the user 2026-09-28, ahead of GitHub moving the label from 2026-10-19
+(actions/runner-images#14748). A throwaway branch ran CI, Canary and the shared Security audit on
+`ubuntu-24.04` and `ubuntu-26.04` side by side. Every job passed on both, and neither image raised
+an annotation beyond GitHub's own migration notice. The gate takes only bash and git from the
+runner: bash goes 5.2 to 5.3 and git is identical, and Python comes from uv. Pinning `ubuntu-24.04`
+was the alternative. It buys stability that nothing here needed, and it is one more version that
+rots with nothing reporting it, the way `ci.check-actions` reports actions. Re-measure the same way
+at the next label move, rather than re-arguing it.]
+
+[PITFALL: **uv runs the image's own Python whenever it satisfies the request**, so a job asking for
+3.14 on 26.04 runs the distribution's `/usr/bin/python3.14`, not a uv-managed build. The same is
+already true of 3.12 on 24.04. Harmless so far, but a failure that appears on one image only is
+worth checking against `Using CPython … interpreter at:` in the bootstrap log first.]
+
+[PITFALL: **actionlint does not know the `ubuntu-26.04` label**, in 1.7.12 or on upstream `main` as
+of its last commit, 2026-04-19. Naming it in `runs-on:` fails the gate with `[runner-label]` until a
+`.github/actionlint.yaml` declares it. Floating never names it.]
+
 [PITFALL: `enable-cache` on `astral-sh/setup-uv` looks like a missing option and is not one. Its
 default is `auto`, which already enables the cache on GitHub-hosted runners for exactly the `push`
 and `pull_request` events this workflow uses — it is disabled only for release/tag,
