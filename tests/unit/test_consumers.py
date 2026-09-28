@@ -391,6 +391,47 @@ def test_a_consumer_with_workflows_but_no_caller_is_behind(tmp_cwd, monkeypatch,
     assert f"no caller for {consumers._SECURITY_REUSABLE}" in capsys.readouterr().out
 
 
+def _ci_without_caller(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, repo_tasks_toml: str) -> None:
+    """One consumer with CI but no security caller, declaring `repo_tasks_toml` in its own tree."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha", security=None)
+    (alpha / ".github" / "workflows").mkdir(parents=True)
+    (alpha / ".github" / "workflows" / "ci.yml").write_text("jobs: {}\n", encoding="utf-8")
+    (alpha / "repo-tasks.toml").write_text(repo_tasks_toml, encoding="utf-8")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+
+
+def test_a_declined_caller_is_said_with_its_reason_and_not_counted(tmp_cwd, monkeypatch, capsys):
+    """agent-skills decided against the caller because nothing in its lock ships to anyone, and was
+    reported as missing one on every run anyway, with the reason living only in its own plan. The
+    declaration puts the answer where the report can print it."""
+    _ci_without_caller(tmp_cwd, monkeypatch, '[security]\ncaller = false\nreason = "the lock ships nothing"\n')
+    consumers.diff.body(_ctx())  # no Exit: a settled question is not drift
+    assert "alpha: declines the security caller: the lock ships nothing" in capsys.readouterr().out
+
+
+def test_declining_without_a_reason_is_still_behind(tmp_cwd, monkeypatch, capsys):
+    """The reason is the whole value of the declaration. Without it the next sweep cannot tell a
+    settled opt-out from a forgotten one, so a bare `caller = false` does not silence the report."""
+    _ci_without_caller(tmp_cwd, monkeypatch, "[security]\ncaller = false\n")
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "declines the security caller with no `reason`" in capsys.readouterr().out
+
+
+def test_a_caller_present_is_checked_even_where_one_is_declined(tmp_cwd, monkeypatch, capsys):
+    """A stale declaration never hides a real pin: the caller that exists is what CI runs."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    alpha = _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
+    (alpha / "repo-tasks.toml").write_text('[security]\ncaller = false\nreason = "x"\n', encoding="utf-8")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx(head="c" * 40))
+    assert "security caller pinned to bbbbbbb" in capsys.readouterr().out
+
+
 def test_the_caller_is_found_by_content_not_by_filename(tmp_cwd, monkeypatch, capsys):
     """This plan's own recurring mistake is letting a filename stand in for what it usually holds —
     the consumer set was miscounted three times that way. A caller in `audit.yml` counts."""

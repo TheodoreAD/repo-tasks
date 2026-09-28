@@ -46,7 +46,7 @@ from invoke.exceptions import Exit
 
 from .ci import reusable_pins
 from .configs import Drift, drift_summary, unreadable_pyproject
-from .projects import Consumer, discover_consumers, projects_root
+from .projects import Consumer, discover_consumers, projects_root, security_caller_declined
 from .selfinstall import read_pin
 
 _SECURITY_REUSABLE = ".github/workflows/security-reusable.yml"
@@ -98,7 +98,11 @@ class _Finding:
     and the security-caller item cannot be done there until somebody decides whether that repo has
     CI. `invoke-stubs` was that case until it gained workflows before the v0.6.0 sweep. Reporting it
     as behind would be asserting the answer, and staying silent would lose the one place where a
-    green local gate is the whole of the evidence. So it is said and not counted."""
+    green local gate is the whole of the evidence. So it is said and not counted.
+
+    The other is a caller the consumer **declined**, with a reason, in its own `repo-tasks.toml` —
+    see `projects.security_caller_declined`. That question has been answered, so it is said with its
+    answer and not counted either."""
 
     text: str
     behind: bool = True
@@ -125,6 +129,11 @@ def _security_finding(consumer: Consumer, head: str | None) -> _Finding | None:
         for pin in reusable_pins(path.read_text(encoding="utf-8", errors="replace"), _SECURITY_REUSABLE)
     ]
     if not pins:
+        declined = security_caller_declined(consumer.path)
+        if declined:
+            return _Finding(f"declines the security caller: {declined}", behind=False)
+        if declined == "":
+            return _Finding("declines the security caller with no `reason` in its repo-tasks.toml")
         return _Finding(f"no caller for {_SECURITY_REUSABLE}")
     # Read by content across every workflow rather than by looking for `security.yml`: this plan's
     # own recurring mistake is letting a filename stand in for the thing it usually contains.
@@ -288,7 +297,8 @@ def diff(c: Context, source: str | None = None, name: str | None = None):
     declared checkout is absent.
 
     A consumer with no CI at all is reported without counting as behind: whether that repo should have
-    workflows is an open question about it, not drift from here.
+    workflows is an open question about it, not drift from here. So is one that declines the
+    security caller with a reason, under `[security]` in its own repo-tasks.toml.
 
     The consumers are `repo-tasks.toml`'s `[[consumer]]` entries, resolved under
     `$REPO_TASKS_PROJECTS_ROOT` or this repo's parent directory. Acting on the result is manual and

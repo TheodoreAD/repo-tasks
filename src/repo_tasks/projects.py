@@ -184,6 +184,25 @@ def _pyright_setting(key: str, root: Path) -> list[str]:
     return [str(entry) for entry in cast(list[object], pyright.get(key, []))]
 
 
+def security_caller_declined(root: Path = _CWD) -> str | None:
+    """Why this repo calls no shared security workflow on purpose — `repo-tasks.toml`'s
+    `[security] caller = false` and its `reason` — or None where it has not declined one.
+
+    An empty string means declined with no reason given, which `consumers.diff` still reports:
+    the reason is the whole value of the declaration. Without it the next sweep sees an opt-out and
+    no way to tell a settled question from a forgotten one, which is the state the key exists to
+    end — until 2026-09-29 a consumer that had decided against the caller (agent-skills, whose lock
+    ships nothing to anyone) was reported as missing one on every run, and only its own plan said
+    why. Same shape as `[pyright] unchecked`: a deliberate gap is reported as deliberate rather than
+    as drift."""
+    data = _load_toml(root / _REPO_TASKS_TOML) if (root / _REPO_TASKS_TOML).exists() else {}
+    security = cast(dict[str, object], data.get("security", {}))
+    if security.get("caller", True) is not False:
+        return None
+    reason = security.get("reason")
+    return reason.strip() if isinstance(reason, str) else ""
+
+
 def python_floor(root: Path = _CWD) -> str | None:
     """The `major.minor` a project declares as its lowest supported Python, or None when it declares
     no `requires-python` at all.

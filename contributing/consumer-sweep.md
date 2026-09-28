@@ -339,10 +339,24 @@ Nor about which consumers are unpinned, nor which lack the security-workflow cal
 `consumers.diff` reports both since 2026-09-26 — `bootstrap unpinned` or a pin behind the version
 the run measured with, and a missing caller or one whose SHA is behind the reusable workflow it
 names. Since 2026-09-29 the same goes for a consumer pinning through its own `pyproject.toml`: a
-git-declared `repo-tasks` with no tag, a ref that is not a release tag, or a tag behind. Report-mode
-wiring was the third candidate for a check and needed none: it only bites a consumer that
-hand-builds its own root `Collection`, which is `power-user-linux-setup` (wired) and the repos
-`scaffoldapy` generates (that repo's own open question).
+git-declared `repo-tasks` with no tag, a ref that is not a release tag, or a tag behind.
+
+A consumer that has decided against the caller says so in its own `repo-tasks.toml`, and the report
+then prints the decision instead of a missing caller, without counting it as behind:
+
+```toml
+[security]
+caller = false
+reason = "nothing in uv.lock ships to anyone; the audit would guard only dev tooling"
+```
+
+The `reason` is required — a bare `caller = false` is still reported — because it is what lets the
+next sweep tell a settled question from a forgotten one. `agent-skills` is the case that asked for
+it: its lock ships nothing, it decided on 2026-09-29 not to add the caller, and every run until then
+listed the missing caller again with the reasoning only in that repo's plan. Report-mode wiring was
+the third candidate for a check and needed none: it only bites a consumer that hand-builds its own
+root `Collection`, which is `power-user-linux-setup` (wired) and the repos `scaffoldapy` generates
+(that repo's own open question).
 
 What stays open is the part of a sweep that is a **reading** rather than a check. No command can do
 these, and a sweep that skips them reports success:
