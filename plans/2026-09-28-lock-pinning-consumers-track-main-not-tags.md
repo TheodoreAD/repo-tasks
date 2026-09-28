@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-28
+status: landed
+updated: 2026-09-29
 source_repo: github.com-personal/invoke-stubs
 source_session: b418c54c-c032-4559-9cf3-6370d926625b.jsonl
 source_moment: 2026-09-28T19:55:00Z
@@ -34,9 +34,19 @@ The `invoke-stubs` v0.6.0 sweep ran `inv deps.lock --package repo-tasks` and got
 
 ## Open questions
 
-[NEEDS CLARIFICATION: should `consumers.diff` report a lock-pinning consumer whose repo-tasks
-declaration has no tag, or whose locked commit is not a tag commit — the same check it already runs
-on a bootstrap's pin? That turns this back into something that runs rather than a sentence.]
+[DECISION: **yes, on the declared ref, not the locked commit.** A re-lock moves within the declared
+ref, and each consumer's own gate runs `uv lock --check`, so a lock out of step with its declaration
+already fails there. Reading the declaration is one TOML parse with no git and no network, the same
+shape as the bootstrap check. Landed 2026-09-29 in `d15c761`.]
+
+## Migrated to
+
+- The pitfall and the corrected equivalent of `stamp`: `contributing/consumer-sweep.md`, beside the
+  stamp step, plus a one-line comment on the loop's first command.
+- The check: `_lock_pin_line` in `src/repo_tasks/consumers.py`, whose docstring carries the
+  incident; tests in `tests/unit/test_consumers.py`.
+- Not migrated: the per-consumer fix state. Both consumers are pinned to `v0.6.0`, which
+  `consumers.diff` now reports on every run.
 
 ## Recommended direction
 
