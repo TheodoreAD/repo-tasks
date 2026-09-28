@@ -98,11 +98,11 @@ three days earlier whose drift nobody had ever measured.
 both the update below and the stamp at the end work from tags.
 
 **Before cutting it, run the checks in
-[`../plans/2026-09-28-upstream-waits-on-actionlint-and-act.md`](../plans/2026-09-28-upstream-waits-on-actionlint-and-act.md).**
+[`../plans/2026-09-28-upstream-waits-behind-shipped-config-workarounds.md`](../plans/2026-09-28-upstream-waits-behind-shipped-config-workarounds.md).**
 The shipped configs carry workarounds for tools that have not caught up yet, starting with zizmor's
 `self-repository` audit disabled until actionlint and act accept `uses: $/`. Nothing fails when
-upstream fixes one, so a sweep is the moment somebody asks. It is a probe and a grep. If one wait is
-over, the release is where its removal ships.
+upstream fixes one, so a sweep is the moment somebody asks. It is two probes and a grep. If one wait
+is over, the release is where its removal ships.
 
 Then once, from anywhere — the tool install is global, not per-repo, so this is not part of the
 per-consumer loop:

@@ -1,16 +1,18 @@
 ---
-status: blocked on actionlint and act accepting the self-repository uses form, checked at every consumer sweep
-updated: 2026-09-28
+status: blocked on actionlint, act and invoke fixing what three shipped-config workarounds cover, checked at every consumer sweep
+updated: 2026-09-29
 ---
 
-# Two things this repo is waiting on upstream actionlint and act for
+# Workarounds in the shipped configs that wait on an upstream fix
 
 ## Context
 
-Both are workarounds whose removal nothing will prompt. Nothing fails when the upstream fix lands:
+Each is a workaround whose removal nothing will prompt. Nothing fails when the upstream fix lands:
 the workaround simply keeps working, in this repo and in every consumer that pulls the shipped
 configs. So this plan is the trigger. `contributing/consumer-sweep.md` points here, so every sweep
-re-runs the checks below.
+re-runs the checks below. Two wait on actionlint and act, which is what this plan was first filed
+for; the third, on invoke, moved here 2026-09-29 from the retired
+`plans/2026-08-29-pytest-ini-anyio-mode.md`, where it had no trigger at all.
 
 [DEFERRED: **re-enable zizmor's `self-repository` audit** once both actionlint and act accept
 GitHub's self-repository form, `uses: $/...` (announced 2026-07-30). It is disabled in the shipped
@@ -26,6 +28,14 @@ fails the gate with `[runner-label]` unless a `.github/actionlint.yaml` declares
 names it today, because Linux jobs float on `ubuntu-latest` (`contributing/quality-gate.md`,
 "Workflow hardening"). This only matters if a pin or a test-ahead job is ever wanted, but it is the
 same upstream, so the same check covers it. Checked 2026-09-28 against the same actionlint commit.]
+
+[DEFERRED: **drop `ignore:unclosed file:ResourceWarning` from the shipped `pytest.ini`** once
+`invoke` closes the subprocess pipes its `Local` runner opens. The comment beside the line names the
+condition. On `pyinvoke/invoke` `main@6a71e68`, `Local.start` opens `stdout`/`stderr`/`stdin` as
+pipes (`invoke/runners.py:1363`) and `Local.stop` (`:1420`) closes only `self.parent_fd`, and only
+on the PTY path, so the two read pipes are closed by nothing — unmet upstream, not merely
+unreleased. Re-checked 2026-09-29: invoke 3.0.3 is still the latest release, with no push in 174
+days, and the probe below still prints two `unclosed file` lines.]
 
 ## The checks
 
@@ -56,6 +66,21 @@ rg -n 'HasPrefix\(j\.Uses, "\./"\)|\$/' $RESEARCH_HOME/repos/github.com--nektos-
 
 A `$/` branch next to the `./` one in `Job.Type()` means act accepts it.
 
+For invoke, a release number and a probe that measures the invoke actually installed, since "is
+there a newer release" alone answers nothing while the fix is unmet upstream:
+
+```shell
+python3 ~/.agents/skills/research-library/scripts/package_health.py pypi invoke
+python -W error::ResourceWarning -c "import gc; from invoke import Context; Context().run('true', hide=True); gc.collect()"
+```
+
+The probe prints two `unclosed file` lines while the leak remains. When it prints nothing, the
+ignore can go.
+
+[PITFALL: the probe reports the warnings but **exits 0**, because they are raised during
+finalization, where `-W error` cannot turn them into a failure. Reading the exit code rather than
+the output says "fixed" about a version that still leaks.]
+
 ## Recommended direction
 
 When **both** tools accept `$/`:
@@ -70,4 +95,8 @@ The change then reaches consumers through the normal release and sweep, and each
 own `uses: ./` lines. Retire the first `DEFERRED` then.
 
 When actionlint knows `ubuntu-26.04`, close the second `DEFERRED`, with no action beyond that.
-Retire the plan once both are closed.
+
+When the invoke probe prints nothing, remove the `ResourceWarning` ignore and its comment from
+`src/repo_tasks/configs/pytest.ini`, run `inv configs.pull` and the gate, and close the third.
+
+Retire the plan once all three are closed.
