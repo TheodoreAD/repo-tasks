@@ -1,5 +1,5 @@
 ---
-status: blocked on actionlint and act accepting uses: $/, checked at every consumer sweep
+status: blocked on actionlint and act accepting the self-repository uses form, checked at every consumer sweep
 updated: 2026-09-28
 ---
 
