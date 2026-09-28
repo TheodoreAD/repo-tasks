@@ -51,5 +51,19 @@ thing either one revisits.]
 
 ## Recommended direction
 
-Whatever lands, agent-skills then declares its scripts, pulls, fixes the ~50 real findings, and
-drops `skills*` from its `[pyright] unchecked`.
+Proposed 2026-09-29 and put to the user, who deferred both questions rather than choosing:
+
+- **Tier shape: a shipped tier, consumer-declared paths.** repo-tasks ships one "scripts" tier with
+  the `Any`/Unknown rules relaxed, and a consumer lists which trees get it
+  (`[pyright] scripts = ["skills/*/scripts"]`), from which `configs.pull` derives the
+  `executionEnvironments` entry. That keeps one answer for which rules are relaxed, and makes the
+  paths the declared fact — the same derivation-not-preservation rule `anyio_mode` and
+  `pythonVersion` already follow (`contributing/test-tiers.md`, the `anyio_mode` section).
+- **Sub-tree include: full-path globs.** `extra-include` accepts a glob like `skills/*/scripts*`,
+  which pyright already takes, and `configs.check-include` learns to match a tracked file's full
+  path rather than its first segment. That keeps `contributing/file-discovery.md`'s settled
+  includes-not-excludes rule, which an `extra-exclude` key would reopen.
+
+Whatever lands, agent-skills then declares its scripts, pulls, and drops `skills*` from its
+`[pyright] unchecked`. Its ~50 real findings are already fixed there (agent-skills `4a723bb`, not
+yet pushed on 2026-09-29), so declaring the tier should turn its gate on with nothing red.
