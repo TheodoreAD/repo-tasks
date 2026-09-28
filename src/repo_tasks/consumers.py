@@ -94,11 +94,11 @@ class _Finding:
     """One clause of a consumer's report line, and whether it means that consumer is behind.
 
     Most findings do, and `behind=True` is the default for that reason. The exception is a consumer
-    with **no CI at all**: that is an open question about the repo rather than drift from this one —
-    `invoke-stubs` has no `.github/` directory, and the plan records that the security-caller item
-    cannot be done there until somebody decides whether that repo has CI. Reporting it as behind
-    would be asserting the answer, and staying silent would lose the one place where a green local
-    gate is the whole of the evidence. So it is said and not counted."""
+    with **no CI at all**: that is an open question about the repo rather than drift from this one,
+    and the security-caller item cannot be done there until somebody decides whether that repo has
+    CI. `invoke-stubs` was that case until it gained workflows before the v0.6.0 sweep. Reporting it
+    as behind would be asserting the answer, and staying silent would lose the one place where a
+    green local gate is the whole of the evidence. So it is said and not counted."""
 
     text: str
     behind: bool = True

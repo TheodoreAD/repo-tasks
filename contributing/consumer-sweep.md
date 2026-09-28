@@ -356,9 +356,11 @@ these, and a sweep that skips them reports success:
 - **Whether to `venv.recreate` onto the declared floor.** `venv.check` reports a mismatch in nearly
   every consumer on first run; whether to develop on the floor rather than the newest is that repo's
   call.
-- **Whether a consumer has CI at all.** `invoke-stubs` has no `.github/`, so its local gate is the
-  whole of the evidence for a sweep there, and the security caller cannot be added until that repo
-  decides whether it wants CI.
+- **Whether a newly declared consumer has CI at all.** Every consumer declared today has
+  `.github/workflows/`, but one without is the case where its local gate is the whole of the
+  evidence for a sweep, and the security caller cannot be added until that repo decides whether it
+  wants CI. `consumers.diff` says `no CI at all` without counting it as behind, which makes it a
+  question for this reading rather than a check.
 
 [PITFALL: **both new checks landed by finding something in a repo that looked finished.** The pin
 check named `ingesta`, swept and reported up to date hours earlier; the caller check named
