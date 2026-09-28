@@ -85,6 +85,13 @@ per-consumer loop below and a session in that repo. Nothing here writes into a c
 After changing any of: the `repo-tasks-quality` manifest in `pyproject.toml`, anything under
 `src/repo_tasks/configs/`, or a `quality.*` / `test.*` step that shells out to a binary.
 
+A comment-only change under those paths rides the next release rather than triggering one. A sweep
+costs a tag and a session per consumer, and a comment changes nothing a consumer's gate does.
+Decided 2026-09-29, when a citation fix in the shipped `ruff.toml` and a pointer in `pytest.ini`
+were all that had changed since `v0.6.0`. The cost of waiting is that `consumers.diff`, measuring
+this repo's working tree, reports those files behind in every consumer until the release, which is
+drift they cannot act on yet.
+
 `inv consumers.diff` answers **which** of them need it, and it is worth running whether or not you
 changed one of those — a consumer can be behind because of somebody else's change, or because
 nothing has swept it in weeks. That is not a hypothetical: its first run, 2026-09-13, found
