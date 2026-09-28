@@ -1,6 +1,6 @@
 ---
-status: blocked on a sweep of scaffoldapy or agent-skills, the only consumers whose lock has no AnyIO, to verify the line is omitted
-updated: 2026-09-26
+status: landed
+updated: 2026-09-29
 repo: git@github.com:TheodoreAD/repo-tasks.git
 ---
 
@@ -82,12 +82,13 @@ hand-edits kept across a pull); only the second has the two-answers problem. Sam
 B in `2026-08-29-python-floor-in-the-shipped-configs.md`, so the "decide these together" clause is
 satisfied — one rule covers both.]
 
-[DEFERRED: Whether `configs.diff` should report a local edit to a pulled file loudly enough to be
-noticed. It compares against the canonical copy already; what is missing is anything in the routine
-`quality.precommit` path that surfaces the difference, so a diverged file stays diverged silently
-until someone runs the pull that reverts it. Derivation removes the immediate need — the affected
-consumer stops carrying a hand-edit at all — but not the general hole, which the next hand-edit
-falls into.]
+Moved 2026-09-29 to `plans/2026-09-06-dev-group-drift-in-the-gate.md`, "The config-files half of the
+same question": whether `configs.diff` should report a local edit to a pulled file loudly enough to
+be noticed. It compares against the canonical copy already; what is missing is anything in the
+routine `quality.precommit` path that surfaces the difference, so a diverged file stays diverged
+silently until someone runs the pull that reverts it. Derivation removes the immediate need — the
+affected consumer stops carrying a hand-edit at all — but not the general hole, which the next
+hand-edit falls into.
 
 ## What the predicate has to be, and the one that looks right and is not
 
@@ -147,13 +148,15 @@ That passed only because this repo's own venv carries AnyIO — the same hidden 
 this plan is about, reproduced inside its own test suite. They now write the derived text, so they
 assert on the file a consumer without AnyIO actually receives.
 
-[UNVERIFIED: the derivation is proven against a hand-written `uv.lock` fixture and against this
-repo, never against the consumer that needs the line. Nothing reaches a consumer until
-`inv repo-tasks.update` moves the global tool; `contributing/consumer-sweep.md` owns that ordering.
-One consumer data point since, recorded by the now-retired `2026-08-25-consumer-transitions.md`: the
-2026-09-05 `power-user-linux-setup` sweep saw `anyio_mode` **emitted, correctly**, since AnyIO is in
-that lock. That is the positive case only; the consumer that needs the line to be absent has not
-been swept.]
+**Verified 2026-09-29, closing what was tagged unverified here:** agent-skills' sweep that day
+pulled `v0.6.0`'s configs (its `6a2ea20`) from a lock with no AnyIO, the line was omitted, and its
+1,306 tests and CI run `36485370139` passed on the pulled file. The earlier note: the derivation was
+proven against a hand-written `uv.lock` fixture and against this repo, never against the consumer
+that needs the line. Nothing reaches a consumer until `inv repo-tasks.update` moves the global tool;
+`contributing/consumer-sweep.md` owns that ordering. One consumer data point since, recorded by the
+now-retired `2026-08-25-consumer-transitions.md`: the 2026-09-05 `power-user-linux-setup` sweep saw
+`anyio_mode` **emitted, correctly**, since AnyIO is in that lock. That was the positive case only,
+until the agent-skills sweep above.
 
 Rejected: **shipping AnyIO as a `repo-tasks-quality` dependency** and then shipping the line
 unconditionally. It reads well — the manifest is already where the family standardises pytest
@@ -165,12 +168,13 @@ every consumer's dev environment for a key most of them will never use.
 
 ## The other conditional line in the same file
 
-[DEFERRED: drop `ignore:unclosed file:ResourceWarning` from the shipped `pytest.ini` once `invoke`
-closes the subprocess pipes its `Local` runner opens. Moved here from the retired integration-tier
-plan because it is a line in this same file with a stated expiry condition and no tracker: nothing
-watches invoke releases for it, so it will be noticed whenever someone next reads `pytest.ini`,
-where the comment names the condition. Unlike `anyio_mode` this one is unconditional today and does
-not need deriving — the question is only when it can go.]
+Moved 2026-09-29, with its re-check below, to
+`plans/2026-09-28-upstream-waits-behind-shipped-config-workarounds.md`, which every consumer sweep
+runs — the trigger this item never had: drop `ignore:unclosed file:ResourceWarning` from the shipped
+`pytest.ini` once `invoke` closes the subprocess pipes its `Local` runner opens. Moved here from the
+retired integration-tier plan because it is a line in this same file with a stated expiry condition
+and no tracker. Unlike `anyio_mode` this one is unconditional today and does not need deriving — the
+question is only when it can go.
 
 **Re-checked 2026-09-08: not yet, and not close.** invoke's latest release is `3.0.3`, which is what
 this repo locks, so "is there a newer release" answers nothing — the check has to read the code. On
@@ -192,3 +196,23 @@ The probe prints two `unclosed file` lines today. When it prints nothing, the ig
 [PITFALL: the probe reports the warnings but **exits 0**, because they are raised during
 finalization, where `-W error` cannot turn them into a failure. Reading the exit code rather than
 the output says "fixed" about a version that still leaks.]
+
+## Migrated to
+
+- The two decisions, the in-process-predicate pitfall, the rejected AnyIO-in-the-manifest option,
+  and verification on both sides of the predicate: `contributing/test-tiers.md`, "`anyio_mode`: the
+  one line the shipped `pytest.ini` derives per consumer". The shipped `pytest.ini` comment and
+  `_project_resolves_anyio`'s docstring now point there.
+- The isolation pitfall (`uv run --with` layering over an active venv): not migrated, since
+  `~/.agents/AGENTS.md`, "Probing whether a dependency is absent", already carries it machine-wide.
+  The new section names it in one clause.
+- The first `DEFERRED`: `plans/2026-09-06-dev-group-drift-in-the-gate.md`, as the config-files half
+  of that plan's question.
+- The `ResourceWarning` wait and its re-check:
+  `plans/2026-09-28-upstream-waits-behind-shipped-config-workarounds.md`, renamed from its
+  actionlint-and-act title to hold it, and re-run 2026-09-29 — still two unclosed pipes on invoke
+  3.0.3.
+- The 2026-08-29/30 measurement tables and the `c514bd9` implementation notes: dropped as
+  verification log; the code and its tests carry the contract.
+- Not fixable from here: agent-skills' pulled `pytest.ini` still cites this plan's path. The next
+  pull after a release replaces that comment with the new pointer.

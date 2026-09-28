@@ -138,7 +138,7 @@ def _project_resolves_anyio(root: Path) -> bool:
     bump-my-version -> httpx2 and would therefore answer "yes" for every consumer, including the
     ones whose venv has none. The lock is a fact about the target project, needs no interpreter,
     and is readable before any venv exists (pull runs during bootstrap). See
-    plans/2026-08-29-pytest-ini-anyio-mode.md."""
+    contributing/test-tiers.md, the `anyio_mode` section."""
     lock = root / "uv.lock"
     # The closing quote is what keeps this off a package merely prefixed `anyio-`.
     return lock.exists() and 'name = "anyio"' in lock.read_text(encoding="utf-8")

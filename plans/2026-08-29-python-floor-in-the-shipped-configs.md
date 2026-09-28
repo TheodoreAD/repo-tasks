@@ -97,8 +97,9 @@ Measured 2026-08-29 on basedpyright 1.39.10, in the same scratch projects as the
   CI agree because the answer is in the file. The cost is that this one file stops being a
   byte-for-byte materialisation, so `configs.diff` has to apply the same derivation before comparing
   or it reports drift forever — and "why does this repo's config differ" gains a second possible
-  answer, which is exactly the objection raised against a per-repo append in
-  `2026-08-29-pytest-ini-anyio-mode.md`. The two questions should be answered the same way.
+  answer, which is exactly the objection raised against a per-repo append in the now-retired
+  `2026-08-29-pytest-ini-anyio-mode.md` (its rationale is in `contributing/test-tiers.md`, the
+  `anyio_mode` section). The two questions should be answered the same way.
 - **C. A library-tier repo's venv is 3.11.** basedpyright's found-interpreter default is then
   already correct and no config changes at all — the cheapest fix that has no editor/CI split. The
   cost is that dev runs the floor rather than the newest, and `venv.create` has to know which tier
@@ -118,7 +119,7 @@ they read:
   stays correct after, with nothing to redo. Only C genuinely needs the tier, because only C has to
   decide what a venv is built with. This plan's `depends_on: [scaffoldapy]` was removed on that
   basis.
-- **Its cost is not the cost a per-repo append pays**, which is what
+- **Its cost is not the cost a per-repo append pays**, which is what the now-retired
   `2026-08-29-pytest-ini-anyio-mode.md` assumed when it said the two should be decided together.
   Derivation and preservation are different mechanisms: a derived file is still fully determined by
   the canonical copy plus one declared input, so `configs.diff` applies the same derivation and

@@ -592,3 +592,43 @@ then current.
 `pytest-asyncio` and `pytest-benchmark` are the two "banner only" cases: one configuration header
 line each, no behaviour change — a weaker violation than a progress bar, and neither is rejected on
 that ground alone.
+
+### `anyio_mode`: the one line the shipped `pytest.ini` derives per consumer
+
+A consumer with async tests needs `anyio_mode = auto`, and `pytest.ini` is the only place it can go:
+pytest reads one config file, and `pytest.ini` wins over `pyproject.toml` whenever it exists. The
+line is **fatal where AnyIO is absent** — its pytest plugin is what defines the key, and the shipped
+`--strict-config` turns an unknown key into `ERROR: Unknown config option`, exit 4, no test run
+(measured 2026-08-29, pytest 9.1.1). Whether a consumer has AnyIO is not something it chose: it
+arrives through `bump-my-version -> httpx2 -> anyio`, so it is in the lock wherever repo-tasks is a
+project dependency and absent where it is a global `uv tool`.
+
+[DECISION: **derived, not shipped to everyone and not preserved as a per-repo append.** Settled
+2026-08-30. `configs.pull` emits the line only when the consumer's lock resolves AnyIO, and
+`configs.diff` applies the same derivation before comparing. That keeps a pulled file fully
+determined by the canonical copy plus declared facts about the consumer, so "why does this repo's
+config differ" keeps one answer. The distinction the append framing missed is **derivation**
+(computed from something declared) against **preservation** (arbitrary hand-edits kept across a
+pull); only the second has the two-answers problem. `pythonVersion` in `pyrightconfig.json` is
+derived by the same rule. Rejected: shipping AnyIO in `repo-tasks-quality` so the line could ship
+unconditionally — the plugins there are justified as inert dependencies, and AnyIO would be added
+only to make one key parse, making an accidental coupling permanent and putting an async framework
+in every consumer's dev environment.]
+
+[DECISION: **the predicate is the consumer's `uv.lock`**, not a probe of its `.venv`. The lock is
+readable before any venv exists — `configs.pull` runs during bootstrap — needs no interpreter, and
+is what `venv.sync` installs from. It also self-heals: if AnyIO leaves a lock, the next pull drops a
+key that would otherwise have become fatal. A hand-installed AnyIO missing from the lock is out of
+scope, as an environment disagreeing with its lock is broken independently of this.]
+
+[PITFALL: **"is AnyIO installed" must not be answered in the process running the task.**
+`importlib.util.find_spec("anyio")` inside `configs.pull` reads whichever interpreter runs
+`repo_tasks`, and for a global-tool consumer that is the tool's own venv, which carries AnyIO
+through the same transitive chain — measured 2026-08-30. It answers "yes" for every consumer and
+writes the fatal line into exactly the repo the derivation protects. `_project_resolves_anyio` in
+`src/repo_tasks/configs.py` carries the same warning. The measuring side of this has its own trap:
+`uv run --with` layers over an active venv, so an absence probe must strip the environment first.]
+
+Verified on both sides of the predicate: `power-user-linux-setup`'s 2026-09-05 sweep emitted the
+line from a lock with AnyIO, and `agent-skills`' 2026-09-29 sweep omitted it from a lock without,
+with its 1,306 tests and CI green on the pulled file.
