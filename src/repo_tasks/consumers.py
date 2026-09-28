@@ -9,10 +9,11 @@ found by hand on 2026-09-13 rather than by anything that runs.
 It also reports the two things `configs.diff` cannot, both of which are files at known paths rather
 than anything it compares:
 
-- **The bootstrap pin.** An unpinned `bootstrap-repo-tasks.sh` installs whatever `main` is at CI run
-  time however recently that repo's configs were pulled, which is the state that makes a push here a
+- **The pin.** An unpinned `bootstrap-repo-tasks.sh` installs whatever `main` is at CI run time
+  however recently that repo's configs were pulled, which is the state that makes a push here a
   deploy. Until 2026-09-26 a consumer swept without the stamp step looked identical to one swept with
-  it.
+  it. A consumer with no bootstrap pins through its own `pyproject.toml` and lock instead, and there
+  the declared git ref is the pin.
 - **The security-workflow caller.** An *addition* to a consumer rather than a `configs.pull`, so
   nothing compares it — and where it does exist, its SHA pin goes stale in silence.
 
@@ -33,10 +34,12 @@ declared rather than derived, and the rest of that file for what to do about wha
 
 import contextlib
 import re
+import tomllib
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _installed_version
 from pathlib import Path
+from typing import cast
 
 from invoke import Context, task
 from invoke.exceptions import Exit
@@ -50,6 +53,11 @@ _SECURITY_REUSABLE = ".github/workflows/security-reusable.yml"
 """This repo's own path for the workflow a consumer calls — matched as a suffix of the `uses:` ref."""
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
+
+_GIT_REQUIREMENT = re.compile(r"^repo-tasks\s*@\s*git\+(?P<url>\S+)\s*$")
+"""A PEP 508 direct reference to this package from git — the form a consumer's own lock resolves."""
+
+_RELEASE_TAG = re.compile(r"^v\d+(\.\d+)*$")
 
 
 def _measured_version() -> str:
@@ -145,11 +153,74 @@ def _pin_line(consumer: Consumer, measured: str) -> str | None:
     consumer pinned to something else is behind *this report*, which is what a sweep acts on."""
     pin = read_pin(consumer.path)
     if not pin.present:
-        return None  # pins through its own lock; `deps.lock --package repo-tasks` is its equivalent
+        return None  # pins through its own lock, which `_lock_pin_line` reads instead
     if pin.version is None:
         return "bootstrap unpinned — its CI installs whatever `main` is at run time"
     if pin.version != measured:
         return f"bootstrap pinned to v{pin.version}, behind the v{measured} this was measured with"
+    return None
+
+
+def _table(value: object) -> dict[str, object]:
+    """A TOML table, or an empty one where the key is absent or holds something else."""
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def _items(value: object) -> list[object]:
+    """A TOML array, or an empty one where the key is absent or holds something else."""
+    return cast(list[object], value) if isinstance(value, list) else []
+
+
+def _git_refs(pyproject: dict[str, object]) -> list[str | None]:
+    """The ref of every git-sourced `repo-tasks` declaration in one parsed pyproject.toml — None for
+    a declaration naming no ref at all — and an empty list where nothing declares it from git.
+
+    Two spellings, because both are in the family: a `[tool.uv.sources]` table
+    (`power-user-linux-setup`) and a PEP 508 direct reference in a dependency list or group
+    (`invoke-stubs`). A PEP 508 ref is whatever follows an `@` in the URL's last path segment, which
+    keeps the `git@` of an ssh URL out of it."""
+    refs: list[str | None] = []
+    source = _table(_table(_table(pyproject.get("tool")).get("uv")).get("sources")).get("repo-tasks")
+    for entry in _items(source) or [source]:  # one table, or a list of them split by marker
+        table = _table(entry)
+        if "git" in table:
+            ref = table.get("tag") or table.get("rev") or table.get("branch")
+            refs.append(ref if isinstance(ref, str) else None)
+
+    project = _table(pyproject.get("project"))
+    lists = [
+        project.get("dependencies"),
+        *_table(project.get("optional-dependencies")).values(),
+        *_table(pyproject.get("dependency-groups")).values(),
+    ]
+    for requirement in (r for deps in lists for r in _items(deps) if isinstance(r, str)):
+        if (match := _GIT_REQUIREMENT.match(requirement)) is not None:
+            last_segment = match["url"].split("#", 1)[0].rsplit("/", 1)[-1]
+            refs.append(last_segment.rsplit("@", 1)[1] if "@" in last_segment else None)
+    return refs
+
+
+def _lock_pin_line(consumer: Consumer, measured: str) -> str | None:
+    """What to say about a `repo-tasks` this consumer declares from git itself, or None when it
+    declares none or pins it to the measured release.
+
+    The other half of `_pin_line`. A consumer with no bootstrap pins through its own lock, and until
+    2026-09-28 this file took that as "nothing to report" — the re-lock in the sweep was assumed to
+    be its equivalent of `stamp`. It was not: both such consumers declared a bare git URL, so every
+    re-lock resolved `main`, and they silently kept the behaviour the pinning decision removed
+    everywhere else. The declared tag, not the lock, is what a re-lock moves within, so the tag is
+    what gets read. An unreadable pyproject.toml says nothing here: `_measure` already reports it."""
+    try:
+        pyproject = tomllib.loads((consumer.path / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    for ref in _git_refs(pyproject):
+        if ref is None:
+            return "repo-tasks declared from git with no tag — its lock re-resolves `main`"
+        if not _RELEASE_TAG.match(ref):
+            return f"repo-tasks declared at {ref!r}, not a release tag"
+        if ref.removeprefix("v") != measured:
+            return f"repo-tasks declared at {ref}, behind the v{measured} this was measured with"
     return None
 
 
@@ -178,9 +249,9 @@ def _report(consumer: Consumer, source: str | None, measured: str, security_head
     if isinstance(drift, str):
         print(f"[consumers.diff] {consumer.name}: {drift}")
         return True
-    pin = _pin_line(consumer, measured)
+    pins = [line for line in (_pin_line(consumer, measured), _lock_pin_line(consumer, measured)) if line]
     security = _security_finding(consumer, security_head)
-    findings = [f for f in (_Finding(pin) if pin else None, security) if f is not None]
+    findings = [*(_Finding(line) for line in pins), *([security] if security else [])]
     if drift.clean and not findings:
         print(f"[consumers.diff] {consumer.name}: up to date")
         return False
@@ -211,7 +282,8 @@ def _report(consumer: Consumer, source: str | None, measured: str, security_head
 def diff(c: Context, source: str | None = None, name: str | None = None):
     """Report what every repo declared as a consumer of this package is behind on — drifted config
     files, dev-group entries the manifest has grown, constraints it declares without, an unpinned or
-    stale `bootstrap-repo-tasks.sh`, and a missing or stale caller for the shipped reusable security
+    stale `bootstrap-repo-tasks.sh` or git-declared `repo-tasks`, and a missing or stale caller for
+    the shipped reusable security
     workflow — without writing anything anywhere. Exits nonzero if any of them is behind or any
     declared checkout is absent.
 

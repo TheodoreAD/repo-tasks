@@ -124,6 +124,7 @@ Then in each consumer's own checkout:
 ```shell
 # Only where this consumer pins repo-tasks in its own uv.lock — and genuinely first, above
 # configs.diff, because everything below reads the installed package (see the pitfall below).
+# Edit the declared tag in pyproject.toml first: a re-lock only moves within it.
 inv deps.lock --package repo-tasks
 inv venv.sync               # or plain `uv sync` where the consumer publishes no `venv` collection
 
@@ -161,8 +162,17 @@ It runs after the gate because `stamp` pins the version **active in the process 
 the newest tag: that records what this repo was verified against, and running it earlier would pin a
 version not yet known to work here. It needs the network for the tag list, and falls back to the
 unpinned form rather than pinning a tag that does not exist. `power-user-linux-setup` and
-`invoke-stubs` have no bootstrap script — they pin through their own lock, so the step is a no-op
-there and the `inv deps.lock --package repo-tasks` at the top is their equivalent.
+`invoke-stubs` have no bootstrap script — they pin through their own `pyproject.toml`, so the step
+is a no-op there. Their equivalent is editing the declared tag **and** re-locking, which is why the
+first step of the loop says to edit first: a re-lock alone only moves within whatever ref is
+declared.
+
+[PITFALL: **a re-lock was taken for the equivalent of `stamp`, and it was not one.** Both
+lock-pinning consumers declared a bare git URL, so every `deps.lock --package repo-tasks` resolved
+`main` — measured 2026-09-28 in `invoke-stubs`, which locked a commit four past the `v0.6.0` tag —
+and they silently kept the behaviour the pinning decision above removed everywhere else. Nothing
+reported it, because `consumers.diff` read only a bootstrap's pin. It now reads the declared ref
+too: no tag, a ref that is not a release tag, or a tag behind the version it measured with.]
 
 [PITFALL: **not `inv configure`.** That is the fresh-checkout composite — dev-env setup,
 `configs.pull` and `stamp` in one — so in a sweep it re-runs steps already done above, in a
@@ -328,9 +338,11 @@ Nothing about whether to pin: that is the decision beside the stamp step above.
 Nor about which consumers are unpinned, nor which lack the security-workflow caller:
 `consumers.diff` reports both since 2026-09-26 — `bootstrap unpinned` or a pin behind the version
 the run measured with, and a missing caller or one whose SHA is behind the reusable workflow it
-names. Report-mode wiring was the third candidate for a check and needed none: it only bites a
-consumer that hand-builds its own root `Collection`, which is `power-user-linux-setup` (wired) and
-the repos `scaffoldapy` generates (that repo's own open question).
+names. Since 2026-09-29 the same goes for a consumer pinning through its own `pyproject.toml`: a
+git-declared `repo-tasks` with no tag, a ref that is not a release tag, or a tag behind. Report-mode
+wiring was the third candidate for a check and needed none: it only bites a consumer that
+hand-builds its own root `Collection`, which is `power-user-linux-setup` (wired) and the repos
+`scaffoldapy` generates (that repo's own open question).
 
 What stays open is the part of a sweep that is a **reading** rather than a check. No command can do
 these, and a sweep that skips them reports success:
@@ -344,8 +356,6 @@ these, and a sweep that skips them reports success:
 - **Whether to `venv.recreate` onto the declared floor.** `venv.check` reports a mismatch in nearly
   every consumer on first run; whether to develop on the floor rather than the newest is that repo's
   call.
-- **Task-code lag in a consumer pinning `repo-tasks` in its own lock** (`power-user-linux-setup`,
-  `invoke-stubs`), which no diff of config files can see.
 - **Whether a consumer has CI at all.** `invoke-stubs` has no `.github/`, so its local gate is the
   whole of the evidence for a sweep there, and the security caller cannot be added until that repo
   decides whether it wants CI.

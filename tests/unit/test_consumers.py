@@ -293,6 +293,87 @@ def test_reading_the_pin_writes_nothing_into_the_consumer(tmp_cwd, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# the lock pin: a consumer declaring repo-tasks from git itself, with no bootstrap
+# ---------------------------------------------------------------------------
+
+
+def _run_alpha(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, pyproject: str, measured: str = "0.6.0") -> None:
+    """One consumer, clean on every other line, whose only finding can be its declared pin."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    (_consumer_tree(tmp_cwd, "alpha") / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    monkeypatch.setattr(consumers, "_measured_version", lambda: measured)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+
+
+def test_a_uv_source_with_no_tag_is_behind(tmp_cwd, monkeypatch, capsys):
+    """The state both lock-pinning consumers were in until 2026-09-28: a bare git source, so every
+    `deps.lock --package repo-tasks` resolved `main` while the sweep doc called it the equivalent of
+    `stamp`. Nothing reported it, because the only pin this file read was a bootstrap's."""
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[tool.uv.sources]\nrepo-tasks = { git = "https://github.com/TheodoreAD/repo-tasks" }\n',
+    )
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "alpha: repo-tasks declared from git with no tag" in capsys.readouterr().out
+
+
+def test_a_direct_reference_at_the_measured_tag_is_up_to_date(tmp_cwd, monkeypatch, capsys):
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[dependency-groups]\ndev = ["repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks@v0.6.0"]\n',
+    )
+    consumers.diff.body(_ctx())
+    assert "alpha: up to date" in capsys.readouterr().out
+
+
+def test_a_uv_source_at_an_older_tag_names_both(tmp_cwd, monkeypatch, capsys):
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[tool.uv.sources]\nrepo-tasks = { git = "https://github.com/TheodoreAD/repo-tasks", tag = "v0.5.0" }\n',
+    )
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "repo-tasks declared at v0.5.0, behind the v0.6.0 this was measured with" in capsys.readouterr().out
+
+
+def test_a_branch_is_a_ref_but_not_a_release(tmp_cwd, monkeypatch, capsys):
+    """Naming `main` explicitly is the same drift as naming nothing, and says so differently."""
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[project]\ndependencies = ["repo-tasks @ git+https://github.com/TheodoreAD/repo-tasks@main"]\n',
+    )
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "repo-tasks declared at 'main', not a release tag" in capsys.readouterr().out
+
+
+def test_the_user_in_an_ssh_url_is_not_read_as_a_ref(tmp_cwd, monkeypatch, capsys):
+    """`git@github.com` carries an `@` too. Only one in the URL's last path segment is a ref."""
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[dependency-groups]\ndev = ["repo-tasks @ git+ssh://git@github.com/TheodoreAD/repo-tasks"]\n',
+    )
+    with pytest.raises(Exit):
+        consumers.diff.body(_ctx())
+    assert "repo-tasks declared from git with no tag" in capsys.readouterr().out
+
+
+def test_a_consumer_not_declaring_repo_tasks_from_git_has_no_lock_pin(tmp_cwd, monkeypatch, capsys):
+    """A registry requirement, or none at all, is not something this reads — the global-tool
+    consumers declare no repo-tasks, and a version specifier is the resolver's job, not a pin."""
+    _run_alpha(tmp_cwd, monkeypatch, '[project]\ndependencies = ["repo-tasks>=0.5"]\n')
+    consumers.diff.body(_ctx())
+    assert "alpha: up to date" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # the security-workflow caller: an addition to a consumer, so nothing compares it
 # ---------------------------------------------------------------------------
 
