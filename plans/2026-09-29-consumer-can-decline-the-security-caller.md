@@ -1,5 +1,5 @@
 ---
-status: idea
+status: landed
 updated: 2026-09-29
 source_repo: github.com-personal/agent-skills
 source_session: c7d58945-4709-4fa6-9253-1140af86d9c0.jsonl
@@ -34,3 +34,20 @@ example `[security] caller = false` with a required `reason`. `consumers.diff` t
 declined, with the reason, rather than as missing, and still reports a caller whose SHA is behind
 for consumers that have one. `[pyright] unchecked` is the precedent: a deliberate gap is reported as
 deliberate rather than failing.
+
+## Migrated to
+
+Landed 2026-09-29 in `37cf195`, as recommended: `[security] caller = false` plus a required
+`reason`, read by `projects.security_caller_declined` and reported by `consumers.diff` as
+`declines the security caller: <reason>`, not counted as behind. Two choices beyond the plan's text,
+both recorded in the code and tests: a bare `caller = false` with no reason is still reported as
+behind, and a caller that exists is checked whatever the declaration says.
+
+- Usage: `contributing/consumer-sweep.md`, "Still open", with the example table.
+- Rationale: the docstrings of `projects.security_caller_declined` and `consumers._Finding`.
+- Verified against the original case: a local clone of agent-skills with the declaration appended,
+  under `REPO_TASKS_PROJECTS_ROOT`, reported
+  `agent-skills: … declines the security caller: nothing in uv.lock ships to anyone …` in place of
+  `no caller for .github/workflows/security-reusable.yml`.
+- Not done here, deliberately: the declaration in agent-skills' own `repo-tasks.toml`. That repo's
+  sweep plan owns it, and a note that this landed is filed for it.
