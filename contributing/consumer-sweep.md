@@ -337,9 +337,11 @@ Nothing about whether to pin: that is the decision beside the stamp step above.
 
 Nor about which consumers are unpinned, nor which lack the security-workflow caller:
 `consumers.diff` reports both since 2026-09-26 — `bootstrap unpinned` or a pin behind the version
-the run measured with, and a missing caller or one whose SHA is behind the reusable workflow it
-names. Since 2026-09-29 the same goes for a consumer pinning through its own `pyproject.toml`: a
-git-declared `repo-tasks` with no tag, a ref that is not a release tag, or a tag behind.
+the run measured with, and a missing caller or one pinned to a commit whose `security-reusable.yml`
+differs from the current one. The file is compared rather than the SHA, so a pin to any release's
+tag commit reads as current until the workflow itself changes. Since 2026-09-29 the same goes for a
+consumer pinning through its own `pyproject.toml`: a git-declared `repo-tasks` with no tag, a ref
+that is not a release tag, or a tag behind.
 
 A consumer that has decided against the caller says so in its own `repo-tasks.toml`, and the report
 then prints the decision instead of a missing caller, without counting it as behind:

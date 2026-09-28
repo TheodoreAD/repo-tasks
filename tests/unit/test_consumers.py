@@ -22,14 +22,27 @@ _SECURITY_HEAD = "a" * 40
 _GIT_LOG = f"git log -1 --format=%H -- {consumers._SECURITY_REUSABLE}"
 
 
-def _ctx(head: str = _SECURITY_HEAD) -> MockContext:
-    """A context answering the one command `diff` shells out to.
+_HEAD_BLOB = "f" * 40
 
-    That is the local `git log` reading this repo's own `security-reusable.yml` head, so a consumer's
-    caller pin can be compared against something real. A dict-valued `run` is deliberate: anything
-    else this task starts shelling out to fails loudly here rather than being absorbed, which is the
-    property that caught this call being added in the first place."""
-    return MockContext(run={_GIT_LOG: Result(stdout=f"{head}\n", exited=0)})
+
+def _rev_parse(rev: str) -> str:
+    return f"git rev-parse --verify --quiet {rev}:{consumers._SECURITY_REUSABLE}"
+
+
+def _ctx(head: str = _SECURITY_HEAD, blobs: dict[str, str] | None = None) -> MockContext:
+    """A context answering the commands `diff` shells out to.
+
+    The local `git log` reading this repo's own `security-reusable.yml` head, and `git rev-parse`
+    for that file's blob at the head and at each pin in `blobs` — a pin whose blob equals
+    `_HEAD_BLOB` carries the same file. A dict-valued `run` is deliberate: anything else this task
+    starts shelling out to fails loudly here rather than being absorbed, which is the property that
+    caught the `git log` call being added in the first place."""
+    run = {
+        _GIT_LOG: Result(stdout=f"{head}\n", exited=0),
+        _rev_parse(head): Result(stdout=f"{_HEAD_BLOB}\n", exited=0),
+    }
+    run.update({_rev_parse(pin): Result(stdout=f"{blob}\n", exited=0) for pin, blob in (blobs or {}).items()})
+    return MockContext(run=run)
 
 
 def _declare(root: Path, toml: str) -> None:
@@ -428,7 +441,7 @@ def test_a_caller_present_is_checked_even_where_one_is_declined(tmp_cwd, monkeyp
     (alpha / "repo-tasks.toml").write_text('[security]\ncaller = false\nreason = "x"\n', encoding="utf-8")
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
     with pytest.raises(Exit):
-        consumers.diff.body(_ctx(head="c" * 40))
+        consumers.diff.body(_ctx(head="c" * 40, blobs={"b" * 40: "e" * 40}))
     assert "security caller pinned to bbbbbbb" in capsys.readouterr().out
 
 
@@ -457,8 +470,34 @@ def test_a_caller_pinned_to_an_older_commit_names_both(tmp_cwd, monkeypatch, cap
     _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
     monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
     with pytest.raises(Exit):
-        consumers.diff.body(_ctx(head="c" * 40))
+        consumers.diff.body(_ctx(head="c" * 40, blobs={"b" * 40: "e" * 40}))
     assert "security caller pinned to bbbbbbb, the reusable workflow is at ccccccc" in capsys.readouterr().out
+
+
+def test_a_caller_pinned_to_a_later_release_commit_with_the_same_file_is_current(tmp_cwd, monkeypatch, capsys):
+    """The natural pin is a release's tag commit, which `ci.check-actions` reads by its `# vX.Y.Z`
+    comment — and for a file edited once and released many times, never the commit that last touched
+    it. `invoke-stubs`, pinned to the `v0.6.0` tag commit, was reported behind `d17c607` with the file
+    byte-identical at both."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(_ctx(head="c" * 40, blobs={"b" * 40: _HEAD_BLOB}))
+    assert "alpha: up to date" in capsys.readouterr().out
+
+
+def test_a_caller_pinned_to_a_commit_this_checkout_lacks_is_behind(tmp_cwd, monkeypatch, capsys):
+    """No blob to compare is not evidence of a match: the pin is reported, not waved through."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _consumer_tree(tmp_cwd, "alpha", security="b" * 40)
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    ctx = _ctx(head="c" * 40)
+    ctx.set_result_for("run", _rev_parse("b" * 40), Result(stdout="", exited=1))
+    with pytest.raises(Exit):
+        consumers.diff.body(ctx)
+    assert "security caller pinned to bbbbbbb" in capsys.readouterr().out
 
 
 def test_a_caller_pinned_to_a_tag_is_reported_as_not_a_sha(tmp_cwd, monkeypatch, capsys):

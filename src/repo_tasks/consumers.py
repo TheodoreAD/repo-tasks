@@ -108,7 +108,23 @@ class _Finding:
     behind: bool = True
 
 
-def _security_finding(consumer: Consumer, head: str | None) -> _Finding | None:
+@dataclass(frozen=True)
+class _ReusableHead:
+    """The newest commit touching this repo's `security-reusable.yml`, and that file's blob there."""
+
+    commit: str
+    blob: str
+
+
+def _blob(c: Context, rev: str) -> str | None:
+    """The blob `security-reusable.yml` has at `rev`, or None where this checkout cannot say — a
+    commit it does not have, or a commit before the file existed."""
+    result = c.run(f"git rev-parse --verify --quiet {rev}:{_SECURITY_REUSABLE}", hide=True, warn=True)
+    blob = result.stdout.strip() if result.ok else ""
+    return blob if _SHA.match(blob) else None
+
+
+def _security_finding(c: Context, consumer: Consumer, head: _ReusableHead | None) -> _Finding | None:
     """Whether this consumer calls the shipped reusable security workflow, and at what commit.
 
     The last mechanical item on the complement list. It is an **addition** to a consumer rather than
@@ -117,7 +133,13 @@ def _security_finding(consumer: Consumer, head: str | None) -> _Finding | None:
 
     `head` is the newest commit touching `security-reusable.yml` in this repo, read once by the
     caller. None where that read failed (a shallow clone, or not a git checkout), in which case the
-    presence half still answers and the currency half is skipped rather than guessed."""
+    presence half still answers and the currency half is skipped rather than guessed.
+
+    **Current means the same file, not the same SHA.** `ci.check-actions` reads a SHA pin's
+    trailing `# vX.Y.Z` as its version, so the natural pin is a release's tag commit — which, for a
+    file edited once and released many times since, is never the commit that last touched it. Until
+    2026-09-29 this compared SHAs, and reported `invoke-stubs`, pinned to the `v0.6.0` tag commit, as
+    behind `d17c607`, with the file byte-identical at both."""
     workflows = consumer.path / ".github" / "workflows"
     if not workflows.is_dir():
         return _Finding("no CI at all, so nothing calls the security workflow", behind=False)
@@ -138,9 +160,11 @@ def _security_finding(consumer: Consumer, head: str | None) -> _Finding | None:
     # Read by content across every workflow rather than by looking for `security.yml`: this plan's
     # own recurring mistake is letting a filename stand in for the thing it usually contains.
     if head is not None:
-        stale = next((pin for pin in pins if _SHA.match(pin) and pin != head), None)
+        stale = next(
+            (pin for pin in pins if _SHA.match(pin) and pin != head.commit and _blob(c, pin) != head.blob), None
+        )
         if stale is not None:
-            return _Finding(f"security caller pinned to {stale[:7]}, the reusable workflow is at {head[:7]}")
+            return _Finding(f"security caller pinned to {stale[:7]}, the reusable workflow is at {head.commit[:7]}")
     loose = next((pin for pin in pins if not _SHA.match(pin)), None)
     if loose is not None:
         return _Finding(f"security caller pinned to {loose!r}, not a 40-character SHA")
@@ -233,19 +257,22 @@ def _lock_pin_line(consumer: Consumer, measured: str) -> str | None:
     return None
 
 
-def _security_head(c: Context) -> str | None:
-    """The newest commit touching this repo's `security-reusable.yml`, so a consumer's pin can be
-    compared against something real.
+def _security_head(c: Context) -> _ReusableHead | None:
+    """What a consumer's caller pin is compared against.
 
     A local `git log`, not the GitHub API: the reporter takes no network, and the answer is in this
     checkout. `warn=True` because a caller outside a git checkout is a reason to skip the currency
     half, never to fail the whole report."""
     result = c.run(f"git log -1 --format=%H -- {_SECURITY_REUSABLE}", hide=True, warn=True)
-    head = result.stdout.strip() if result.ok else ""
-    return head if _SHA.match(head) else None
+    commit = result.stdout.strip() if result.ok else ""
+    if not _SHA.match(commit) or (blob := _blob(c, commit)) is None:
+        return None
+    return _ReusableHead(commit, blob)
 
 
-def _report(consumer: Consumer, source: str | None, measured: str, security_head: str | None) -> bool:
+def _report(
+    c: Context, consumer: Consumer, source: str | None, measured: str, security_head: _ReusableHead | None
+) -> bool:
     """One consumer's line, and whether it is behind. Prints the absent case rather than skipping
     it: a declared name with no checkout is the failure mode the declared list exists to make
     visible, and a reporter that quietly passed over it would be back to reporting success for a
@@ -259,7 +286,7 @@ def _report(consumer: Consumer, source: str | None, measured: str, security_head
         print(f"[consumers.diff] {consumer.name}: {drift}")
         return True
     pins = [line for line in (_pin_line(consumer, measured), _lock_pin_line(consumer, measured)) if line]
-    security = _security_finding(consumer, security_head)
+    security = _security_finding(c, consumer, security_head)
     findings = [*(_Finding(line) for line in pins), *([security] if security else [])]
     if drift.clean and not findings:
         print(f"[consumers.diff] {consumer.name}: up to date")
@@ -316,6 +343,6 @@ def diff(c: Context, source: str | None = None, name: str | None = None):
     security_head = _security_head(c)
     print(f"[consumers.diff] measured with repo-tasks {measured} from {Path(__file__).parent}")
     print(f"[consumers.diff] under {projects_root()}")
-    behind = [consumer.name for consumer in consumers if _report(consumer, source, measured, security_head)]
+    behind = [consumer.name for consumer in consumers if _report(c, consumer, source, measured, security_head)]
     if behind:
         raise Exit(code=1)
