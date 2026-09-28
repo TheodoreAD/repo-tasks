@@ -1,6 +1,6 @@
 ---
-status: idea
-updated: 2026-09-28
+status: landed
+updated: 2026-09-29
 source_repo: github.com-personal/invoke-stubs
 source_session: b418c54c-c032-4559-9cf3-6370d926625b.jsonl
 source_moment: 2026-09-28T19:40:00Z
@@ -32,3 +32,11 @@ Drop the bullet, or rewrite it as the general reading it stands for (whether a c
 all) without naming `invoke-stubs`. Check the table above it and the `stamp` paragraph for other
 claims about `invoke-stubs` while there — the `stamp` one ("no bootstrap script, pins through its
 own lock") still holds.
+
+## Migrated to
+
+Nothing needed a new home. Done 2026-09-29 in `c58c5a2`: the bullet in
+`contributing/consumer-sweep.md` is rewritten as the general reading for a newly declared consumer,
+and `_Finding`'s docstring in `src/repo_tasks/consumers.py`, which made the same claim, now records
+it as past. The table and the `stamp` paragraph were checked; the `stamp` paragraph was rewritten
+the same day for a different reason (the lock-pinning plan, `d15c761`).
