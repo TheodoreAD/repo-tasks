@@ -24,12 +24,13 @@ version-grouping model; `login` names the registry for you and lets docker promp
 credential itself), `helm` (`lint`/`package`/`push`/`login` — charts resolved from
 `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
 idempotent shell auto-activation), `agents` (`wire_claude_hook` — wiring an AI coding agent's shell
-execution to pick up the direnv environment), `dev_env` (`setup` — the one-time post-clone bootstrap
-composing all of the above), `docs` (`clean`/`build`/`serve`, wrapping
-[zensical](https://zensical.org/), plus `link_check`, the dependency-free relative-link check that
-runs in the gate), `ci` (`status`/`check-actions` — GitHub Actions read through `gh`: the previous
-push's conclusion, the warning annotations a green run hides, and which pinned actions are behind
-their latest release), `configs` (`pull`/`diff`/`ensure_deps`/`promote` — materializes
+execution to pick up the direnv environment; `install_skills` — installing the repo's own skills
+from `skills/` for every agent), `dev_env` (`setup` — the one-time post-clone bootstrap composing
+all of the above), `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/), plus
+`link_check`, the dependency-free relative-link check that runs in the gate), `ci`
+(`status`/`check-actions` — GitHub Actions read through `gh`: the previous push's conclusion, the
+warning annotations a green run hides, and which pinned actions are behind their latest release),
+`configs` (`pull`/`diff`/`ensure_deps`/`promote` — materializes
 `ruff.toml`/`pyrightconfig.json`/`dprint.json`/`pytest.ini`/`zizmor.yml`/ `.editorconfig` from this
 package's own canonical copies, reports what a consumer is behind on, and declares the quality
 tooling those configs need; `promote` runs the other direction and is for this repo only), and
@@ -134,9 +135,18 @@ Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_ch
 
 `inv dev-env.setup` is the one command to run once after cloning: `venv.create` (syncs `.venv` from
 `uv.lock`) + `direnv.allow` + `agents.wire-claude-hook` (wiring Claude Code's Bash tool to
-auto-activate the venv too, no-ops if the repo has no `.envrc`) — `dev_env.py` itself owns no logic,
-it's pure orchestration of those three modules. `inv docs.build`/`docs.serve` assume `zensical` is
-installed — add it as a project `docs` dependency group, it isn't a dependency of this package.
+auto-activate the venv too, no-ops if the repo has no `.envrc`) + `agents.install-skills`
+(installing the skills authored in `skills/<name>/` into `.agents/skills/` for every agent, with a
+per-skill link in `.claude/skills/` for Claude Code, through the `skills` CLI; no-ops without
+`skills/`) — `dev_env.py` itself owns no logic, it's pure orchestration of those modules.
+
+A repo's own skills follow one layout everywhere: authored in `skills/<name>/` and committed,
+installed per clone, and the install targets ignored — `.agents/skills/`, `.claude/skills/` and
+`skills-lock.json` go in `.gitignore`. That keeps an installed copy apart from its source, and lets
+a developer try another skill in the project with a plain `skills add` without touching anything git
+tracks. Re-run `inv agents.install-skills` after editing a skill: the installed copies do not follow
+the source. `inv docs.build`/`docs.serve` assume `zensical` is installed — add it as a project
+`docs` dependency group, it isn't a dependency of this package.
 
 ### What a task needs beyond a checkout
 

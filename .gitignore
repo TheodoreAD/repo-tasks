@@ -16,3 +16,9 @@ dist/
 
 # Claude Code — personal/runtime state, not shared config.
 .claude/settings.local.json
+
+# Agent skills: authored in skills/<name>/ and committed there; these are install targets, written
+# per clone by `inv agents.install-skills` or by a developer trying another skill with `skills add`.
+.agents/skills/
+.claude/skills/
+skills-lock.json
