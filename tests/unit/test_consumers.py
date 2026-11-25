@@ -281,6 +281,58 @@ def test_a_bootstrap_pinned_to_an_older_version_names_both(tmp_cwd, monkeypatch,
     assert "bootstrap pinned to v0.2.0, behind the v0.3.0 this was measured with" in capsys.readouterr().out
 
 
+def test_a_bootstrap_pinned_ahead_is_said_without_being_counted(tmp_cwd, monkeypatch, capsys):
+    """A pin newer than the measuring version means this report's repo-tasks is the stale party —
+    the 2026-11-25 case, right after a release, when every freshly stamped consumer read "behind"."""
+    _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
+    monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
+    _bootstrap(_consumer_tree(tmp_cwd, "alpha"), pinned="0.7.0")
+    monkeypatch.setattr(consumers, "_measured_version", lambda: "0.6.0")
+    monkeypatch.setattr(consumers, "_measure", lambda *_: Drift([], [], [], None))
+    consumers.diff.body(_ctx())  # no Exit: the consumer is not behind
+    out = capsys.readouterr().out
+    assert "bootstrap pinned to v0.7.0, ahead of the v0.6.0 this was measured with" in out
+    assert "behind" not in out
+
+
+def test_versions_compare_numerically_not_as_text():
+    assert consumers._pin_finding("pinned", "0.10.0", "0.9.0").behind is False  # pyright: ignore[reportOptionalMemberAccess]
+    assert consumers._pin_finding("pinned", "0.9.0", "0.10.0").behind is True  # pyright: ignore[reportOptionalMemberAccess]
+    assert consumers._pin_finding("pinned", "0.9.0", "0.9.0") is None
+
+
+def test_an_unparseable_measured_version_still_reports_a_difference():
+    finding = consumers._pin_finding("pinned", "0.7.0", "unknown")
+    assert finding is not None
+    assert finding.behind
+
+
+def test_a_source_checkout_measures_with_its_declared_version(tmp_path, monkeypatch):
+    """The metadata of an editable install lags pyproject.toml until the venv is synced again."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "repo-tasks"\nversion = "4.5.6"\n', encoding="utf-8")
+    monkeypatch.setattr(consumers, "_CHECKOUT_PYPROJECT", pyproject)
+    monkeypatch.setattr(consumers, "_installed_version", lambda _name: "4.5.5")
+    assert consumers._measured_version() == "4.5.6"
+
+
+def test_an_installed_copy_measures_with_its_metadata(tmp_path, monkeypatch):
+    """No checkout around the module — or one belonging to another project — falls back."""
+    other = tmp_path / "pyproject.toml"
+    other.write_text('[project]\nname = "something-else"\nversion = "1.0.0"\n', encoding="utf-8")
+    monkeypatch.setattr(consumers, "_CHECKOUT_PYPROJECT", other)
+    monkeypatch.setattr(consumers, "_installed_version", lambda _name: "4.5.5")
+    assert consumers._measured_version() == "4.5.5"
+    monkeypatch.setattr(consumers, "_CHECKOUT_PYPROJECT", tmp_path / "absent.toml")
+    assert consumers._measured_version() == "4.5.5"
+
+
+def test_this_checkout_finds_its_own_declaration():
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    declared = cast(str, tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"])
+    assert consumers._checkout_version() == declared
+
+
 def test_the_pin_is_reported_alongside_config_drift_not_instead_of_it(tmp_cwd, monkeypatch, capsys):
     _declare(tmp_cwd, '[[consumer]]\nname = "alpha"\n')
     monkeypatch.setenv("REPO_TASKS_PROJECTS_ROOT", str(tmp_cwd))
@@ -352,6 +404,16 @@ def test_a_uv_source_at_an_older_tag_names_both(tmp_cwd, monkeypatch, capsys):
     with pytest.raises(Exit):
         consumers.diff.body(_ctx())
     assert "repo-tasks declared at v0.5.0, behind the v0.6.0 this was measured with" in capsys.readouterr().out
+
+
+def test_a_uv_source_at_a_newer_tag_is_said_without_being_counted(tmp_cwd, monkeypatch, capsys):
+    _run_alpha(
+        tmp_cwd,
+        monkeypatch,
+        '[tool.uv.sources]\nrepo-tasks = { git = "https://github.com/TheodoreAD/repo-tasks", tag = "v0.7.0" }\n',
+    )
+    consumers.diff.body(_ctx())
+    assert "repo-tasks declared at v0.7.0, ahead of the v0.6.0 this was measured with" in capsys.readouterr().out
 
 
 def test_a_branch_is_a_ref_but_not_a_release(tmp_cwd, monkeypatch, capsys):

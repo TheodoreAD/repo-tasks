@@ -59,6 +59,28 @@ _GIT_REQUIREMENT = re.compile(r"^repo-tasks\s*@\s*git\+(?P<url>\S+)\s*$")
 
 _RELEASE_TAG = re.compile(r"^v\d+(\.\d+)*$")
 
+_CHECKOUT_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
+"""This package's own pyproject.toml when it runs from a source checkout (`src/repo_tasks/` two
+levels below it), and a path that does not exist when it runs from an installed wheel."""
+
+
+def _checkout_version() -> str | None:
+    """The version this source checkout declares, or None when this module is not running from one.
+
+    Read from the checkout's pyproject.toml rather than the installed metadata because the metadata
+    lags: `trunkflow.cut` writes the new version into pyproject.toml, and an editable install's
+    metadata keeps the old one until the venv is synced again. The code being measured is this
+    checkout either way, so its own declaration is the true answer. Hit 2026-11-25, right after
+    cutting v0.7.0: the metadata still said 0.6.0, and every consumer just stamped to v0.7.0 was
+    reported behind."""
+    try:
+        pyproject = tomllib.loads(_CHECKOUT_PYPROJECT.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    project = _table(pyproject.get("project"))
+    version = project.get("version")
+    return version if project.get("name") == "repo-tasks" and isinstance(version, str) else None
+
 
 def _measured_version() -> str:
     """What this report was produced by, printed with it.
@@ -66,11 +88,41 @@ def _measured_version() -> str:
     Comparability is the point of running one loop instead of visiting each repo: a per-consumer
     answer is only meaningful against a named version of this package, and a hand-run sweep that
     used the global tool in one repo and a working tree in another produces two answers that cannot
-    be put in the same table. Naming it costs a line and removes the whole question."""
+    be put in the same table. Naming it costs a line and removes the whole question.
+
+    A source checkout answers from its own pyproject.toml — see `_checkout_version` — and an
+    installed copy from its metadata, which for a wheel is written once and cannot go stale."""
+    if (declared := _checkout_version()) is not None:
+        return declared
     try:
         return _installed_version("repo-tasks")
     except PackageNotFoundError:  # a working tree that was never installed, editable or otherwise
         return "unknown"
+
+
+def _release_key(version: str) -> tuple[int, ...] | None:
+    """A release version as a comparable tuple, or None for anything that is not plain dotted
+    digits — `unknown`, a pre-release — which then compares as merely different."""
+    return tuple(int(part) for part in version.split(".")) if re.fullmatch(r"\d+(\.\d+)*", version) else None
+
+
+def _pin_finding(subject: str, pinned: str, measured: str) -> "_Finding | None":
+    """The finding for a consumer pinned at `pinned` when this report measured with `measured`.
+
+    Ahead is not behind. A pin newer than the measuring version means this report's own repo-tasks
+    is the stale party, so it is said — naming what to do here — and not counted against the
+    consumer. Until 2026-11-25 every mismatch read "behind", which turned one stale measurement into
+    a confident wrong finding per consumer."""
+    if pinned == measured:
+        return None
+    pinned_key, measured_key = _release_key(pinned), _release_key(measured)
+    if pinned_key is not None and measured_key is not None and pinned_key > measured_key:
+        return _Finding(
+            f"{subject} v{pinned}, ahead of the v{measured} this was measured with — "
+            "this report's repo-tasks is older than the pin; update it and measure again",
+            behind=False,
+        )
+    return _Finding(f"{subject} v{pinned}, behind the v{measured} this was measured with")
 
 
 def _measure(consumer: Consumer, source: str | None) -> Drift | str:
@@ -171,7 +223,7 @@ def _security_finding(c: Context, consumer: Consumer, head: _ReusableHead | None
     return None
 
 
-def _pin_line(consumer: Consumer, measured: str) -> str | None:
+def _pin_line(consumer: Consumer, measured: str) -> _Finding | None:
     """What to say about this consumer's bootstrap pin, or None when there is nothing to say.
 
     The complement item that stayed unreported longest, and the cheapest of the six: the pin is one
@@ -188,10 +240,8 @@ def _pin_line(consumer: Consumer, measured: str) -> str | None:
     if not pin.present:
         return None  # pins through its own lock, which `_lock_pin_line` reads instead
     if pin.version is None:
-        return "bootstrap unpinned — its CI installs whatever `main` is at run time"
-    if pin.version != measured:
-        return f"bootstrap pinned to v{pin.version}, behind the v{measured} this was measured with"
-    return None
+        return _Finding("bootstrap unpinned — its CI installs whatever `main` is at run time")
+    return _pin_finding("bootstrap pinned to", pin.version, measured)
 
 
 def _table(value: object) -> dict[str, object]:
@@ -233,7 +283,7 @@ def _git_refs(pyproject: dict[str, object]) -> list[str | None]:
     return refs
 
 
-def _lock_pin_line(consumer: Consumer, measured: str) -> str | None:
+def _lock_pin_line(consumer: Consumer, measured: str) -> _Finding | None:
     """What to say about a `repo-tasks` this consumer declares from git itself, or None when it
     declares none or pins it to the measured release.
 
@@ -249,11 +299,11 @@ def _lock_pin_line(consumer: Consumer, measured: str) -> str | None:
         return None
     for ref in _git_refs(pyproject):
         if ref is None:
-            return "repo-tasks declared from git with no tag — its lock re-resolves `main`"
+            return _Finding("repo-tasks declared from git with no tag — its lock re-resolves `main`")
         if not _RELEASE_TAG.match(ref):
-            return f"repo-tasks declared at {ref!r}, not a release tag"
-        if ref.removeprefix("v") != measured:
-            return f"repo-tasks declared at {ref}, behind the v{measured} this was measured with"
+            return _Finding(f"repo-tasks declared at {ref!r}, not a release tag")
+        if (finding := _pin_finding("repo-tasks declared at", ref.removeprefix("v"), measured)) is not None:
+            return finding
     return None
 
 
@@ -285,9 +335,9 @@ def _report(
     if isinstance(drift, str):
         print(f"[consumers.diff] {consumer.name}: {drift}")
         return True
-    pins = [line for line in (_pin_line(consumer, measured), _lock_pin_line(consumer, measured)) if line]
+    pins = [finding for finding in (_pin_line(consumer, measured), _lock_pin_line(consumer, measured)) if finding]
     security = _security_finding(c, consumer, security_head)
-    findings = [*(_Finding(line) for line in pins), *([security] if security else [])]
+    findings = [*pins, *([security] if security else [])]
     if drift.clean and not findings:
         print(f"[consumers.diff] {consumer.name}: up to date")
         return False
