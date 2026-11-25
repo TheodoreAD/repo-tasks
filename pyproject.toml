@@ -1,6 +1,6 @@
 [project]
 name = "repo-tasks"
-version = "0.7.1"
+version = "0.7.2"
 requires-python = ">=3.11"
 # The platforms this actually claims. Linux and macOS are each exercised by a CI job; Windows is
 # not claimed, and the reasons are concrete rather than caution — see plans/. Declared here so the
