@@ -138,7 +138,8 @@ inv venv.sync               # or plain `uv sync` where the consumer publishes no
 repo-tasks configs.diff     # what this consumer has drifted from — both configs and dev group
 repo-tasks configs.ensure-deps
 inv deps.lock               # re-resolve uv.lock; review the diff
-inv deps.check-currency     # manifest entries the lock still holds behind; take any with
+inv deps.check-currency     # manifest entries the lock still holds behind, and every locked
+                            # package with a fixed advisory; take all it lists with
                             # inv deps.lock --package <name>, since a plain lock keeps old pins
 inv venv.sync
 inv configs.pull

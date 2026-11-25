@@ -1,6 +1,7 @@
 """Tests for repo_tasks.deps: asserts the exact command string each task builds via invoke's
 MockContext — the only real logic here is flag-to-flag command construction."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -136,8 +137,25 @@ _RUFF_UPGRADES = Result(stderr="Resolved 64 packages in 1.14s\nUpdate ruff v0.16
 _NO_CHANGE = Result(stderr="Resolved 64 packages in 265ms\nNo lockfile changes detected\n", exited=0)
 
 
+# `uv audit --output-format json`'s real top-level shape (uv 0.11.19, schema "preview"), trimmed to
+# the fields read. It exits 1 whenever it finds something, with the report still on stdout.
+_CLEAN_AUDIT = Result(stdout='{"schema": {"version": "preview"}, "vulnerabilities": [], "adverse_statuses": []}')
+
+
+def _audit(*findings: tuple[str, str, list[str]]) -> Result:
+    vulnerabilities = [
+        {"dependency": {"name": name, "version": version}, "id": f"GHSA-{i}", "fix_versions": fixes}
+        for i, (name, version, fixes) in enumerate(findings)
+    ]
+    return Result(stdout=json.dumps({"schema": {"version": "preview"}, "vulnerabilities": vulnerabilities}), exited=1)
+
+
 def _currency_repo(
-    tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, head: Result, ruff_upgrade: Result = _RUFF_UPGRADES
+    tmp_cwd: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    head: Result,
+    ruff_upgrade: Result = _RUFF_UPGRADES,
+    audit: Result = _CLEAN_AUDIT,
 ) -> MockContext:
     (tmp_cwd / "uv.lock").write_text(
         f'[[package]]\nname = "invoke-stubs"\nversion = "0.1.0"\nsource = {{ git = "{_STUBS_URL}#{_LOCKED}" }}\n\n'
@@ -150,6 +168,7 @@ def _currency_repo(
             deps._CURRENCY_TREE_CMD: Result(stdout=_TREE, exited=0),
             f"git ls-remote {_STUBS_URL} HEAD": head,
             "uv lock --dry-run --upgrade-package ruff --color never": ruff_upgrade,
+            deps._CURRENCY_AUDIT_CMD: audit,
         }
     )
 
@@ -228,6 +247,36 @@ def test_check_currency_asks_uv_for_uncoloured_output(tmp_cwd, monkeypatch):
     ]
     assert uv_calls
     assert all(command.endswith(" --color never") for command in uv_calls)
+
+
+def test_check_currency_sends_a_runtime_advisory_to_the_same_next_steps(tmp_cwd, monkeypatch, capsys):
+    """The ingesta case: a runtime dependency with advisories, which a sweep that only took what this
+    task listed never moved — the Security workflow stayed red across sweeps."""
+    audit = _audit(("aiohttp", "3.14.3", ["3.14.4"]), ("aiohttp", "3.14.3", ["3.14.4"]), ("certifi", "2026.7.22", []))
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD, audit=audit)
+    deps.check_currency.body(c)
+    out = capsys.readouterr().out
+    assert "aiohttp 3.14.3  2 advisories — fixed in 3.14.4" in out
+    assert "inv deps.lock --package aiohttp" in out
+    # Listed, but no command for it: there is no release to move to yet.
+    assert "certifi 2026.7.22  1 advisory — no fixed release yet" in out
+    assert "inv deps.lock --package certifi" not in out
+
+
+def test_check_currency_says_when_the_locked_set_is_clean(tmp_cwd, monkeypatch, capsys):
+    c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD)
+    deps.check_currency.body(c)
+    assert "advisories: none in the locked set" in capsys.readouterr().out
+
+
+def test_check_currency_does_not_call_an_unreadable_audit_clean(tmp_cwd, monkeypatch, capsys):
+    """No network, or a schema uv changed: neither may read as "no advisories"."""
+    for broken in (Result(stderr="error: failed to query OSV", exited=2), Result(stdout='{"schema": {}}')):
+        c = _currency_repo(tmp_cwd, monkeypatch, _AT_HEAD, audit=broken)
+        deps.check_currency.body(c)
+        out = capsys.readouterr().out
+        assert "advisories: could not audit" in out
+        assert "none in the locked set" not in out
 
 
 def test_check_currency_noops_without_a_lock(tmp_cwd, capsys):

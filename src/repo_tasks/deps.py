@@ -2,6 +2,7 @@
 `venv.py`'s `--locked` sync fails loudly on drift instead of ever silently regenerating it."""
 
 import builtins
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -97,6 +98,35 @@ _CURRENCY_TREE_CMD = "uv tree --outdated --depth 1 --locked --only-group dev --q
 # What `inv deps.lock --package <name>` would actually do, without writing the lock.
 _CURRENCY_CONFIRM_CMD = "uv lock --dry-run --upgrade-package {name} --color never"
 
+# The advisories half of check-currency, as JSON so each finding names its package and its fixed
+# versions. Exits 1 when anything is found, with the report still on stdout, so the exit code is not
+# the signal; an unparseable stdout is. The JSON schema is marked preview by uv, which is why a shape
+# this code does not recognise is reported as "could not audit" rather than as clean.
+_CURRENCY_AUDIT_CMD = "uv audit --locked --output-format json --color never"
+
+
+def _advisories(c: Context) -> dict[str, tuple[str, builtins.list[str], int]] | None:
+    """Every package uv audit flags, bare name -> (locked version, fixed versions, advisory count),
+    or None when the audit could not run or answered in a shape this does not know."""
+    result = c.run(_CURRENCY_AUDIT_CMD, hide=True, warn=True)
+    try:
+        data = cast(dict[str, object], json.loads(result.stdout))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    vulnerabilities = data.get("vulnerabilities")
+    if not isinstance(vulnerabilities, builtins.list):
+        return None
+    found: dict[str, tuple[str, builtins.list[str], int]] = {}
+    for entry in cast(builtins.list[dict[str, object]], vulnerabilities):
+        dependency = cast(dict[str, str], entry.get("dependency", {}))
+        name, version = dependency.get("name", "").lower(), dependency.get("version", "?")
+        if not name:
+            continue
+        fixes = [str(v) for v in cast(builtins.list[object], entry.get("fix_versions") or [])]
+        _, known_fixes, count = found.get(name, (version, [], 0))
+        found[name] = (version, sorted({*known_fixes, *fixes}), count + 1)
+    return found
+
 
 def _git_sources() -> dict[str, tuple[str, str]]:
     """Every git-sourced package in uv.lock, bare name -> (repository URL, locked commit).
@@ -190,7 +220,14 @@ def check_currency(c: Context):
     lag nothing can close. A git entry is invisible to that — uv does not look one up
     — so its locked commit is compared with the remote's default-branch head, which is the only
     "latest" such an entry has. Never in `quality.check`: the answer moves when an index does, the
-    same reason `deps.audit` stands alone."""
+    same reason `deps.audit` stands alone.
+
+    It also runs the advisory audit over the whole lock, runtime dependencies included, and adds
+    each flagged package that has a fixed release to the same list of `deps.lock --package`
+    commands. A sweep takes everything this task lists, so it now clears advisories in the same
+    step instead of in one nobody remembers. Added 2026-11-25, after `ingesta`'s Security workflow
+    had been red on 44 runtime advisories across several sweeps, each of which only ever moved the
+    manifest's dev tools."""
     if not _LOCK_PATH.exists():
         print("[deps.check-currency] no uv.lock — nothing to check")
         return
@@ -214,8 +251,29 @@ def check_currency(c: Context):
 
     noun = "entry" if len(names) == 1 else "entries"
     print(f"[deps.check-currency] {len(behind)} of {len(names)} manifest {noun} behind")
+
+    behind.extend(name for name in _report_advisories(c) if name not in behind)
     if behind:
         next_steps(*(f"inv deps.lock --package {name}" for name in behind))
+
+
+def _report_advisories(c: Context) -> builtins.list[str]:
+    """Print the advisory half of check-currency, and return the flagged packages that have a fixed
+    release — the ones a `deps.lock --package` can move."""
+    advisories = _advisories(c)
+    if advisories is None:
+        print("[deps.check-currency] advisories: could not audit — run `inv deps.audit` to see why")
+        return []
+    if not advisories:
+        print("[deps.check-currency] advisories: none in the locked set")
+    fixable: builtins.list[str] = []
+    for name, (version, fixes, count) in sorted(advisories.items()):
+        plural = "advisory" if count == 1 else "advisories"
+        fixed = f"fixed in {', '.join(fixes)}" if fixes else "no fixed release yet"
+        print(f"[deps.check-currency] {name} {version}  {count} {plural} — {fixed}")
+        if fixes:
+            fixable.append(name)
+    return fixable
 
 
 @task(help={"outdated": "Show the latest available version of each installed package"})
