@@ -133,11 +133,12 @@ Three files, which is most of the reason the directories are split at all:
   directory for every unit test; `no_network` disables sockets (`pytest-socket`'s `disable_socket`,
   Unix sockets still allowed) so the tier's third promise is enforced rather than merely stated —
   see "The three promises" above. [PITFALL: `tmp_path` sandboxes the working tree, not the user.
-  `agents.wire_claude_hook` writes an env-cache file under `Path.home()/.cache/claude-code`, and
-  before the fixture existed each unit run left one stale `tmp-pytest-of-*` file per test in the
-  developer's real cache — ~400 accumulated before anyone noticed, because nothing failed. The
-  fixture is autouse for the same reason `tmp_cwd` exists, and `agents.py` resolves the cache
-  directory at call time rather than as an import-time constant so the override actually lands.]
+  `agents.wire_claude_hook` (retired 2026-11-25) wrote an env-cache file under
+  `Path.home()/.cache/claude-code`, and before the fixture existed each unit run left one stale
+  `tmp-pytest-of-*` file per test in the developer's real cache — ~400 accumulated before anyone
+  noticed, because nothing failed. The fixture is autouse for the same reason `tmp_cwd` exists, and
+  stays for any task that reaches `Path.home()`; resolve such a path at call time rather than as an
+  import-time constant, or the override never lands.]
 - `tests/integration/conftest.py` — the container and index fixtures, which no unit test should be
   able to reach by accident.
 
@@ -443,8 +444,6 @@ filesystem/JSON logic against `tmp_path`:
   project venv existing yet — the daily-driver model, end to end.
 - `direnv.allow` flips a really-blocked `.envrc` to allowed, proven behaviorally via `direnv export`
   failing before and succeeding after.
-- `agents.wire-claude-hook` wires a fresh project on a fresh `$HOME`, including the env cache file
-  materializing under the real `~/.cache/claude-code`.
 
 `tests/integration/test_clean_os_gate_integration.py` covers the gate itself, in its own container:
 `uv sync --group dev` on a machine with none of the gate binaries, then every binary-dependent

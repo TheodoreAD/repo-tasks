@@ -7,7 +7,7 @@ set -euo pipefail
 # venv.create` inside it, which — via venv.py's own GITHUB_PATH registration — also adds
 # .venv/bin to PATH for the rest of the job when run under GitHub Actions (a no-op locally).
 # Every command after this one is a bare `inv <task>` call: `inv dev-env.setup` for the full local
-# dev loop (direnv, Claude Code hook), `inv quality.check`/`inv quality.precommit` to run the
+# dev loop (direnv, the repo's skills), `inv quality.check`/`inv quality.precommit` to run the
 # quality gate, `inv -l` to see everything else.
 
 command -v uv > /dev/null 2>&1 || {

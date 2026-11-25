@@ -61,7 +61,7 @@ def test_ns_installs_the_reporting_runner_when_report_mode_is_on(monkeypatch: py
 
 def test_ns_nests_dev_env_under_its_own_name():
     # invoke dashifies the collection name for the CLI (`inv dev-env.setup`), same as it does for
-    # underscored task names (`wire_claude_hook` -> `wire-claude-hook`) — the dict key reflects that.
+    # underscored task names (`install_skills` -> `install-skills`) — the dict key reflects that.
     dev_env_collection = ns.collections["dev-env"]
     assert "setup" in dev_env_collection.task_names
 
@@ -109,7 +109,9 @@ def test_ns_nests_direnv_under_its_own_name():
 
 def test_ns_nests_agents_under_its_own_name():
     agents_collection = ns.collections["agents"]
-    assert "wire-claude-hook" in agents_collection.task_names
+    assert "install-skills" in agents_collection.task_names
+    # Retired 2026-11-25; a machine-level hook replaces it (see agents.py's docstring).
+    assert "wire-claude-hook" not in agents_collection.task_names
 
 
 def test_direnv_module_is_individually_importable():
@@ -117,7 +119,7 @@ def test_direnv_module_is_individually_importable():
 
 
 def test_agents_module_is_individually_importable():
-    assert agents.wire_claude_hook is not None
+    assert agents.install_skills is not None
 
 
 def test_ns_nests_dist_under_its_own_name():

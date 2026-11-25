@@ -10,19 +10,13 @@ Fixture-scope decision: these tests deliberately share one module-scoped contain
 holds because pytest instantiates a module-scoped fixture once per *module* — the smoke-test
 module gets its own container, untouched by these mutations —
 and because every mutation here lands on a disjoint path: the tool install under ~/.local/bin and
-~/.local/share/uv (a fixture, so nothing depends on test file-order), direnv's allow database under
-~/.local/share/direnv, wire-claude-hook's output in its own scratch project dir plus
-~/.cache/claude-code. A future test that can't keep that disjoint-paths property belongs in a
+~/.local/share/uv (a fixture, so nothing depends on test file-order), and direnv's allow database
+under ~/.local/share/direnv. A future test that can't keep that disjoint-paths property belongs in a
 function-scoped container of its own, not in this module."""
-
-import json
-from pathlib import Path
-from typing import cast
 
 import pytest
 from testcontainers.core.container import DockerContainer
 
-from repo_tasks import agents
 from repo_tasks.selfinstall import _INSTALL_CMD
 
 _HOME = "/home/tester"
@@ -76,30 +70,3 @@ def test_direnv_allow_unblocks_envrc(installed_repo_tasks: DockerContainer):
     exit_code, output = _run(installed_repo_tasks, f"cd {_REPO} && direnv export bash")
     assert exit_code == 0, output
     assert "VIRTUAL_ENV" in output
-
-
-def test_claude_hook_wires_clean_home(installed_repo_tasks: DockerContainer):
-    """Fresh project dir, fresh $HOME: settings.json created from nothing, and the env cache file
-    materialized under the real ~/.cache/claude-code — the path-shape half tests/test_agents.py
-    can't cover, since there _claude_env_file_path is exercised against the dev machine's $HOME."""
-    project = f"{_HOME}/hooked-project"
-    env_file = f"{_HOME}/.cache/claude-code/home-tester-hooked-project-direnv-env"
-    exit_code, output = _run(
-        installed_repo_tasks,
-        f"mkdir -p {project} && touch {project}/.envrc && cd {_REPO} && inv agents.wire-claude-hook --dir {project}",
-    )
-    assert exit_code == 0, output
-
-    exit_code, output = _run(installed_repo_tasks, f"cat {project}/.claude/settings.json")
-    assert exit_code == 0, output
-    settings = cast(
-        agents._ClaudeSettings,
-        json.loads(output),
-    )
-    assert settings.get("env", {}).get("CLAUDE_ENV_FILE") == env_file
-    bash_group = next(g for g in settings.get("hooks", {}).get("PreToolUse", []) if g["matcher"] == "Bash")
-    expected_command = agents._direnv_hook_command(Path(env_file))
-    assert bash_group["hooks"][0]["command"] == expected_command
-
-    exit_code, output = _run(installed_repo_tasks, f"test -f {env_file}")
-    assert exit_code == 0, output

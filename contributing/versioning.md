@@ -30,9 +30,10 @@ enforceable later by a task diffing the paths below rather than by whoever remem
 The surface, audited 2026-09-04. **Files this package writes into a consumer's repo:** the six
 `configs.pull` files (`ruff.toml`, `pyrightconfig.json`, `dprint.json`, `pytest.ini`, `zizmor.yml`,
 `.editorconfig`); the `repo-tasks-quality` entries `configs.ensure-deps` splices into their
-`pyproject.toml`; `tasks.py`; `bootstrap-repo-tasks.sh`; `.python-version`; `.claude/settings.json`
-and the `CLAUDE_ENV_FILE` it names. **Contracts they author or name:** the `repo-tasks.toml` schema;
-the `repo-tasks-quality` group's contents; `inv` task names; `from repo_tasks import ns`; every task
+`pyproject.toml`; `tasks.py`; `bootstrap-repo-tasks.sh`; `.python-version`. (Until 2026-11-25 also
+`.claude/settings.json` and the `CLAUDE_ENV_FILE` it named, from the retired
+`agents.wire-claude-hook`.) **Contracts they author or name:** the `repo-tasks.toml` schema; the
+`repo-tasks-quality` group's contents; `inv` task names; `from repo_tasks import ns`; every task
 module being importable, which makes **module names API**; `configure` staying unnested;
 `bootstrap.sh`. **Called by other repos:** `.github/workflows/security-reusable.yml`.
 

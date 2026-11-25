@@ -23,8 +23,7 @@ name/Dockerfile resolved from `repo-tasks.toml` or a zero-config root `Dockerfil
 version-grouping model; `login` names the registry for you and lets docker prompt and store the
 credential itself), `helm` (`lint`/`package`/`push`/`login` — charts resolved from
 `repo-tasks.toml`'s `[[helm]]` entries, versioned by that same grouping model), `direnv` (`allow` —
-idempotent shell auto-activation), `agents` (`wire_claude_hook` — wiring an AI coding agent's shell
-execution to pick up the direnv environment; `install_skills` — installing the repo's own skills
+idempotent shell auto-activation), `agents` (`install_skills` — installing the repo's own skills
 from `skills/` for every agent), `dev_env` (`setup` — the one-time post-clone bootstrap composing
 all of the above), `docs` (`clean`/`build`/`serve`, wrapping [zensical](https://zensical.org/), plus
 `link_check`, the dependency-free relative-link check that runs in the gate), `ci`
@@ -134,11 +133,14 @@ Every consumer repo needs its own `pyrightconfig.json` — `check` runs `type_ch
 (no allowances), so type-check config must exist everywhere `check` runs.
 
 `inv dev-env.setup` is the one command to run once after cloning: `venv.create` (syncs `.venv` from
-`uv.lock`) + `direnv.allow` + `agents.wire-claude-hook` (wiring Claude Code's Bash tool to
-auto-activate the venv too, no-ops if the repo has no `.envrc`) + `agents.install-skills`
-(installing the skills authored in `skills/<name>/` into `.agents/skills/` for every agent, with a
-per-skill link in `.claude/skills/` for Claude Code, through the `skills` CLI; no-ops without
-`skills/`) — `dev_env.py` itself owns no logic, it's pure orchestration of those modules.
+`uv.lock`) + `direnv.allow` + `agents.install-skills` (installing the skills authored in
+`skills/<name>/` into `.agents/skills/` for every agent, with a per-skill link in `.claude/skills/`
+for Claude Code, through the `skills` CLI; no-ops without `skills/`) — `dev_env.py` itself owns no
+logic, it's pure orchestration of those modules. It writes no Claude Code hook into the repo:
+`agents.wire-claude-hook` did, until 2026-11-25, with the developer's home path in a committed file.
+An agent's per-directory venv is a machine-level concern, which
+[power-user-linux-setup](https://github.com/TheodoreAD/power-user-linux-setup) handles with one
+user-level hook for every repo.
 
 A repo's own skills follow one layout everywhere: authored in `skills/<name>/` and committed,
 installed per clone, and the install targets ignored — `.agents/skills/`, `.claude/skills/` and
@@ -395,7 +397,7 @@ failed one.
 
 ```shell
 ./bootstrap.sh          # uv sync + inv venv.create -- the one place a raw uv call is needed
-inv dev-env.setup       # direnv + Claude Code hook, on top of the venv bootstrap.sh just built
+inv dev-env.setup       # direnv + the repo's skills, on top of the venv bootstrap.sh just built
 inv quality.precommit
 ```
 
