@@ -792,8 +792,8 @@ cache is off for a tag push but on for the `workflow_dispatch` path in the same 
 Recorded so a later sweep does not re-litigate them:
 
 - **`pre-commit`** — a second runner, config format and mental model beside invoke, which already
-  aggregates tools behind one command. `~/AGENTS.md`'s rule against mechanisms that fire behind an
-  agent's back reinforces it.
+  aggregates tools behind one command. `~/.agents/AGENTS.md`'s rule against mechanisms that fire
+  behind an agent's back reinforces it.
 - **gitleaks / secret scanning** — unnecessary here. GitHub's own `secret_scanning` and
   `secret_scanning_push_protection` are enabled on this repo, and Trusted Publishing means no PyPI
   token exists to leak. Push protection is the layer that matters; a gate-side scanner would be

@@ -160,8 +160,8 @@ why — never by lowering the rule for everyone.]
 
 This is also why the gate's output fits in one terminal read again, which is not cosmetic: while the
 output was ~1 MB, every session working in a consumer piped the gate through `| tail` or redirected
-it to a log, both of which lose the exit code. `~/AGENTS.md`'s "Reading a command's result" rule
-exists because of that habit, and the habit was rational while the output was that size.
+it to a log, both of which lose the exit code. `~/.agents/AGENTS.md`'s "Reading a command's result"
+rule exists because of that habit, and the habit was rational while the output was that size.
 
 [PITFALL: an editable install resolved through a `.pth` (uv/hatch) makes pyright treat the project's
 own package as a _library_ — every test file importing it reports `reportMissingTypeStubs`. The

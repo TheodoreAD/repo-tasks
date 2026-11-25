@@ -551,8 +551,8 @@ concerns that looked plugin-shaped are answered by three autouse fixtures in
 `tests/unit/conftest.py` and by a class invoke itself ships, and those answers are better than a
 plugin would be — opt-in per tier rather than imposed through a config every consumer inherits, the
 reasoning that conftest already states for the socket guard. The `$HOME`/cwd fixtures in particular
-cover a hazard `~/AGENTS.md` documents as recurring and for which no maintained plugin exists at
-all.]
+cover a hazard `~/.agents/AGENTS.md` documents as recurring and for which no maintained plugin
+exists at all.]
 
 **Recommended, not shipped.** Each is inert and would cost nothing in the manifest, but covers a
 concern only some repos have — so it is a named recommendation a repo adds when it needs it. PyPI

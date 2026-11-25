@@ -140,7 +140,7 @@ def docs_generators(root: Path = _CWD) -> list[str]:
     **Commands rather than task names, and the difference is the point.** A repo-tasks task cannot
     see the consumer's invoke namespace — `pre=` chains are composed in this package, and nothing
     hands it the consumer's root collection — so calling a consumer's task means running `inv` as a
-    subprocess either way. Taking the whole command covers the `~/AGENTS.md` rule's "ideally invoke
+    subprocess either way. Taking the whole command covers the `~/.agents/AGENTS.md` rule's "ideally invoke
     if possible" rather than only its common case, and asks nothing about whether a named task
     exists. It executes what the repo's own config says to execute, which is the trust level
     `tasks.py` already has.
