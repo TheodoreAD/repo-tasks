@@ -279,6 +279,31 @@ def test_check_currency_does_not_call_an_unreadable_audit_clean(tmp_cwd, monkeyp
         assert "none in the locked set" not in out
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "├── invoke-stubs v0.3.1 (group: dev)",
+        "└── invoke-stubs v0.3.1 (group: dev)",
+        # A chunk boundary inside the three-byte `├`, decoded with errors="replace" — the 2026-11-25
+        # line that vanished from ingesta's report.
+        "��── invoke-stubs v0.3.1 (group: dev)",
+        "���─ invoke-stubs v0.3.1 (group: dev)",
+    ],
+)
+def test_a_tree_line_survives_a_mangled_prefix(line: str):
+    match = deps._TREE_LINE_RE.search(line)
+    assert match is not None
+    assert (match["name"], match["version"], match["latest"]) == ("invoke-stubs", "0.3.1", None)
+
+
+def test_the_tree_root_and_an_extras_line_are_not_packages():
+    assert deps._TREE_LINE_RE.search("ingesta v0.1.0") is None
+    assert deps._TREE_LINE_RE.search("├── ingesta[api, bot] v0.1.0 (group: dev) (*)") is None
+    extra = deps._TREE_LINE_RE.search("├── sqlalchemy[asyncio] v2.0.52 (extra: store) (latest: v2.1.9)")
+    assert extra is not None
+    assert (extra["name"], extra["latest"]) == ("sqlalchemy[asyncio]", "2.1.9")
+
+
 def test_check_currency_noops_without_a_lock(tmp_cwd, capsys):
     deps.check_currency.body(MockContext())
     assert "no uv.lock — nothing to check" in capsys.readouterr().out

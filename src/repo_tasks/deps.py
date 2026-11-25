@@ -83,8 +83,15 @@ _LOCK_PATH = Path("uv.lock")
 # One package line of `uv tree --depth 1 --outdated`: `├── ruff v0.16.3 (group: dev) (latest: v0.16.9)`.
 # The latest clause is absent when the lock is current, and always absent for a git source, which uv
 # does not look up.
+#
+# Anchored on "a non-word prefix, then a name", never on the box-drawing characters themselves.
+# invoke decodes a command's output in fixed-size byte chunks, so a chunk boundary inside the
+# three-byte `├` turns it into replacement characters, and a regex requiring `├──` silently dropped
+# that one line — reported as "not in this project's dev group". Which line it hit depended on where
+# the boundary fell: found 2026-11-25, when `invoke-stubs` vanished from ingesta's report on one run
+# and not another. Package names are ASCII, so only the prefix can be damaged.
 _TREE_LINE_RE = re.compile(
-    r"[├└]── (?P<name>\S+) v(?P<version>\S+)(?: \([^)]*\))*?(?: \(latest: v(?P<latest>[^)]+)\))?$"
+    r"^\W+(?P<name>[\w.\-\[\],]+) v(?P<version>\S+)(?: \([^)]*\))*?(?: \(latest: v(?P<latest>[^)]+)\))?$"
 )
 
 # `--color never` on both commands this module parses. uv honours `FORCE_COLOR` even into a pipe, and
