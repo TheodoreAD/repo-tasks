@@ -60,7 +60,7 @@ def install_skills(c: Context, dir: str = "."):  # noqa: A002
     base = Path(dir).expanduser().resolve()
     names = authored_skills(base)
     if not names:
-        print(f"[agents.install-skills] no skills/ in {base} — nothing to install")
+        print(f"[agents.install-skills] no skills/<name>/SKILL.md in {base} — nothing to install")
         return
     cli = skills_cli()
     if cli is None:
