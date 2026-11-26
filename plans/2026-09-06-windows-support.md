@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-09-06
+updated: 2026-11-26
 ---
 
 # Windows support, and why it is not a priority
@@ -40,6 +40,9 @@ they are ours to fix rather than upstream's to ship.
 
 Read from the source 2026-09-06, not run — nothing here has been executed on Windows, and that is
 itself the point of §"What it would take".
+
+Items 1 and 2 are gone: v0.8.0 removed `agents.wire-claude-hook` with both helpers (2026-11-25), and
+the venv activation it provided moved to a user-level hook declared in `power-user-linux-setup`.
 
 1. **`agents._claude_env_file_path` builds an invalid filename.** It slugs a project path with
    `str(base).replace("/", "-")`. A Windows path is `C:\Users\...`, so the separator is never
