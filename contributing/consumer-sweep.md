@@ -45,13 +45,14 @@ one command:
 inv consumers.diff          # what every declared consumer is behind on — reads only, writes nothing
 ```
 
-| consumer                 | how it consumes                    | what lags                                       |
-| ------------------------ | ---------------------------------- | ----------------------------------------------- |
-| `power-user-linux-setup` | pinned in its own `uv.lock`        | task code **and** configs                       |
-| `scaffoldapy`            | the global `uv tool` install       | configs only — **plus every repo it generates** |
-| `agent-skills`           | the global `uv tool` install       | configs only                                    |
-| `ingesta`                | the global `uv tool` install       | configs only                                    |
-| `invoke-stubs`           | `repo-tasks` as its own dependency | task code **and** configs                       |
+| consumer                 | how it consumes                              | what lags                                       |
+| ------------------------ | -------------------------------------------- | ----------------------------------------------- |
+| `power-user-linux-setup` | pinned in its own `uv.lock`                  | task code **and** configs                       |
+| `scaffoldapy`            | the global `uv tool` install                 | configs only — **plus every repo it generates** |
+| `agent-skills`           | the global `uv tool` install                 | configs only                                    |
+| `ingesta`                | the global `uv tool` install                 | configs only                                    |
+| `invoke-stubs`           | `repo-tasks` as its own dependency           | task code **and** configs                       |
+| `hekate`                 | its own `uv.lock` **and** a pinned bootstrap | task code **and** configs                       |
 
 The `*-polite-mcp` repos and `product-research-pipeline` are not consumers — they predate the
 template and are its migration backlog, not a sweep target.

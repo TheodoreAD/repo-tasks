@@ -34,6 +34,9 @@ name = "ingesta"
 [[consumer]]
 name = "invoke-stubs"
 
+[[consumer]]
+name = "hekate"
+
 [[docker]]
 name = "sample-service"
 # The repo root, not the member's own directory — a uv workspace member's dependencies resolve from
