@@ -1,6 +1,6 @@
 ---
 status: idea
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Windows support, and why it is not a priority
@@ -15,6 +15,13 @@ something nobody got to.
 
 **The user's call, 2026-09-06: worth writing down, not worth doing.** No machine in this family runs
 Windows, and every consumer is a personal repo on this one Linux workstation.
+
+**That premise no longer holds.** v0.8.0 was cut from a native Windows checkout on 2026-11-26, and
+two things broke there that the source reading below did not predict: `release.push-tag`'s guard
+(the cmd.exe quoting bug in
+[`2026-11-27-windows-quoting-and-shipped-config-bugs.md`](2026-11-27-windows-quoting-and-shipped-config-bugs.md)),
+and 29 unit tests, mostly from Windows paths. The deferral below still stands, but it rests on a
+reason that is gone.
 
 ## The surprise: the dependencies are not the blocker
 
@@ -93,6 +100,9 @@ otherwise be re-derived by whoever asks next — the expensive half of this ques
 answered.]
 
 ## Recommended direction
+
+[NEEDS CLARIFICATION: Windows now runs repo-tasks' own release flow (2026-11-26). Does that count as
+the consumer this direction was waiting for, or does the deferral stand with an updated reason?]
 
 Leave it. Revisit if a Windows consumer ever appears, and start from §"What actually breaks", which
 is a real list rather than a guess — but re-measure the wheel table first, since it is the half that
